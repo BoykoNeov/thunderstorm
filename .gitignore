@@ -1,0 +1,79 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Thunderstorm Simulator — .gitignore
+# Policy (see CLAUDE.md): raw netCDF is regenerable and NEVER committed; scenario
+# packages are multi-GB and live outside plain git (LFS or out-of-repo — decided
+# before the first package ships). Nothing >10 MB in plain git.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Simulation raw output (regenerable, disposable by design) ────────────────
+*.nc
+*.nc4
+*.netcdf
+*.dat
+*.grads
+*.ctl
+sim/**/output/
+sim/**/*.rst
+**/restart/
+**/rst/
+
+# ── VDB volumes & scenario packages (multi-GB, out-of-repo / LFS) ────────────
+*.vdb
+scenarios/**/*.vdb
+scenarios/**/*.exr
+scenarios/**/*.png
+scenarios/**/*.jpg
+scenarios/**/frames/
+# Keep scenario manifests/contracts and small docs tracked:
+!scenarios/**/manifest.json
+!scenarios/**/*.md
+
+# ── Python (pipeline/) ───────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.conda/
+
+# ── Unreal Engine (unreal/) — standard UE ignores ────────────────────────────
+unreal/**/Binaries/
+unreal/**/Intermediate/
+unreal/**/Saved/
+unreal/**/DerivedDataCache/
+unreal/**/Build/
+unreal/**/.vs/
+unreal/**/*.VC.db
+unreal/**/*.opensdf
+unreal/**/*.sdf
+unreal/**/*.suo
+unreal/**/*.sln
+# UE binary assets are large; if versioned later, do it via Git LFS (decide first).
+unreal/**/*.uasset
+unreal/**/*.umap
+
+# ── Editors / OS cruft ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Temp / scratch (kept out of the repo tree by policy) ─────────────────────
+tmp/
+temp/
+scratch/
+*.log

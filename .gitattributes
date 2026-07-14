@@ -1,0 +1,23 @@
+# Cross-platform repo: sim + pipeline run in WSL2 (LF), UE project runs on Windows.
+# Normalize line endings so CRLF/LF churn never enters history.
+* text=auto eol=lf
+
+# Windows-native tooling files keep CRLF.
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+*.ps1        text eol=crlf
+*.sln        text eol=crlf
+
+# Shell/Python/config are LF everywhere.
+*.sh         text eol=lf
+*.py         text eol=lf
+
+# Binary formats — never diff or eol-normalize these.
+*.nc         binary
+*.nc4        binary
+*.vdb        binary
+*.exr        binary
+*.png        binary
+*.jpg        binary
+*.uasset     binary
+*.umap       binary
