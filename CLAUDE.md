@@ -133,7 +133,14 @@ Keep current — SVT behavior shifts between UE releases. Filled through Phase 0
   (system libs). MPI, single node.
 - **Python env lockfile:** TBD Phase 1 (post-processor; currently system python3 +
   netCDF4/numpy/scipy/matplotlib for analysis only).
-- **OpenVDB:** TBD Phase 1 (VDB writer — see pipeline/README).
+- **OpenVDB:** conda-forge **openvdb 13.0.0** (writer lib; on-disk file-format
+  **v225**) — **PIN LOCKED, empirically confirmed against UE 5.8 (2026-07-14, Phase 1
+  task 3, docs/phase1-task3-svt-import.md).** UE 5.8 bundles the identical
+  `openvdb-13.0.0` (`OPENVDB_FILE_VERSION = 225`), and its `USparseVolumeTextureFactory`
+  imported the full 300-frame v225 sequence headless into a 300-frame
+  `AnimatedSparseVolumeTexture` (160×160×64; Tex A RGBA16F = cloud/ice/rain/graupelhail,
+  Tex B R16F = dbz; 21 s build). Only *visual streaming playback* remains an owner-gated
+  editor check.
 - **UE 5.x.y (exact):** **5.8.0** (`5.8.0-55116800+++UE5+Release-5.8`, CL 55116800).
   Installed and launches (2026-07-14). Note: the Epic launcher must be **Run as
   administrator** on first UE launch or the VC++ prereq install fails with
@@ -173,7 +180,10 @@ Do not start a phase without explicit go from the owner.
   below M:'s safe headroom (owner's call on the exact number).
 - **Phase 1:** pipeline de-risking spike — a full-length, multi-grid,
   few-hundred-frame VDB sequence through UE SVT (explicitly NOT a one-frame demo);
-  single-cell storm playback end to end.
+  single-cell storm playback end to end. **Task 3 done (2026-07-14,
+  docs/phase1-task3-svt-import.md):** full 300-frame v225 synthetic sequence imported
+  headless into a 300-frame `AnimatedSparseVolumeTexture` in UE 5.8 → openvdb pin
+  locked; only in-editor *visual* streaming playback remains (owner-gated handoff).
 - **Phase 2:** scenario system + selectable UI layers + radar view.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.

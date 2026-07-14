@@ -23,22 +23,29 @@ The build links a **userspace** OpenVDB installed with `micromamba` — no
 root, and the package's `vdb_print`/tooling split differs by distro. micromamba
 installs the whole C++ toolchain into `$HOME` with zero privilege.)
 
-**Working toolchain (⚠ pending UE validation — NOT yet a locked pin):**
+**Working toolchain (PIN LOCKED — round-trip CONFIRMED against UE 5.8, task 3):**
 - **conda-forge `openvdb` 13.0.0** — the lib the converters link against.
 - `cmake` 4.x, `cxx-compiler` (gcc/g++ 14), `tbb-devel`, `libboost-devel`, `zlib`
   (OpenVDB's configure-time header deps).
 - env python: 3.14 (only used to run `gen_synthetic.py`).
 
-> **Why "pending", not pinned:** the acceptance test for the OpenVDB version is
-> *"UE 5.8's SVT importer reads the `.vdb` these tools write"* — that is Phase 1
-> **task #3**, still unrun. OpenVDB's on-disk file-format version can outrun an
-> older reader, and we don't yet know which OpenVDB UE 5.8 bundles. So openvdb
-> 13.0.0 stays recorded as *working, pending round-trip* here and is **not** flipped
-> into `CLAUDE.md`'s locked "Pinned versions" block until task 3 confirms the
-> round-trip. If UE rejects v13's file version, the pin becomes whatever version
-> UE accepts. `vdb_inspect` reads with the *same* openvdb 13 that wrote the file, so
-> a green report proves the writer is self-consistent — it does **not** prove UE
-> compatibility.
+> **Format-version compat CONFIRMED (2026-07-14):** UE 5.8 bundles
+> **`openvdb-13.0.0`** at
+> `W:\UE_5.8\Engine\Source\ThirdParty\OpenVDB\Deploy\openvdb-13.0.0`, whose
+> `version.h` declares the identical **`OPENVDB_FILE_VERSION = 225`** that these
+> tools write. Same serializer version + same Blosc compression ⇒ UE's reader
+> decodes exactly what the writer emits; there is no version skew to fear. This is
+> dispositive at the *file-format* layer and answers the narrow "does v225 read"
+> question **without UE running**.
+>
+> **Empirical round-trip CONFIRMED (2026-07-14, task 3 —
+> `docs/phase1-task3-svt-import.md`):** UE 5.8's `USparseVolumeTextureFactory`
+> imported the full 300-frame v225 sequence *headless* into a 300-frame
+> `AnimatedSparseVolumeTexture` (160×160×64; Tex A RGBA16F = cloud/ice/rain/
+> graupelhail, Tex B R16F = dbz) in 21 s, with the default grid assignment
+> reproducing the `docs/phase1-svt-budget.md` channel map exactly. The pin is now
+> **locked**, not merely header-matched. The only remaining check is *visual
+> streaming playback* in the editor (owner-gated — see the task-3 doc's Handoff).
 
 One-time env setup (inside WSL Ubuntu; `~/bin/micromamba` already present):
 
@@ -99,12 +106,12 @@ Full 300-frame synthetic run, **0 failures**:
 - **What this does NOT verify:** the 5.92 MB VDB *file* (blosc-compressed 4-byte
   floats + tree topology) is a **different quantity** from the doc's ~5.7 MB fp16
   SVT *texture memory* (10 B/active-voxel) — their closeness is coincidental. The
-  actual SVT memory budget is verified only once UE loads these (task 3), and the
   **binding** per-frame test is task 5's *real* CM1 frames, which spread wider
   (cold-pool secondary cells — see `sim/single_cell/README.md`).
 - **On-disk format:** these VDBs are **file-format version 225** (writer lib
-  openvdb 13.0). That is the number task 3 checks against UE 5.8's bundled OpenVDB
-  — and the reason the openvdb pin stays *pending* above.
+  openvdb 13.0). **Task 3 confirmed** UE 5.8 reads v225 and built a 300-frame
+  animated SVT from this sequence (`docs/phase1-task3-svt-import.md`); the openvdb
+  pin is now **locked**.
 
 ## `.densevol` format (little-endian)
 
