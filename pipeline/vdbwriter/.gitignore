@@ -1,0 +1,4 @@
+# Generated / large — never committed (charter data policy: nothing >10 MB in git).
+build/
+*.densevol
+*.vdb

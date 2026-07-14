@@ -23,7 +23,8 @@
 //     float  threshold            (|value| <= threshold => inactive background)
 //     float  data[nx*ny*nz]       (index = x + nx*(y + ny*z))
 //
-// Build: see CMakeLists.txt (links system OpenVDB, TBB).
+// Build: see build.sh / CMakeLists.txt (links userspace conda-forge OpenVDB via
+// micromamba — no sudo). Validate output with the vdb_inspect sibling tool.
 // Usage: dense2vdb input.densevol output.vdb
 
 #include <openvdb/openvdb.h>
