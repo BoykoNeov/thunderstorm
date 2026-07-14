@@ -152,11 +152,19 @@ Do not start a phase without explicit go from the owner.
   @ 83 min, PASS); throughput benchmarked and **benchmark gate resolved**
   (docs/phase0-benchmark.md — 333 m default / 250 m flat hero / 500 m preview; np=8;
   bitwise reproducible). .wslconfig set (48 GB / 16 proc).
-  **Remaining Phase 0 setup — VHDX relocation to a multi-TB drive: a Phase 1
-  PREREQUISITE.** WSL's VHDX defaults to C:; the benchmark runs used `tapfrq=9999`
-  (no output) so never stressed disk, but Phase 1's full-length VDB sequence
-  produces 300 GB–1 TB of raw netCDF that would fill C: and crash the run. Do this
-  before the first large Phase 1 run.
+  **VHDX relocation — DONE (2026-07-14):** the Ubuntu WSL VHDX was moved off C:
+  (the OS NVMe) to **`M:\wsl\Ubuntu\ext4.vhdx`** (Toshiba 7.4 TB HDD). Method:
+  `wsl --terminate Ubuntu` → copy VHDX → repoint the distro's registry `BasePath`
+  (`HKCU\...\Lxss\{5b1d55ef-…}`) to `M:\wsl\Ubuntu` → verified boot from M: (user
+  `boiko`, write test PASS). CM1's raw-write path averages only tens of MB/s, so the
+  HDD is not an I/O bottleneck. Two follow-ups: (a) the stale old copy on C: is still
+  locked by the WSL utility VM and clears on the next full `wsl --shutdown` — not worth
+  blipping BOINC/Docker for 7.6 GB; (b) the VHDX max virtual size is **1024 GB
+  (default)** — fine for Phase 1's 333 m workhorse (raw ≪ 1 TB), but the **250 m-terrain
+  hero runs (Phase 3) can approach 1 TB raw and would hit this ceiling. Provision the
+  VHDX larger before the first hero run** (`wsl --manage Ubuntu --resize`, then
+  `resize2fs`) — but NOT to 2 TB: M: is a ~72%-full backup drive, so the cap must stay
+  below M:'s safe headroom (owner's call on the exact number).
 - **Phase 1:** pipeline de-risking spike — a full-length, multi-grid,
   few-hundred-frame VDB sequence through UE SVT (explicitly NOT a one-frame demo);
   single-cell storm playback end to end.
