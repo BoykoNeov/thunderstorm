@@ -64,6 +64,16 @@ plots + event lists + manifest JSON) → scenarios/ → UE5 playback app (Window
 - **Coordinate/units contract:** CM1 is SI/meters/right-handed; UE is
   centimeters/left-handed (Y flip). The conversion lives in exactly ONE pipeline
   module.
+- **AI/editor tooling — Unreal MCP:** default to Epic's **official first-party
+  Unreal MCP** (embedded editor MCP server, ships with **UE 5.8**, Experimental).
+  Enable via Edit → Plugins → "Unreal MCP" (auto-enables Toolset Registry) → restart;
+  wire Claude Code with the console command `ModelContextProtocol.GenerateClientConfig
+  ClaudeCode` (writes `.mcp.json` to project root). Binds loopback `http://127.0.0.1:8000/mcp`
+  (HTTP+SSE, no auth — local single-node only). Expose only playback/scene-inspection
+  tools; never physics — science stays in the pipeline ("UE is a dumb player").
+  Decision factors into the UE version pin (favors 5.8). If a hard constraint forces
+  UE 5.5–5.7, fall back to a **Remote Control API**–based MCP (e.g. remiphilippe/mcp-unreal)
+  to avoid adding maintained C++ to unreal/. Full comparison: docs/decision-unreal-mcp-2026-07-14.md.
 - **Frame interpolation is an open decision** (Phase 1): output interval vs playback
   smoothness under time compression — more output frames vs material crossfade
   between SVT frames. Affects both CM1 output config and UE material design.
@@ -118,7 +128,8 @@ plots + event lists + manifest JSON) → scenarios/ → UE5 playback app (Window
 ## Pinned versions
 
 Fill at Phase 0/1 and keep current — SVT behavior shifts between UE releases:
-UE 5.x.y (exact), CM1 release, WSL distro + Python env lockfile, OpenVDB version.
+UE 5.x.y (exact), CM1 release, WSL distro + Python env lockfile, OpenVDB version,
+Unreal MCP (official/embedded if UE ≥ 5.8, else the chosen Remote Control API server).
 
 ## Status / phasing
 
