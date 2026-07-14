@@ -42,21 +42,28 @@ with ~40 km to every boundary — the outflow stays interior for the full hour.
 
 - **Horizontal:** `nx=ny=160`, `dx=dy=500 m` → **80 × 80 km**, flat
   (`terrain_flag=.false.`, `itern=0`), open-radiative lateral BCs.
-- **Vertical:** `nz=40`, `ztop=18 km`, `stretch_z=0` → **uniform dz** (≈450 m
-  = `ztop/nz`; note `param1 dz=500` disagrees, CM1 resolves this internally —
-  **confirm the actual level heights from `cm1.out` after the run** rather than
-  trusting this inference).
-  - ⚠️ **Doc discrepancy to resolve:** the charter's "Pinned versions" prose
-    says the validated grid is "dz stretched 125→500 m", but the committed
-    Phase 0 decks (`sim/validation`, `sim/benchmark/decks`) all use
-    `stretch_z=0` (uniform). This deck **matches the committed, validated
-    decks** (uniform 450 m) rather than the prose. A stretched vertical grid
-    (better low-level resolution, a charter wall-clock/fidelity lever) is a
-    deliberate Phase 2/3 upgrade, not something to introduce untested on the
-    first plumbing run.
+- **Vertical:** `nz=40`, `stretch_z=0` → **uniform dz = 500 m**, model top
+  **20 km**. ✅ *Verified from the output* (`zh` scalar levels 0.25…19.75 km,
+  `zf` 0…20 km, constant 0.5 km spacing). Note: with `stretch_z=0` CM1 uses the
+  **`param1 dz=500`** value and `nz`, giving `40×500 = 20 km` — the
+  **`param6 ztop=18000` is ignored** in this mode. (Earlier inference of
+  "≈450 m = ztop/nz" was wrong; corrected against the actual grid, per the
+  advisor's "verify, don't assert" flag.) The Rayleigh damping layer
+  (`zd=15 km`) sits comfortably below the 20 km top. This matches the committed,
+  validated Phase 0 decks (`sim/validation`, `sim/benchmark/decks` — all
+  `stretch_z=0` uniform) and `docs/phase0-validation.md`, which already records
+  "dz=500 m (uniform)". A **stretched** vertical grid (finer near-surface
+  resolution — a charter wall-clock/fidelity lever) is a deliberate Phase 2/3
+  upgrade, not something to introduce untested on the first plumbing run.
+  - Minor: `phase0-validation.md` lists `ztop=18 km`; the *effective* top with
+    `stretch_z=0` is `nz×dz = 20 km` (the `param6 ztop` is inert in this mode).
 - **Microphysics:** NSSL 2-moment `ptype=27` (true hail category), `ihail=1`.
-  Emits the individual species the pipeline maps to SVT channels: cloud water,
-  cloud ice, rain, graupel, hail, plus diagnostic `dbz`.
+  Emits the individual species the pipeline maps to SVT channels. **NSSL output
+  variable names** (confirmed from the frames): `qc` cloud water, `qi` cloud
+  ice, `qs` snow, `qr` rain, `qg` graupel, **`qhl` hail** (note: `qhl`, *not*
+  `qh` — with number/volume `chl`/`vhl`), plus diagnostic `dbz` (and `cref`
+  composite reflectivity). ✅ Hail verified active: `qhl` reaches ~5 g/kg by
+  t≈50 min.
 - **Time stepping:** `adapt_dt=1` (charter default; CFL-adaptive, still
   deterministic), `dtl=3.0 s` initial.
 - **Output:** `output_format=2` (netCDF), `output_filetype=2` (**one file per
@@ -81,8 +88,32 @@ decomposition — charter reproducibility contract), and runs `mpirun -np 8`
 Raw `cm1out_*.nc` is **disposable** and never committed (charter data policy);
 only the finished scenario package (Phase 1 task 5) is durable.
 
+## Run outcome (verified 2026-07-14)
+
+301 frames + `cm1out_stats.nc`, ~6.1 GB raw in WSL ext4, **18 min** wall at
+`np=8` (~2.3 core-hours), all ranks terminated normally (the
+`IEEE_UNDERFLOW/DENORMAL` notes are CM1's standard benign FP flags). A clean,
+vigorous pulse cell with the expected life cycle:
+
+| t (min) | peak w (m/s) | max dBZ | hail `qhl` | phase |
+|---|---|---|---|---|
+| 0–15 | 0.8 → 5.9 | 0 | 0 | warm-bubble rise |
+| 20 | 25 | 16 | 0 | first precip; graupel begins |
+| 25–30 | 46 → **53** | 44 → 51 | onset | **mature updraft peak** |
+| 35–50 | 33 → 44 | 59 → **71** | 0.6 → 4.7 g/kg | hail core falls; **secondary gust-front cells** |
+| 60 | 22 | 63 | decaying | decay |
+
+The updraft re-invigoration after ~30 min and the widening high-dBZ area are the
+cold-pool secondary cells the advisor flagged — expected physics, and exactly
+the real-vs-synthetic footprint spread to re-check against the SVT budget.
+
 ## What this feeds
 
 `cm1out_*.nc` → pipeline (Phase 1 task 5): derived fields, regrid to Cartesian,
 decimation, `.densevol` per frame → `dense2vdb` → VDB sequence + surface
 textures + MetPy plots + manifest → scenario package → UE SVT playback.
+
+**SVT channel mapping for the pipeline** (5 channels, per
+[`docs/phase1-svt-budget.md`](../../docs/phase1-svt-budget.md)):
+`cloud=qc`, `ice=qi+qs` (cloud ice + snow), `rain=qr`,
+`graupelhail=qg+qhl` (graupel + hail), `dbz=dbz`.
