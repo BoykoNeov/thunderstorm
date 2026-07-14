@@ -51,6 +51,13 @@ falls back to `DefaultImportOptions`. Two behaviors make a plain automated impor
     preserves write order; UE's `GetOpenVDBGridInfo` iterates `Stream.getGrids()` and
     assigns `Index` 0,1,2,… **without sorting**
     (`SparseVolumeTextureOpenVDBUtility.cpp:225`).
+  - The default-assignment loop walks `GridComponentInfoPtrs`, **not** `GridInfo`, so
+    the last link is: `LoadOpenVDBPreviewData` builds `GridComponentInfoPtrs` by
+    iterating `GridInfo` **in order** with no sort (`SparseVolumeTextureFactory.cpp:148`),
+    one entry per component; a `<None>` sentinel sits at array index 0 and is skipped by
+    the `Index == INDEX_NONE` guard (`:89`). So the array the assignment actually walks
+    is file-order too — a display-sorted permutation (which would put `rain` in Tex B and
+    look identical in every log) is ruled out by code, not just by the readback.
   - ⇒ **Tex A (RGBA16F): R=cloud, G=ice, B=rain, A=graupelhail; Tex B (R16F): R=dbz** —
     reproducing the `phase1-svt-budget.md` channel map exactly.
   - **Caveat (mechanism):** this correct mapping comes from UE's *default file-order*

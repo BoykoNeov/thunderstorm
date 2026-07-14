@@ -180,10 +180,12 @@ Do not start a phase without explicit go from the owner.
   below M:'s safe headroom (owner's call on the exact number).
 - **Phase 1:** pipeline de-risking spike — a full-length, multi-grid,
   few-hundred-frame VDB sequence through UE SVT (explicitly NOT a one-frame demo);
-  single-cell storm playback end to end. **Task 3 done (2026-07-14,
-  docs/phase1-task3-svt-import.md):** full 300-frame v225 synthetic sequence imported
-  headless into a 300-frame `AnimatedSparseVolumeTexture` in UE 5.8 → openvdb pin
-  locked; only in-editor *visual* streaming playback remains (owner-gated handoff).
+  single-cell storm playback end to end. **Task 3 import/build VALIDATED; visual
+  playback PENDING OWNER (2026-07-14, docs/phase1-task3-svt-import.md):** full 300-frame
+  v225 synthetic sequence imported headless into a 300-frame `AnimatedSparseVolumeTexture`
+  in UE 5.8 — all three non-visual binding tests pass (frame count, multi-grid channel
+  identity, static bbox) → openvdb pin locked. The task's namesake **in-editor visual
+  streaming playback is still owed by the owner** (owner-gated handoff in the task doc).
 - **Phase 2:** scenario system + selectable UI layers + radar view.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
