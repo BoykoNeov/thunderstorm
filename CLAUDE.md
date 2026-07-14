@@ -127,20 +127,31 @@ plots + event lists + manifest JSON) → scenarios/ → UE5 playback app (Window
 
 ## Pinned versions
 
-Fill at Phase 0/1 and keep current — SVT behavior shifts between UE releases:
-UE 5.x.y (exact), CM1 release, WSL distro + Python env lockfile, OpenVDB version,
-Unreal MCP (official/embedded if UE ≥ 5.8, else the chosen Remote Control API server).
+Keep current — SVT behavior shifts between UE releases. Filled through Phase 0:
+- **CM1:** cm1r21.1 (binary sha256 in docs/phase0-cm1-build.md).
+- **WSL/toolchain:** Ubuntu 24.04, gfortran 13, OpenMPI 4.1.6, netCDF C+Fortran
+  (system libs). MPI, single node.
+- **Python env lockfile:** TBD Phase 1 (post-processor; currently system python3 +
+  netCDF4/numpy/scipy/matplotlib for analysis only).
+- **OpenVDB:** TBD Phase 1 (VDB writer — see pipeline/README).
+- **UE 5.x.y (exact):** TBD Phase 1 (favors 5.8 for official Unreal MCP).
+- **Unreal MCP:** official/embedded if UE ≥ 5.8, else chosen Remote Control API server.
+
+**Production run config (locked by Phase 0 benchmark gate — docs/phase0-benchmark.md):**
+`mpirun -np 8`, no explicit core binding, NSSL `ptype=27`. Final resolution
+**333 m default** (overnight-able incl. terrain), **250 m** for flat/imove hero
+runs (no terrain), **500 m** preview tier. Reproducibility verified **bitwise**.
 
 ## Status / phasing
 
 Do not start a phase without explicit go from the owner.
 
-- **Phase 0 (NOT started):** build CM1 in WSL; run the canonical Weisman–Klemp
-  supercell at coarse resolution; validate against published WK evolution (updraft
-  max, storm-splitting time — "it ran" ≠ "it's right"); measure throughput
-  (cell-steps/s) and extrapolate cost to candidate final resolutions — **benchmark
-  gate**: final resolution is chosen from this measurement, not assumed. Also verify
-  reproducibility; set up .wslconfig/VHDX.
+- **Phase 0 (COMPLETE — 2026-07-14):** CM1 built in WSL (docs/phase0-cm1-build.md);
+  canonical Weisman–Klemp supercell validated (docs/phase0-validation.md — split into
+  counter-rotating movers, peak w 60.6 m/s @ 83 min, PASS); throughput benchmarked and
+  **benchmark gate resolved** (docs/phase0-benchmark.md — 333 m default / 250 m flat
+  hero / 500 m preview; np=8; bitwise reproducible). .wslconfig set (48 GB / 16 proc).
+  VHDX relocation to a multi-TB drive still outstanding before large production runs.
 - **Phase 1:** pipeline de-risking spike — a full-length, multi-grid,
   few-hundred-frame VDB sequence through UE SVT (explicitly NOT a one-frame demo);
   single-cell storm playback end to end.
