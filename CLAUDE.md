@@ -134,8 +134,14 @@ Keep current — SVT behavior shifts between UE releases. Filled through Phase 0
 - **Python env lockfile:** TBD Phase 1 (post-processor; currently system python3 +
   netCDF4/numpy/scipy/matplotlib for analysis only).
 - **OpenVDB:** TBD Phase 1 (VDB writer — see pipeline/README).
-- **UE 5.x.y (exact):** TBD Phase 1 (favors 5.8 for official Unreal MCP).
-- **Unreal MCP:** official/embedded if UE ≥ 5.8, else chosen Remote Control API server.
+- **UE 5.x.y (exact):** **5.8.0** (`5.8.0-55116800+++UE5+Release-5.8`, CL 55116800).
+  Installed and launches (2026-07-14). Note: the Epic launcher must be **Run as
+  administrator** on first UE launch or the VC++ prereq install fails with
+  `LS-0019-IS-*`.
+- **Unreal MCP:** **official/embedded** (UE 5.8 ships it; confirmed available in
+  the 5.8.0 install's plugin list). No Remote Control fallback needed. Enable via
+  Edit → Plugins → "Unreal MCP" (auto-enables Toolset Registry) → restart, then
+  wire Claude Code with `ModelContextProtocol.GenerateClientConfig ClaudeCode`.
 
 **Production run config (locked by Phase 0 benchmark gate — docs/phase0-benchmark.md):**
 `mpirun -np 8`, no explicit core binding, NSSL `ptype=27`. Final resolution
