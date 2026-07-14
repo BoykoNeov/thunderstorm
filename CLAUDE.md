@@ -146,12 +146,17 @@ runs (no terrain), **500 m** preview tier. Reproducibility verified **bitwise**.
 
 Do not start a phase without explicit go from the owner.
 
-- **Phase 0 (COMPLETE — 2026-07-14):** CM1 built in WSL (docs/phase0-cm1-build.md);
-  canonical Weisman–Klemp supercell validated (docs/phase0-validation.md — split into
-  counter-rotating movers, peak w 60.6 m/s @ 83 min, PASS); throughput benchmarked and
-  **benchmark gate resolved** (docs/phase0-benchmark.md — 333 m default / 250 m flat
-  hero / 500 m preview; np=8; bitwise reproducible). .wslconfig set (48 GB / 16 proc).
-  VHDX relocation to a multi-TB drive still outstanding before large production runs.
+- **Phase 0 (benchmark gate COMPLETE — 2026-07-14):** CM1 built in WSL
+  (docs/phase0-cm1-build.md); canonical Weisman–Klemp supercell validated
+  (docs/phase0-validation.md — split into counter-rotating movers, peak w 60.6 m/s
+  @ 83 min, PASS); throughput benchmarked and **benchmark gate resolved**
+  (docs/phase0-benchmark.md — 333 m default / 250 m flat hero / 500 m preview; np=8;
+  bitwise reproducible). .wslconfig set (48 GB / 16 proc).
+  **Remaining Phase 0 setup — VHDX relocation to a multi-TB drive: a Phase 1
+  PREREQUISITE.** WSL's VHDX defaults to C:; the benchmark runs used `tapfrq=9999`
+  (no output) so never stressed disk, but Phase 1's full-length VDB sequence
+  produces 300 GB–1 TB of raw netCDF that would fill C: and crash the run. Do this
+  before the first large Phase 1 run.
 - **Phase 1:** pipeline de-risking spike — a full-length, multi-grid,
   few-hundred-frame VDB sequence through UE SVT (explicitly NOT a one-frame demo);
   single-cell storm playback end to end.

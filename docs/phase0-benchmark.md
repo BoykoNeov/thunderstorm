@@ -87,7 +87,10 @@ compared 56 vars; bitwise_identical = True; max_abs_diff = 0
 ```
 
 The charter's reproducibility contract stays at the **strong (bitwise)** tier —
-no downgrade to statistical-equivalence needed. Every scenario still records
+no downgrade to statistical-equivalence needed. (Verified once at 1 km / Morrison /
+fixed 8-rank decomposition, as the charter asks; CM1 determinism is scheme- and
+resolution-independent, but this was not separately re-tested at the NSSL / 333 m
+production config.) Every scenario still records
 seed(s), binary hash, rank count, and decomposition (§ charter Conventions).
 
 ---
@@ -117,7 +120,11 @@ production throughput(R) = mature_NSSL_1km × resolution_derating(R)
 - **Flat / imove** (120 km box, moving domain) — validated to hold the 2 h
   split with 26 km edge clearance (§5).
 - **Terrain / large** (200 km box, no imove — `imove` is incompatible with
-  terrain; a translating storm needs ~200 km to stay in-domain for 2 h).
+  terrain). **200 km is a placeholder, not a measurement:** a storm translating
+  ~13 m/s ground-relative covers ~93 km in 2 h, plus ~46 km split spread, so
+  200 km may be tight in the travel direction and terrain domains want to be
+  non-square — validate per-scenario in Phase 3. (The flat numbers are measured;
+  the terrain numbers are order-of-magnitude sizing.)
 
 | Res | dtl | steps | flat cells | **flat 2 h** | terrain cells | **terrain 2 h** |
 |---|---|---|---|---|---|---|
