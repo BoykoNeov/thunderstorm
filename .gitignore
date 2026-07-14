@@ -19,6 +19,9 @@ sim/**/*.rst
 
 # ── VDB volumes & scenario packages (multi-GB, out-of-repo / LFS) ────────────
 *.vdb
+# Dense-array fixtures the VDB writer consumes (regenerable; can be large):
+*.densevol
+pipeline/vdbwriter/synthetic_seq/
 scenarios/**/*.vdb
 scenarios/**/*.exr
 scenarios/**/*.png
