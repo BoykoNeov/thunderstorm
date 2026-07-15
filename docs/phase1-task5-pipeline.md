@@ -249,29 +249,62 @@ checks were self-consistent and measured the wrong thing.
   to 200 km changed nothing. **Keep this recorded anyway**: the default is tuned for
   metre-scale VFX puffs and *will* matter for a km-scale storm once the volume renders at all.
 
-### Still open (ranked)
+### The material is EXONERATED (2026-07-15, reflection pass)
 
-1. **Capture artifact.** The captures show the skydome banner repeated 3× — `HighResShot`
-   was **tiling**, and tiled capture is known to drop some volumetric passes. If so,
-   "renders nothing" is an artefact of *how I looked*, and the owner's live viewport was
-   always the right instrument.
-2. **The material samples the wrong attribute.** The static switches (`Density (Attributes A)`,
-   `Clamp SVT Density`, `StaticSparseVolumeTexture`) were set **without verifying the names
-   exist** — `set_material_instance_static_switch_parameter_value` no-ops silently on a bad
-   name, the same silent-failure class as `save_current_level`.
-3. **The 25000× actor scale defeats the marcher.** `scale3d(250) × 100`. Auto `StepSize(-1)`
-   is plausibly computed in the component's *local* space (1 voxel = 1 unit), so the ray
-   quits before reaching the dense core.
-4. **`playing=False` samples an unstreamed frame.** An `AnimatedSparseVolumeTexture` may only
-   stream during playback, so a pinned `frame=255` in a static view can be legitimately empty.
+Reflection reads asset metadata truthfully even under `-nullrhi` — it cannot validate a
+renderer, but "what parameters does this material have" is not a rendering question. Four
+headless passes (`params.py`, `params2.py`, `params3.py`, `place_test.py`) establish:
+
+| Property | Value | Verdict |
+|---|---|---|
+| MI parent | `/Engine/EngineMaterials/SparseVolumeMaterial` | stock engine material |
+| `SparseVolumeTexture` param | → `AnimatedSparseVolumeTexture'/Game/SVT_REAL/frame'` | **bound** |
+| `Density (Attributes A)` | `True` | correct |
+| `Density Mask` (parent default) | `default_r=True`, g/b/a `False` | **R = cloud**, which has content |
+| `Density Scale` | `1.0` | applied |
+| `comp.volume_resolution` | `{186, 186, 65}` | matches the imported SVT exactly |
+
+So the hand-rolled MI is essentially what the engine's own factory produces, and suspect 2
+below is **dead**. Two traps worth recording, both of which produced a *false* conclusion
+before a complete read corrected it:
+
+- **`get_texture_parameter_names()` returns `[]` for an SVT.** Sparse volume textures are
+  their own material-parameter *type*; they live in `mi.sparse_volume_texture_parameter_values`.
+  An empty texture list looks damning and means nothing. Read completely, then conclude.
+- `StaticSparseVolumeTexture` — a name this doc previously listed as a set static switch —
+  **is not a parameter at all**. The real switch list is `Density (Attributes A)`,
+  `Temperature (Attributes B)`, `Clamp SVT Density`, `Clamp SVT Temperature`,
+  `Use Blackbody Temperature`. The bogus set no-op'd silently, but harmlessly: the texture
+  was already bound by the correct API.
+
+### Still open (ranked, after the 2026-07-15 pass)
+
+1. **The editor viewport never ticks the SVT.** With `playing=True`, `looping=True` and a
+   real RHI, `comp.frame` **stayed at 255.0 across all 600 ticks**. The animation does not
+   advance in an editor viewport. If frames only stream while the controller actually ticks
+   (PIE / Simulate), then *every* screenshot so far sampled an unstreamed frame — which is
+   exactly "the marcher integrates ~zero density" — and **the whole editor-viewport-screenshot
+   method is structurally unable to show a streaming SVT**, the same class of error as
+   `-nullrhi`. Test PIE/Simulate before anything else.
+2. **Capture artifact — NOT eliminated.** `HighResShot 1` (multiplier 1, meant to be untiled)
+   *still* shows the skydome banner repeated 3×. `HighResShot` appears to tile regardless of
+   multiplier when given a `filename=`, so tiled capture remains live as a reason volumetric
+   passes are dropped.
+3. ~~The material samples the wrong attribute.~~ **DEAD** — see the exoneration table above.
+4. **The 25000× actor scale.** Demoted, and probably wrong: black at Density Scale `1e6`
+   means the *sample* is zero, whereas partial traversal would integrate a small nonzero that
+   `1e6` would blow out to opaque. Scale theories predict a faint volume, not a black one.
+5. **The SVT data itself** — the last suspect standing if PIE renders nothing.
 
 ### The one ask that beats more of this
 
-**Drag `/Game/SVT_REAL/frame` from the Content Browser straight into the viewport.** That
-builds the engine's own default volume actor + material — the canonical path, which Python
-refused (`spawn_actor_from_object` returns `None` for an SVT, with and without `-nullrhi`).
-It separates "my hand-rolled material instance is wrong" from "km-scale volumes don't render"
-in a single look, and it is the one thing that cannot be done headless.
+**Drag `/Game/SVT_REAL/frame` from the Content Browser straight into the viewport, then press
+Play (or Simulate).** That builds the engine's own default volume actor + material — the
+canonical path, which Python cannot reach (`spawn_actor_from_object` returns `None` for an
+SVT, and **`unreal.PlacementSubsystem` is not exposed to Python at all**, so the drag-drop
+placement path has no scriptable equivalent). Combined with Play, it tests placement,
+material *and* the streaming tick in one look — the three things every headless probe has
+either faked or failed to drive.
 
 ## Doing the visual check (OWNER) — currently BLOCKED, see above
 
@@ -310,12 +343,20 @@ The editor's four panels: **Content Browser** (bottom — the project's files),
 **Details** (bottom right — the selected actor's properties). If one is missing, they are
 all under the **Window** menu.
 
-1. **Launch.** Easiest is to double-click `SvtProbe.uproject` in Explorer at
+1. **Launch.** Double-click `SvtProbe.uproject` in Explorer at
    `M:\claud_projects\temp\svt_probe\SvtProbe\` — same as the command above. First open
    takes a while (shader compile); a "Compiling Shaders" counter in the bottom-right is
    normal, let it finish before judging anything.
-2. **Open the map.** Content Browser → left tree → **Content** → **Maps** → double-click
-   **SvtPlayback**. (Ignore whatever level opens by default.)
+   - **Two dialogs may appear on the way in, and both are safe to dismiss.** *Restore
+     Packages* offers to recover unsaved work from a session that was killed — click
+     **Disregard**; restoring it would overwrite the level with junk. *Unable to Check Out
+     From Revision Control* is noise (the throwaway project isn't in git) — dismiss it.
+     Neither means the project failed to open.
+2. **Open the map.** The project now boots straight into **SvtPlayback** — `EditorStartupMap`
+   is set in `Config/DefaultEngine.ini` (added 2026-07-15, after the editor was observed
+   opening on an empty `Untitled_1` world and *looking* like a failed project load). If you
+   ever land somewhere else: Content Browser → left tree → **Content** → **Maps** →
+   double-click **SvtPlayback**.
 3. **Find the storm.** In the **Outliner**, click **StormVolume**. Then move the mouse
    over the viewport and press **F** — "frame selected" flies the camera to it. Pressing F
    with the cursor outside the viewport does nothing.
