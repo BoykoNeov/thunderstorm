@@ -55,12 +55,18 @@ def build(scenario, source_run, frames, provenance):
                 "is lost -- only empty pad -- and the index->world mapping is preserved "
                 "exactly, so the active volume lands at identical CM1 world coordinates."),
             "ue_placement_rule": (
-                "DO NOT add origin_m to the actor transform. The imported SVT asset "
-                "already carries the correct CM1 world placement in its own frame "
-                "transform; the actor applies ONLY the units conversion (m->cm, Y-flip). "
-                "Adding origin_m on top double-applies it and lands the volume 2750 m off "
-                "in X/Y. Likewise take any vertical-exaggeration pivot from the asset, not "
-                "from bbox_center_m."),
+                "Read placement from the IMPORTED ASSET's frame transform "
+                "(svt.get_frame_transform()), never from origin_m here. Adding origin_m "
+                "on top double-applies it and lands the volume 2750 m off in X/Y. "
+                "Likewise take any vertical-exaggeration pivot from the asset, not from "
+                "bbox_center_m. NOTE (measured 2026-07-15, docs/phase1-task5-pipeline.md): "
+                "UE does NOT auto-apply that frame transform -- "
+                "HeterogeneousVolumeComponent lays the volume out at 1 voxel = 1 UE unit, "
+                "so an actor left at identity renders a 1.9 m storm at the world origin. "
+                "The actor must apply the asset's frame transform AND the units "
+                "conversion: scale = frame.scale3d * 100 (m->cm), location = "
+                "frame.translation * 100 with Y negated. That is the single conversion "
+                "site; it reads the asset, not this manifest."),
         },
 
         "channels": {

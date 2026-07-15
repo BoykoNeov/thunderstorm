@@ -179,11 +179,11 @@ is room to raise export resolution if playback wants it.
 
 ## What is still owed
 
-1. **In-editor visual streaming playback (OWNER).** Unchanged from
-   `docs/phase1-task3-svt-import.md` — every non-visual binding test passes headless, but
+1. **In-editor visual streaming playback (OWNER) — scene is now pre-built, see
+   "Doing the visual check" below.** Every non-visual binding test passes headless, but
    whether 301 frames *stream smoothly and look right* is only observable with a GPU and
-   a human. This is now testable on **real storm data** (`/Game/SVT_REAL` in the
-   `svt_probe` project), which is a better test than task 3's synthetic fixture.
+   a human. Now on **real storm data**, which is a better test than task 3's synthetic
+   fixture.
 2. **The UE placement rule must survive into the Phase 2 app.** The manifest describes
    the VDB on disk; the imported asset holds tightened values. The app takes placement
    from the **asset's frame transform** and applies **only** the units conversion.
@@ -204,6 +204,61 @@ is room to raise export resolution if playback wants it.
    *different interpreter* from the pipeline's 3.12.3; they never meet because the handoff
    is a file plus a subprocess. Spike-grade — `--explicit`/apt-pin hardening is Phase 2.
 
+## Doing the visual check (OWNER)
+
+The scene is pre-built and asserted, so the check is *look at it*, not *wire up UE*. A
+misconfigured volume renders as nothing, which looks exactly like a streaming failure —
+so every binding below was read back and verified headless rather than assumed.
+
+```
+W:\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe ^
+  M:\claud_projects\temp\svt_probe\SvtProbe\SvtProbe.uproject
+```
+Then open **`/Game/Maps/SvtPlayback`** (Content Browser → `Maps` → `SvtPlayback`). The
+`StormVolume` actor is already playing — select it and press **F** to frame it.
+
+Built by `M:\claud_projects\temp\task5\build_playback_level.py` (verdict `READY`, all
+five checks PASS):
+
+| | |
+|---|---|
+| Volume | `/Game/SVT_REAL/frame` — 301-frame `AnimatedSparseVolumeTexture`, 186×186×65 |
+| Material | `MI_SvtPlayback`, instance of `/Engine/EngineMaterials/SparseVolumeMaterial` |
+| Playback | 25 fps, looping → **~12 s per simulated hour** |
+| Size in world | **46.5 km** across (`span_x_km = 46.5`) |
+| Level | from the `TimeOfDay_Default` template — an empty level has no light, and an unlit volumetric renders as nothing |
+
+**What to judge** (this is the part only you can do): do the 301 frames advance *smoothly*
+— no hitching, popping, or frames that arrive visibly late as the storm grows? Does the
+cell look like a storm rather than a boxy artefact — and, given error #2 above, does the
+anvil look right now that snow is in the `ice` channel?
+
+Two things that are **expected** and are not the test failing: the default engine material
+maps our channels to generic albedo/extinction, so colour is meaningless — this checks
+*streaming*, not final look; and the storm is 46.5 km wide, so at default camera speed
+you will feel slow (raise the viewport speed).
+
+### Finding: UE does not auto-apply the SVT frame transform
+
+Setting the scene up surfaced this, and it **sharpens the placement rule** (item 2). The
+first build placed the actor at identity and its bounds came back **186 × 186 × 65 cm** —
+a 1.9 m storm. `HeterogeneousVolumeComponent` lays the volume out at **1 voxel = 1 UE
+unit** and *ignores the asset's frame transform entirely*.
+
+So "the asset carries the placement" is true only in the sense that it is the **source you
+read it from** — UE will not apply it for you. The actor must apply the frame transform
+**and** the units conversion together:
+
+```
+scale    = frame.scale3d   * 100          # 250 m/voxel -> 25 000 cm/voxel
+location = frame.translation * 100        # with Y negated (CM1 right-handed -> UE left-handed)
+```
+which yields the correct 46.5 km span. This is still exactly one conversion site, and it
+still reads the **asset**, not the manifest's `origin_m` — the double-apply trap is
+unchanged. `volume.ue_placement_rule` in the manifest has been corrected to say so
+explicitly, since the earlier wording ("applies ONLY the units conversion") could be read
+as "UE places it for you", which is false.
+
 ## Reproduction
 
 Pipeline code is committed (`pipeline/cm1post/`, `pipeline/export_scenario.py`; usage in
@@ -212,6 +267,20 @@ Pipeline code is committed (`pipeline/cm1post/`, `pipeline/export_scenario.py`; 
 
 Not committed (regenerable, under `M:\claud_projects\temp\task5\`): `vdb/` staged frames,
 `import_real.py` (the headless UE import + transform check, expectations annotated with
-UE's trim behaviour), `regen_manifest.py`, and logs. UE-side output is
-`/Game/SVT_REAL` in the throwaway `svt_probe` project; per convention it is not promoted
-to `unreal/`.
+UE's trim behaviour), `regen_manifest.py`, `build_playback_level.py` (the owner's
+playback scene), and logs. UE-side output is `/Game/SVT_REAL` + `/Game/Maps/SvtPlayback`
+in the throwaway `svt_probe` project; per convention it is not promoted to `unreal/`.
+
+The playback scene is **rebuildable at any time** — re-run:
+```
+cd M:\claud_projects\temp\svt_probe\SvtProbe
+W:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe SvtProbe.uproject ^
+  -ExecutePythonScript="M:\claud_projects\temp\task5\build_playback_level.py" ^
+  -unattended -nosplash -nullrhi
+```
+It prints `PLAYBACK:` lines to `SvtProbe\Saved\Logs\SvtProbe.log` (**not** stdout) and
+ends in `verdict = READY`. Two API notes for whoever touches it next:
+`spawn_actor_from_object()` — the content-browser-drag actor factory — **refuses an SVT
+from Python** (with and without `-nullrhi`), hence the explicit material instance; and the
+static switch **`StaticSparseVolumeTexture` must be false**, or the animated frames are
+sampled through the static path and never advance.
