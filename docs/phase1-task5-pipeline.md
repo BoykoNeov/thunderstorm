@@ -195,9 +195,14 @@ is room to raise export resolution if playback wants it.
    plain-git line. It currently lives in WSL at
    `/home/boiko/thunderstorm/scenario_out/single_cell_500m/` and is regenerable in 7.5
    minutes from the CM1 run, so nothing is at risk while the decision is open.
-4. **Python env lockfile** (`CLAUDE.md` pinned-versions, "TBD Phase 1"). The pipeline
-   currently runs on system `python3` + numpy/scipy/netCDF4, with OpenVDB reached only
-   through `dense2vdb`. Worth pinning before Phase 2 builds on it.
+4. ~~**Python env lockfile**~~ — **DONE (2026-07-15): `pipeline/ENVIRONMENT.md` +
+   `pipeline/env-vdb.yml`.** Recorded as two separate envs in each one's native form,
+   with **no `requirements.txt`**: system python3 is `EXTERNALLY-MANAGED` and pip-free, so
+   a pip pin file would advertise a `pip install -r` reproducibility that does not exist.
+   Worth knowing: the micromamba `vdb` env is a **runtime** dependency of `export` (not
+   build-time-only — `dense2vdb` dynamically links its libs), and its python 3.14.6 is a
+   *different interpreter* from the pipeline's 3.12.3; they never meet because the handoff
+   is a file plus a subprocess. Spike-grade — `--explicit`/apt-pin hardening is Phase 2.
 
 ## Reproduction
 

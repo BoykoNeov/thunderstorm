@@ -131,8 +131,15 @@ Keep current — SVT behavior shifts between UE releases. Filled through Phase 0
 - **CM1:** cm1r21.1 (binary sha256 in docs/phase0-cm1-build.md).
 - **WSL/toolchain:** Ubuntu 24.04, gfortran 13, OpenMPI 4.1.6, netCDF C+Fortran
   (system libs). MPI, single node.
-- **Python env lockfile:** TBD Phase 1 (post-processor; currently system python3 +
-  netCDF4/numpy/scipy/matplotlib for analysis only).
+- **Python env lockfile:** **RECORDED — pipeline/ENVIRONMENT.md + pipeline/env-vdb.yml
+  (2026-07-15).** Two envs, different interpreters, deliberately no `requirements.txt`
+  (system python is `EXTERNALLY-MANAGED`; a pip file would advertise reproducibility that
+  doesn't exist). (a) **Pipeline runtime = system apt** on Ubuntu 24.04.4: python3
+  **3.12.3**, numpy **1.26.4**, scipy **1.11.4**, netCDF4 **1.6.5** (matplotlib 3.6.3 is
+  installed but NOT load-bearing — no MetPy; plots are Phase 2/4). (b) **VDB writer =
+  micromamba conda-forge `vdb` env**: openvdb **13.0.0** on python 3.14.6 — a *runtime*
+  dep of `export` (dense2vdb dynamically links `envs/vdb/lib`), not build-time-only.
+  Spike-grade: records what is true; `--explicit`/apt-pin hardening deferred to Phase 2.
 - **OpenVDB:** conda-forge **openvdb 13.0.0** (writer lib; on-disk file-format
   **v225**) — **PIN LOCKED, empirically confirmed against UE 5.8 (2026-07-14, Phase 1
   task 3, docs/phase1-task3-svt-import.md).** UE 5.8 bundles the identical

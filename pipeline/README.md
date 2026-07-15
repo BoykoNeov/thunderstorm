@@ -37,7 +37,12 @@ python3 export_scenario.py export \
 
 Deps: system `python3` + `numpy`, `scipy`, `netCDF4` (analysis stack). The VDB write is
 shelled out to `dense2vdb`, so the pipeline needs **no** OpenVDB Python binding — that
-was the point of the C++ converter (see `vdbwriter/README.md`).
+was the point of the C++ converter (see `vdbwriter/README.md`). It does still need the
+env's **shared libraries** at export time, which is what the `LD_LIBRARY_PATH` above is
+for: the `vdb` env is a runtime dependency, not build-time-only.
+
+Exact versions both envs ran on: **`ENVIRONMENT.md`** (+ `env-vdb.yml`). Note there is
+deliberately no `requirements.txt` — the reasoning is in that file.
 
 ## VDB writer implementation (DECIDED — 2026-07-14)
 
