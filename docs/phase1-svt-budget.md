@@ -1,8 +1,26 @@
 # Phase 1 — SVT frame budget (pipeline anchor)
 
-**Status:** decided (2026-07-14). This is the first Phase 1 number computed, because it
-constrains everything upstream: export resolution, decimation, channel packing, and the
-scenario-package format contract.
+**Status:** decided (2026-07-14); **AMENDED against real CM1 data (2026-07-15, task 5 —
+[`phase1-task5-pipeline.md`](phase1-task5-pipeline.md)).** This is the first Phase 1 number
+computed, because it constrains everything upstream: export resolution, decimation, channel
+packing, and the scenario-package format contract.
+
+> ## Amendments from real data (2026-07-15)
+>
+> This doc was authored before any real CM1 frames existed; it sized the crop and sparsity
+> from reasoning plus a synthetic fixture. Task 5 measured the real single-cell run and three
+> numbers below are **superseded**. The *conclusion* — per-frame size is not the limiter —
+> survived and in fact got stronger. What changed:
+>
+> | Was | Now (measured over all 301 frames) | Why |
+> |---|---|---|
+> | crop **40 × 40 × 16 km** | **52 × 52 × 18 km** (208×208×72 @ 250 m) | The real cold-pool outflow reaches **23.25 km** from centre (and 24.25 km at a 100× lower threshold) — the 20 km half-width **clipped the storm**. Anvil top hit 15.75 km vs a 16 km cap. |
+> | `ice` channel = **qi** | `ice` = **qi + qs** | NSSL ptype=27 emits snow separately. Measured **qs/qi ≈ 0.29–0.53** by mass, with snow filling **as many voxels as ice** — omitting it visibly thins the anvil. Merged rather than added as a 6th channel: this keeps the 5-grid / RGBA16F+R16F layout task 3 already proved, so **no SVT import re-test was needed**. Follows the existing qg+qhl precedent; the split stays recoverable in the 3 spare channels. |
+> | sparse fill **35 %** (assumed) | **≤ 12.2 %** within the crop (peak grid, peak frame) | The 35 % figure was a conservative guess. Real peak per-frame VDB is **3.36 MB**, not the ~5.7 MB estimated — an order of magnitude under the streaming ceiling. |
+>
+> The crop miss is the single most valuable thing the spike caught: it is exactly the
+> real-vs-synthetic gap `sim/single_cell/README.md` predicted, and it would have silently
+> truncated every frame of the sequence.
 
 ## Why this comes first
 
@@ -29,8 +47,14 @@ the split available in a spare channel for later phases.
 
 | Texture   | Format     | R          | G          | B          | A                     |
 |-----------|------------|------------|------------|------------|-----------------------|
-| **A**     | RGBA16F    | qc (cloud water) | qi (cloud ice) | qr (rain) | qg+qh (graupel+hail) |
+| **A**     | RGBA16F    | qc (cloud water) | **qi+qs (cloud ice + snow)** | qr (rain) | qg+qhl (graupel+hail) |
 | **B**     | R16F       | dBZ (radar diag) | —      | —          | —                     |
+
+> **Amended 2026-07-15:** the `ice` channel carries **qi + qs**, not qi alone (see the
+> amendment table at the top), and CM1's hail variable is `qhl` (not `qh`). The grid
+> **names** shipped in the VDB — `cloud`, `ice`, `rain`, `graupelhail`, `dbz` — are
+> unchanged and frozen: task 3 proved UE 5.8's default grid→SVT assignment reproduces this
+> exact map, so renaming would force an import re-test.
 
 - 5 channels used of 8 → headroom for a 6th–8th field later (split hail from graupel, add
   temperature for cloud tint, or w for updraft viz) **without** re-authoring the SVT contract.
@@ -44,6 +68,11 @@ the split available in a spare channel for later phases.
   see `scenarios/`). UE reads the mapping from the manifest, never hardcodes it.
 
 ## Export domain (single cell, stationary, flat)
+
+> **SUPERSEDED by measurement (2026-07-15).** The real crop is **52 × 52 × 18 km**
+> (208×208×72 @ 250 m); the 40 × 40 × 16 km box below **clipped** both the outflow and the
+> anvil top. The reasoning about *why* the box is fixed and centred still holds verbatim —
+> only the numbers moved. Authoritative box: `pipeline/cm1post/config.py`.
 
 A single airmass cell's meaningful cloud+precip is ~15–25 km wide and reaches the overshooting
 top near 16 km. We crop the CM1 domain to a **fixed, padded 40 × 40 × 16 km box** covering the

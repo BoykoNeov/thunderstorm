@@ -186,6 +186,21 @@ Do not start a phase without explicit go from the owner.
   in UE 5.8 — all three non-visual binding tests pass (frame count, multi-grid channel
   identity, static bbox) → openvdb pin locked. The task's namesake **in-editor visual
   streaming playback is still owed by the owner** (owner-gated handoff in the task doc).
+  **Task 5 (real post-processor) COMPLETE — 2026-07-15, docs/phase1-task5-pipeline.md:**
+  `pipeline/cm1post/` + `export_scenario.py` turn real CM1 netCDF into a 301-frame VDB
+  sequence + manifest (0.46 GB; **peak 3.51 MB/frame** vs the 30–50 MB budget; imports
+  headless into a 301-frame SVT in 11.6 s). The spike caught two silent contract errors
+  the synthetic fixture could not: the locked 40×40 km crop **clipped** the real cold-pool
+  outflow (real half-width 23.25 km → box now 52×52×18 km), and `ice = qi` **dropped
+  snow** (→ `qi+qs`; qs/qi ≈ 0.29–0.53 by mass). Both amended into
+  docs/phase1-svt-budget.md. **Known UE behaviour:** the SVT factory unions active voxels
+  across the sequence and tightens/re-bases the box (208×208×72 @ −25875 → 186×186×65 @
+  −23125) — lossless, but the UE app must take placement from the **asset's transform**
+  and apply only the units conversion; adding the manifest's `origin_m` on top lands the
+  volume 2750 m off (guardrail: `volume.ue_placement_rule` in the manifest).
+  **Still open:** where multi-GB packages live (LFS vs out-of-repo — charter says decide
+  before the first ships; this one is 0.46 GB and regenerable in 7.5 min), and the Python
+  env lockfile.
 - **Phase 2:** scenario system + selectable UI layers + radar view.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
