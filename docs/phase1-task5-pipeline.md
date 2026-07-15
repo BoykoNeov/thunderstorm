@@ -232,6 +232,38 @@ If the viewport is static, toggle **Realtime** (the viewport's clock icon, or `C
 without it the editor does not tick and the volume will sit on one frame, which looks
 exactly like streaming being broken.
 
+### Finding your way around (no UE experience assumed)
+
+The editor's four panels: **Content Browser** (bottom — the project's files),
+**Viewport** (centre — the 3D view), **Outliner** (top right — every actor in the level),
+**Details** (bottom right — the selected actor's properties). If one is missing, they are
+all under the **Window** menu.
+
+1. **Launch.** Easiest is to double-click `SvtProbe.uproject` in Explorer at
+   `M:\claud_projects\temp\svt_probe\SvtProbe\` — same as the command above. First open
+   takes a while (shader compile); a "Compiling Shaders" counter in the bottom-right is
+   normal, let it finish before judging anything.
+2. **Open the map.** Content Browser → left tree → **Content** → **Maps** → double-click
+   **SvtPlayback**. (Ignore whatever level opens by default.)
+3. **Find the storm.** In the **Outliner**, click **StormVolume**. Then move the mouse
+   over the viewport and press **F** — "frame selected" flies the camera to it. Pressing F
+   with the cursor outside the viewport does nothing.
+4. **Realtime.** Top-left of the viewport there is a row of icons; the **clock** toggles
+   Realtime. Or hover the viewport and press `Ctrl+R`. **Do this first** — it is the single
+   most likely reason the volume looks frozen.
+5. **Fly.** Hold **right mouse button** in the viewport and steer with the mouse; **WASD**
+   while holding it moves (Q/E = down/up). Still holding RMB, the **scroll wheel** changes
+   fly speed — 46.5 km is large, so wind it up. The **camera icon** at the viewport's top
+   right has the same speed setting as a slider.
+6. **Scrub to the storm's peak.** With `StormVolume` selected, the **Details** panel has a
+   *Heterogeneous Volume* section: untick **Playing**, then set **Frame** to `255`. Tick
+   **Playing** again to resume the loop.
+7. **Density Scale** (only if it looks blank or like a solid block). Content Browser →
+   **Content** → **SVT_REAL** → double-click **MI_SvtPlayback**. In the Material Instance
+   editor, the left **Parameter Groups** list has **Density Scale**; **tick its checkbox**
+   to enable the override (greyed-out means it is inherited and your typing is ignored),
+   then edit the number. The viewport updates live. **Ctrl+S** to keep a value.
+
 **What to judge** (this is the part only you can do):
 
 1. **Smoothness** — the actual question. Do the 301 frames advance without hitching,
