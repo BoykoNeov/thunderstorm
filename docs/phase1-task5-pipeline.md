@@ -367,14 +367,25 @@ all under the **Window** menu.
    while holding it moves (Q/E = down/up). Still holding RMB, the **scroll wheel** changes
    fly speed — 46.5 km is large, so wind it up. The **camera icon** at the viewport's top
    right has the same speed setting as a slider.
-6. **Scrub to the storm's peak.** With `StormVolume` selected, the **Details** panel has a
-   *Heterogeneous Volume* section: untick **Playing**, then set **Frame** to `255`. Tick
-   **Playing** again to resume the loop.
-7. **Density Scale** (only if it looks blank or like a solid block). Content Browser →
-   **Content** → **SVT_REAL** → double-click **MI_SvtPlayback**. In the Material Instance
-   editor, the left **Parameter Groups** list has **Density Scale**; **tick its checkbox**
-   to enable the override (greyed-out means it is inherited and your typing is ignored),
-   then edit the number. The viewport updates live. **Ctrl+S** to keep a value.
+6. **Tick `Playing` — DO THIS, the saved level has it OFF.** With `StormVolume` selected,
+   the **Details** panel has a *Heterogeneous Volume* section. It currently reads
+   `Playing = False`, `Frame = 255` — left there by my probes, and quite possibly the reason
+   the volume is invisible (an animated SVT that isn't playing may have no frames resident,
+   so the renderer samples zero density). **Tick `Playing`** and set **Frame** back to `0`.
+   I could not bake this in headlessly: setting the property from Python never marks the
+   package dirty, so both `save_packages()` and `save_asset()` return `False` and write
+   nothing. It is one checkbox for you; it was an afternoon for me.
+7. **Then press `Play` (Alt+P) or `Simulate` (Alt+S).** This is the step that has never been
+   tested. With a real GPU, `playing=True` and 600 editor ticks, `Frame` **never advanced
+   past 255** — the editor viewport does not appear to tick the SVT's animation at all. If
+   frames only stream during PIE/Simulate, then every screenshot I took sampled an
+   unstreamed frame, and that alone explains the black volume. Press Escape to stop.
+8. **Density Scale** (only if it renders but looks blank or like a solid block — *not* a fix
+   for a black screen; ten decades of it changed nothing). Content Browser → **Content** →
+   **SVT_REAL** → double-click **MI_SvtPlayback**. In the Material Instance editor, the left
+   **Parameter Groups** list has **Density Scale**; **tick its checkbox** to enable the
+   override (greyed-out means it is inherited and your typing is ignored), then edit the
+   number. The viewport updates live. **Ctrl+S** to keep a value.
 
 **What to judge** (this is the part only you can do):
 
