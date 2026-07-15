@@ -179,17 +179,25 @@ is room to raise export resolution if playback wants it.
 
 ## What is still owed
 
-1. **In-editor visual streaming playback (OWNER) — scene is now pre-built, see
-   "Doing the visual check" below.** Every non-visual binding test passes headless, but
-   whether 301 frames *stream smoothly and look right* is only observable with a GPU and
-   a human. Now on **real storm data**, which is a better test than task 3's synthetic
-   fixture.
-2. **The UE placement rule must survive into the Phase 2 app.** The manifest describes
-   the VDB on disk; the imported asset holds tightened values. The app takes placement
-   from the **asset's frame transform** and applies **only** the units conversion.
-   Adding manifest `origin_m` on top double-applies it and lands the volume **2750 m off
-   in X/Y**. Recorded as `volume.ue_placement_rule` in the manifest itself, where the
-   code that could get it wrong will be looking.
+1. **In-editor visual streaming playback (OWNER) — BLOCKED: the volume does not render.**
+   See "Render investigation (2026-07-15) — UNRESOLVED" below. On a real GPU (D3D12,
+   RTX 5090) the volume is **absent from the frame** at every Density Scale from 2e-4 to
+   **1e6**, correctly bound, placed and lit throughout. A density sweep spanning ten
+   decades changing nothing means the ray marcher is integrating ~zero density — so this
+   is not a tuning knob, it is a real defect somewhere between the material, the actor
+   scale, and the capture method. **Do not open the level expecting a storm.**
+2. **The UE placement rule is WRONG as written and must not be trusted by Phase 2.**
+   Two errors found on 2026-07-15, both while setting the scene up:
+   - **The Y-flip is broken.** Negating the frame transform's translation *moves* the box
+     instead of *mirroring* it: the volume extends in +Y from its corner, so flipping only
+     the corner lands the storm ~46 km off-axis (measured `bounds_origin.y = +4,637,500 cm`
+     where x centred at ~125 cm). Mirroring the far corner
+     (`location.y = -(translation.y + span_y) * 100`) is the likely fix — **unverified**.
+   - **The ×100 scale itself is now in question**, not merely unconfirmed. A 25000× actor
+     scale is a live suspect for the invisible volume (see below), and a control at scale 1
+     is what would separate the two. Until the render works, treat the whole rule as
+     unproven.
+   `volume.ue_placement_rule` in the manifest has been amended to say so.
 3. **Where the package lives (OWNER).** The charter requires deciding LFS vs out-of-repo
    "before the first package ships". This one is 0.46 GB — comfortably over the 10 MB
    plain-git line. It currently lives in WSL at
@@ -204,21 +212,84 @@ is room to raise export resolution if playback wants it.
    *different interpreter* from the pipeline's 3.12.3; they never meet because the handoff
    is a file plus a subprocess. Spike-grade — `--explicit`/apt-pin hardening is Phase 2.
 
-## Doing the visual check (OWNER)
+## Render investigation (2026-07-15) — UNRESOLVED
 
-The scene is pre-built and asserted, so the check is *look at it*, not *wire up UE*. A
-misconfigured volume renders as nothing, which looks exactly like a streaming failure —
-so every binding below was read back and verified headless rather than assumed.
+**The volume does not render.** Not "renders wrong" — absent, on a real GPU, with the
+scene otherwise drawing correctly (default-level geometry, gizmo and engine banners all
+appear in the captures; only the storm is missing).
+
+### The thing that actually matters: `-nullrhi` cannot check a renderer
+
+Everything below was found in one sitting *after* switching from `-nullrhi` to a real
+D3D12 device. The prior session's build script reported **`verdict = READY`, six checks
+PASS**, and every one of those checks was true of an in-memory object and false of the
+artefact on disk. Under `-nullrhi` nothing renders, so nothing that only matters when
+rendering can fail — a missing light costs nothing, an unsaved level costs nothing. The
+checks were self-consistent and measured the wrong thing.
+
+**Four defects `-nullrhi` reported as PASS:**
+
+| Defect | How it passed |
+|---|---|
+| The level **never saved**. `new_level()` returned `False` (the map already existed), so every actor was spawned into a throwaway `/Temp/Untitled_1` world; `save_current_level()` then returned `False` and the return value was never read. The `.umap` on disk stayed stale for 35 minutes while builds reported success. | Checks inspected live objects, not the saved file. Fix: `EditorLoadingAndSavingUtils.save_map(world, path)` (returns `True`) + verify by re-loading **in a separate process**. |
+| **No lights.** `new_level_from_template(TimeOfDay_Default)` contributed nothing; the saved level held exactly one actor. The template was chosen *specifically* to avoid an unlit volume. | An unlit volumetric is invisible only when something renders it. |
+| **`set_actor_label` does not persist** through save — the actor came back labelled `HeterogeneousVolume`, not `StormVolume`, so a label lookup returned `None`. | Nothing looked the actor up from disk. |
+| A density sweep fired **451 `HighResShot` requests** instead of 6 (the state machine ran off the end of its list; the `IndexError` was raised *after* the request, so it re-fired every tick) and wrote **zero** PNGs — while logging `SWEEP: DONE`. | The log said DONE. Nobody checked for the files. |
+
+### What is ruled out
+
+- **Density Scale.** Swept `2e-4 → 1e0 → 1e2 → 1e4 → 1e6`. Ten decades, no change, still
+  black. A sweep that wide changing *nothing* means the marcher integrates ~zero density,
+  which rules out calibration as the *cause* — and kills the "if it's blank, raise Density
+  Scale" advice this doc previously gave.
+- **Lighting / camera framing** — the rest of the scene renders; the camera is aimed at the
+  volume's centre and its bounds are correct (46.5 × 46.5 × 16.25 km = 186×186×65 @ 250 m).
+- **Trace distance** — a real find but **not the cause**: `r.HeterogeneousVolumes.MaxTraceDistance`
+  defaults to **30000 cm = 300 m**, against our 46.5 km volume seen from 51 km. Raising it
+  to 200 km changed nothing. **Keep this recorded anyway**: the default is tuned for
+  metre-scale VFX puffs and *will* matter for a km-scale storm once the volume renders at all.
+
+### Still open (ranked)
+
+1. **Capture artifact.** The captures show the skydome banner repeated 3× — `HighResShot`
+   was **tiling**, and tiled capture is known to drop some volumetric passes. If so,
+   "renders nothing" is an artefact of *how I looked*, and the owner's live viewport was
+   always the right instrument.
+2. **The material samples the wrong attribute.** The static switches (`Density (Attributes A)`,
+   `Clamp SVT Density`, `StaticSparseVolumeTexture`) were set **without verifying the names
+   exist** — `set_material_instance_static_switch_parameter_value` no-ops silently on a bad
+   name, the same silent-failure class as `save_current_level`.
+3. **The 25000× actor scale defeats the marcher.** `scale3d(250) × 100`. Auto `StepSize(-1)`
+   is plausibly computed in the component's *local* space (1 voxel = 1 unit), so the ray
+   quits before reaching the dense core.
+4. **`playing=False` samples an unstreamed frame.** An `AnimatedSparseVolumeTexture` may only
+   stream during playback, so a pinned `frame=255` in a static view can be legitimately empty.
+
+### The one ask that beats more of this
+
+**Drag `/Game/SVT_REAL/frame` from the Content Browser straight into the viewport.** That
+builds the engine's own default volume actor + material — the canonical path, which Python
+refused (`spawn_actor_from_object` returns `None` for an SVT, with and without `-nullrhi`).
+It separates "my hand-rolled material instance is wrong" from "km-scale volumes don't render"
+in a single look, and it is the one thing that cannot be done headless.
+
+## Doing the visual check (OWNER) — currently BLOCKED, see above
+
+**The scene below does not currently show a storm.** The steps and UI walkthrough are kept
+because they are correct *mechanically* and are what you would use once the render defect is
+found — but the previous claim that this was "pre-built and asserted, just look at it" was
+wrong, and the assertions behind it could not have caught any of the four defects above.
 
 ```
 W:\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe ^
   M:\claud_projects\temp\svt_probe\SvtProbe\SvtProbe.uproject
 ```
-Then open **`/Game/Maps/SvtPlayback`** (Content Browser → `Maps` → `SvtPlayback`). The
-`StormVolume` actor is already playing — select it and press **F** to frame it.
+Then open **`/Game/Maps/SvtPlayback`** (Content Browser → `Maps` → `SvtPlayback`). The volume
+actor is labelled `StormVolume` in the level built by `build_v7.py` — earlier builds left it
+as `HeterogeneousVolume`.
 
-Built by `M:\claud_projects\temp\task5\build_playback_level.py` (verdict `READY`, all
-five checks PASS):
+Scene contents (rebuilt by `M:\claud_projects\temp\task5\build_v7.py`, verified from a
+separate process by `verify_v7.py`: 78 actors, lights present, volume bound, span 46.5 km):
 
 | | |
 |---|---|

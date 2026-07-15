@@ -202,9 +202,23 @@ Do not start a phase without explicit go from the owner.
   snow** (→ `qi+qs`; qs/qi ≈ 0.29–0.53 by mass). Both amended into
   docs/phase1-svt-budget.md. **Known UE behaviour:** the SVT factory unions active voxels
   across the sequence and tightens/re-bases the box (208×208×72 @ −25875 → 186×186×65 @
-  −23125) — lossless, but the UE app must take placement from the **asset's transform**
-  and apply only the units conversion; adding the manifest's `origin_m` on top lands the
-  volume 2750 m off (guardrail: `volume.ue_placement_rule` in the manifest).
+  −23125) — lossless, and the UE app must take placement from the **asset's transform**,
+  never the manifest's `origin_m` (adding it on top lands the volume 2750 m off).
+  **RENDER BLOCKED (2026-07-15) — docs/phase1-task5-pipeline.md "Render investigation":**
+  on a real GPU the imported volume **does not render at any Density Scale (swept 2e-4 →
+  1e6)**. Ten decades changing nothing ⇒ the ray marcher integrates ~zero density, so this
+  is a defect, not tuning. Open suspects: tiled-`HighResShot` capture artifact, unverified
+  material switch names, the 25000× actor scale vs auto `StepSize`, `playing=False` sampling
+  an unstreamed frame. The **exact units mapping** in `volume.ue_placement_rule` is UNPROVEN
+  and partly wrong — the Y-flip *moves* the box instead of mirroring it (~46 km off-axis).
+  Also recorded: `r.HeterogeneousVolumes.MaxTraceDistance` defaults to **300 m** (tuned for
+  metre-scale VFX puffs) — raising it to 200 km did not fix the invisibility, but it is a
+  real constraint for a 46.5 km storm once the volume renders.
+  **Method lesson, load-bearing:** `-nullrhi` underpinned all of task 3's and task 5's
+  binding validation and is **structurally incapable** of catching render defects — it
+  reported `verdict = READY` over an unsaved level, a lightless scene, a non-persisting
+  actor label, and a screenshot loop that wrote no files. Any future "SVT works" claim
+  must come from a real RHI.
   **Still open:** where multi-GB packages live (LFS vs out-of-repo — charter says decide
   before the first ships; this one is 0.46 GB and regenerable in 7.5 min), and the Python
   env lockfile.
