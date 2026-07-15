@@ -212,7 +212,30 @@ is room to raise export resolution if playback wants it.
    *different interpreter* from the pipeline's 3.12.3; they never meet because the handoff
    is a file plus a subprocess. Spike-grade — `--explicit`/apt-pin hardening is Phase 2.
 
-## Render investigation (2026-07-15) — UNRESOLVED
+## Render investigation (2026-07-15) — **RESOLVED same day, evening session**
+
+**The storm renders.** Root causes and the full operational handoff are in
+`docs/session-handoff-2026-07-15-visuals.md`. Summary of what was wrong, in causal order:
+
+1. **Placement:** on a real RHI the component DOES apply the SVT frame transform — the
+   ×25000 actor scale made the volume 250× oversized (11,625 km) with the camera lost
+   inside it. Correct rule: **actor scale = 100 (m→cm), location = (0,0,0)** — the
+   "provisional finding" below is falsified, as its own caveat feared.
+2. **`r.HeterogeneousVolumes.MaxTraceDistance` = 300 m default** — suspect confirmed as a
+   real cause once the size was fixed; set to 100 km (persisted in the probe project ini).
+3. **The editor world never streams non-resident SVT frames** (open suspect #1 confirmed):
+   frame 0 (a ~3 KB warm bubble) is all you ever see outside PIE. Visual verification must
+   run in Simulate/PIE, where streaming works.
+4. The saved level sampled **frame 0** — near-empty by construction.
+
+Full-size captures of the 46.5-km storm at frame 255 exist under
+`M:\claud_projects\temp\task5_visuals\`. One NEW open issue: after many PIE cycles in one
+editor session the SVT degrades to lowest-mip rendering; see the handoff doc.
+
+The original investigation text is kept below for the record; read it knowing the
+resolution above.
+
+---
 
 **The volume does not render.** Not "renders wrong" — absent, on a real GPU, with the
 scene otherwise drawing correctly (default-level geometry, gizmo and engine banners all

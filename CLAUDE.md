@@ -204,16 +204,20 @@ Do not start a phase without explicit go from the owner.
   across the sequence and tightens/re-bases the box (208×208×72 @ −25875 → 186×186×65 @
   −23125) — lossless, and the UE app must take placement from the **asset's transform**,
   never the manifest's `origin_m` (adding it on top lands the volume 2750 m off).
-  **RENDER BLOCKED (2026-07-15) — docs/phase1-task5-pipeline.md "Render investigation":**
-  on a real GPU the imported volume **does not render at any Density Scale (swept 2e-4 →
-  1e6)**. Ten decades changing nothing ⇒ the ray marcher integrates ~zero density, so this
-  is a defect, not tuning. Open suspects: tiled-`HighResShot` capture artifact, unverified
-  material switch names, the 25000× actor scale vs auto `StepSize`, `playing=False` sampling
-  an unstreamed frame. The **exact units mapping** in `volume.ue_placement_rule` is UNPROVEN
-  and partly wrong — the Y-flip *moves* the box instead of mirroring it (~46 km off-axis).
-  Also recorded: `r.HeterogeneousVolumes.MaxTraceDistance` defaults to **300 m** (tuned for
-  metre-scale VFX puffs) — raising it to 200 km did not fix the invisibility, but it is a
-  real constraint for a 46.5 km storm once the volume renders.
+  **RENDER FIXED (2026-07-15 evening) — docs/session-handoff-2026-07-15-visuals.md:**
+  the storm renders full-size (46.5 km) on a real GPU in Simulate. Root causes: (1) the
+  placement rule was wrong — on a real RHI the component DOES apply the SVT frame
+  transform, so the correct actor transform is **scale=100 (m→cm), location=(0,0,0)**
+  (the ×25000 rule made it 250× oversized; manifest still needs correcting); (2)
+  `r.HeterogeneousVolumes.MaxTraceDistance` 300 m default → 100 km (persisted in the probe
+  project ini); (3) **the editor world never streams non-resident SVT frames** — frame 0
+  only; all visual verification must run in Simulate/PIE. Visual-improvement work (scene
+  foundation done: physical sun 75000 lux, manual exposure, fog, 200 km ground plane,
+  ambient VolumetricCloud; density/albedo tuning + rain/hail/lightning pending) and one
+  open issue (SVT drops to lowest mip after many PIE cycles in one editor session — test:
+  restart editor) are in the handoff doc. Unreal MCP is now fully wired: EditorToolset /
+  NiagaraToolsets / ConfigSettingsToolset plugins enabled in SvtProbe → 25 toolsets incl.
+  CaptureViewport, StartPIE/StopPIE, generic property access, material/Blueprint authoring.
   **Method lesson, load-bearing:** `-nullrhi` underpinned all of task 3's and task 5's
   binding validation and is **structurally incapable** of catching render defects — it
   reported `verdict = READY` over an unsaved level, a lightless scene, a non-persisting
