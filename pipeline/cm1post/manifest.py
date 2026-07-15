@@ -59,14 +59,18 @@ def build(scenario, source_run, frames, provenance):
                 "(svt.get_frame_transform()), never from origin_m here. Adding origin_m "
                 "on top double-applies it and lands the volume 2750 m off in X/Y. "
                 "Likewise take any vertical-exaggeration pivot from the asset, not from "
-                "bbox_center_m. NOTE (measured 2026-07-15, docs/phase1-task5-pipeline.md): "
-                "UE does NOT auto-apply that frame transform -- "
-                "HeterogeneousVolumeComponent lays the volume out at 1 voxel = 1 UE unit, "
-                "so an actor left at identity renders a 1.9 m storm at the world origin. "
-                "The actor must apply the asset's frame transform AND the units "
-                "conversion: scale = frame.scale3d * 100 (m->cm), location = "
-                "frame.translation * 100 with Y negated. That is the single conversion "
-                "site; it reads the asset, not this manifest."),
+                "bbox_center_m. PROVISIONAL (measured 2026-07-15 under -nullrhi, "
+                "docs/phase1-task5-pipeline.md -- CONFIRM ON GPU BEFORE RELYING ON IT): "
+                "UE appears NOT to auto-apply that frame transform -- "
+                "HeterogeneousVolumeComponent laid the volume out at 1 voxel = 1 UE unit "
+                "(bounds 186x186x65 cm, a 1.9 m storm), so the actor must apply the "
+                "asset's frame transform AND the units conversion: scale = "
+                "frame.scale3d * 100 (m->cm), location = frame.translation * 100 with Y "
+                "negated -> a 46.5 km span. If UE DOES honour the frame transform on a "
+                "real GPU, that scaling is 100x oversized. The owner's visual check "
+                "settles it: the storm must read ~46.5 km across, not 1.9 m or 4650 km. "
+                "Either way the conversion is ONE site and reads the asset, not this "
+                "manifest."),
         },
 
         "channels": {

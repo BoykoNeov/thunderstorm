@@ -228,22 +228,58 @@ five checks PASS):
 | Size in world | **46.5 km** across (`span_x_km = 46.5`) |
 | Level | from the `TimeOfDay_Default` template — an empty level has no light, and an unlit volumetric renders as nothing |
 
-**What to judge** (this is the part only you can do): do the 301 frames advance *smoothly*
-— no hitching, popping, or frames that arrive visibly late as the storm grows? Does the
-cell look like a storm rather than a boxy artefact — and, given error #2 above, does the
-anvil look right now that snow is in the `ice` channel?
+If the viewport is static, toggle **Realtime** (the viewport's clock icon, or `Ctrl+R`) —
+without it the editor does not tick and the volume will sit on one frame, which looks
+exactly like streaming being broken.
 
-Two things that are **expected** and are not the test failing: the default engine material
-maps our channels to generic albedo/extinction, so colour is meaningless — this checks
-*streaming*, not final look; and the storm is 46.5 km wide, so at default camera speed
-you will feel slow (raise the viewport speed).
+**What to judge** (this is the part only you can do):
 
-### Finding: UE does not auto-apply the SVT frame transform
+1. **Smoothness** — the actual question. Do the 301 frames advance without hitching,
+   popping, or arriving visibly late as the storm grows and per-frame size climbs toward
+   the 3.51 MB peak?
+2. **Scale** — does the storm read **~46.5 km** across? This is free verification of a
+   *provisional* finding (below): the ×100 conversion was measured under `-nullrhi`, which
+   cannot prove what a real GPU does. **1.9 m or 4650 km means the placement rule is
+   wrong**, not the streaming.
+3. **Shape** — a storm rather than a boxy artefact; and given error #2 above, does the
+   anvil look right now that snow is in `ice`?
+
+### If you see nothing (or a solid block), read this before concluding "broken"
+
+A blank viewport has several causes and only one of them is streaming. In order of
+likelihood:
+
+- **Density Scale is a guess.** Our channels are mixing ratios ~1e-3 kg/kg; the stock
+  material is built for density grids ~0–1 and knows nothing about our units. Left at its
+  default `1.0`, optical depth across a 10 km path would be ~5000 — an opaque black block.
+  I set **`Density Scale = 2e-4`** on `MI_SvtPlayback` to put τ near 1, but that rests on
+  an assumed UE extinction convention. **If it is blank, raise it; if it is an opaque
+  block, lower it** — sweep it in decades (1e-5 → 1e-2). That is material tuning, **not**
+  a streaming failure.
+- **The loop starts before the storm exists.** Frame 0 is **2937 bytes** against 3.2 MB at
+  the end — a warm bubble in a clear domain. Near-nothing at t=0 is *correct*. The storm
+  develops over the loop and peaks around **frame 255** (t≈51 min). Scrub there before
+  judging.
+- **Colour is meaningless.** The default material maps our channels onto generic
+  albedo/extinction; density comes from Tex A's R channel (cloud). This checks
+  *streaming*, not final look — the real material is Phase 4.
+- **Camera speed.** 46.5 km is big; raise the viewport speed or you will feel stuck.
+
+### Finding (PROVISIONAL): UE does not auto-apply the SVT frame transform
 
 Setting the scene up surfaced this, and it **sharpens the placement rule** (item 2). The
 first build placed the actor at identity and its bounds came back **186 × 186 × 65 cm** —
 a 1.9 m storm. `HeterogeneousVolumeComponent` lays the volume out at **1 voxel = 1 UE
-unit** and *ignores the asset's frame transform entirely*.
+unit** and *appears to ignore the asset's frame transform entirely*.
+
+**This is measured under `-nullrhi`, and that is exactly what `-nullrhi` cannot settle.**
+Whether the component folds `frame.scale3d` into its world bounds on a real GPU is a
+render-path question. If it *does*, the ×100 below is 100× oversized and the volume is
+4650 km wide with the camera inside it. The scale half is solid — 186 cm → 46.5 km, and
+resolution/transform read back correctly, so the SVT data genuinely loaded — but the
+conclusion is provisional until the owner's check confirms the storm reads ~46.5 km. The
+manifest's `ue_placement_rule` is worded as provisional for the same reason: a wrong pin
+here double-applies in Phase 2.
 
 So "the asset carries the placement" is true only in the sense that it is the **source you
 read it from** — UE will not apply it for you. The actor must apply the frame transform
