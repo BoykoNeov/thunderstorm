@@ -311,6 +311,9 @@ With streaming fixed, the planned sweep ran at Frame=255 (mature storm), mip 0 r
 Caveat: the scene currently reads dark/dusk-like and fog washes the storm heavily at these
 distances — the sweep is internally consistent but the anvil-translucent/core-solid call
 likely needs the lighting pass (sun angle/exposure) first. MI restored to 0.05 after.
+**⚠ INVALIDATED 2026-07-16 (docs/phase1-lighting-pass-2026-07-16.md §2): this sweep was
+blind — MI edits do not apply live (only at the next PIE start), so all four captures show
+the same stale material; the visible differences were template-cloud animation drift.**
 An A/B `bVisible` toggle diff (cap64_novol/cap64_vol, 18 km out) proves the volume renders
 full-size with structure sourced from mip 0.
 

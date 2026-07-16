@@ -234,7 +234,15 @@ Do not start a phase without explicit go from the owner.
   StormVolume actor + fix are SAVED to disk (owner Save All, 2026-07-16) and the debug
   scaffolding is torn down (BP_ConsoleExec BeginPlay reduced to two idempotent
   debug-off resets; `bThrottleCPUWhenNotForeground=False` persisted in editor prefs;
-  inject_view.py deleted).** Unreal MCP is now fully wired: EditorToolset /
+  inject_view.py deleted).** **Lighting/exposure pass DONE (2026-07-16 session 4,
+  docs/phase1-lighting-pass-2026-07-16.md): scene reads as daylight, storm legible at 35 km
+  (EV bias −13, fog 5e-5/falloff 0.01, template VolumetricCloud hidden — it camouflaged the
+  storm; frame 150 is the classic-Cb hero frame, NOT 255 which is late-stage diffuse; all
+  unsaved pending owner Save All). Two hard-won rules: MI scalar edits apply only at the
+  NEXT PIE start (never live — sweeps need one Simulate cycle per value; the 07-15 "live in
+  PIE" claim and the 07-16 sweep2 results are retracted), and `Density Scale` saturates
+  visually above ~1 on the engine default SparseVolumeMaterial — core solidity needs the
+  task-5 custom material, not this knob.** Unreal MCP is now fully wired: EditorToolset /
   NiagaraToolsets / ConfigSettingsToolset plugins enabled in SvtProbe → 25 toolsets incl.
   CaptureViewport, StartPIE/StopPIE, generic property access, material/Blueprint authoring.
   **Method lesson, load-bearing:** `-nullrhi` underpinned all of task 3's and task 5's

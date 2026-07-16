@@ -89,8 +89,10 @@ Key tools (exact names matter; describe_toolset for schemas):
   set_properties(`instance`,`values`=JSON-STRING), list_properties. Works on ANY UObject
   incl. components and PIE-world objects (path prefix `/Game/Maps/UEDPIE_0_SvtPlayback.`).
 - `editor_toolset.toolsets.material_instance.MaterialInstanceTools`:
-  get/set_scalar_parameter(`instance`,`name`[,`value`]). **MI edits apply LIVE into a
-  running PIE session** — the density sweep loop is: set param → capture, no PIE restart.
+  get/set_scalar_parameter(`instance`,`name`[,`value`]). ~~**MI edits apply LIVE into a
+  running PIE session** — the density sweep loop is: set param → capture, no PIE restart.~~
+  **RETRACTED 2026-07-16 (docs/phase1-lighting-pass-2026-07-16.md §2): MI edits apply only
+  at the NEXT PIE start, never live — sweep = one Simulate cycle per value.**
 - `editor_toolset.toolsets.material.MaterialTools`: create_material, add_expression,
   connect_to_output(`expression`,`output_name`,`material_property` e.g. "MP_BaseColor"),
   recompile(`material_or_function`).
