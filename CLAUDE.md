@@ -242,7 +242,18 @@ Do not start a phase without explicit go from the owner.
   NEXT PIE start (never live — sweeps need one Simulate cycle per value; the 07-15 "live in
   PIE" claim and the 07-16 sweep2 results are retracted), and `Density Scale` saturates
   visually above ~1 on the engine default SparseVolumeMaterial — core solidity needs the
-  task-5 custom material, not this knob.** Unreal MCP is now fully wired: EditorToolset /
+  task-5 custom material, not this knob.**
+  **Custom SVT volume material DONE + SAVED (2026-07-16 session 5,
+  docs/phase1-svt-custom-material-2026-07-16.md):** /Game/SVT_REAL/M_StormVolume (+ MI,
+  bound to the component and saved to disk over MCP) maps the four hydrometeor channels
+  to physical extinction (Extinction→MP_SubsurfaceColor, Albedo→MP_BaseColor; SVT param
+  name must stay "SparseVolumeTexture"; weights 1.0 cloud / 0.10 ice / 0.02 rain /
+  0.005 graupelhail × "Extinction Scale", default 1000 by sweep — solid core,
+  translucent anvil; no saturation, each decade a distinct step). Persistence lesson:
+  the level is One-File-Per-Actor — component edits dirty the actor package under
+  `__ExternalActors__`, never the map package, and `AssetTools.save_assets
+  {"asset_paths": []}` saves everything headlessly (no owner Save All needed).
+  Unreal MCP is now fully wired: EditorToolset /
   NiagaraToolsets / ConfigSettingsToolset plugins enabled in SvtProbe → 25 toolsets incl.
   CaptureViewport, StartPIE/StopPIE, generic property access, material/Blueprint authoring.
   **Method lesson, load-bearing:** `-nullrhi` underpinned all of task 3's and task 5's
