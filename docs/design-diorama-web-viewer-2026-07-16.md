@@ -245,6 +245,30 @@ is always evidence.
 3. **Diorama staging** — low-poly island + water, pastel palette, tilt-shift DOF,
    background, storm ground-shadow. *Gate: a static screenshot reads as "toy
    diorama with a real storm," side-by-side with the reference image.*
+   **DONE 2026-07-16** — gate met (headless captures at frames 150 and 255 plus
+   alternate orbit angles): the storm stands on a 74-km circular water platter
+   with a low-poly terraced island and a layered "resin base" side wall against
+   a plain pastel backdrop — the frame-255 outflow engulfing the island is the
+   money shot. As built: a G-buffer mesh pass (albedo + flat normal + real
+   depth; projection unit-tested against the raymarch's ray generation,
+   including the depth→ray-distance reconstruction) feeds the existing
+   composite pass, which shades land/water per pixel with the *same* sunTau
+   shadow march the cloud uses — the storm's shadow sweeps the island (§5.2's
+   highest-value effect came free). Island generation is pure CPU,
+   seeded/deterministic, vitest-covered; it is decorative staging and the HUD
+   says so ("island & water are decorative staging, not simulation data").
+   Water is one flat disk with analytic ripple normals (amplitude fades with
+   camera distance — full-strength ripples moiré at 100+ km), fresnel backdrop
+   reflection, soft sun glint. Tilt-shift is a two-pass variable-radius
+   separable blur keyed to a horizontal focus band pinned to the projected
+   platter centre, plus +13 % saturation and a gentle vignette; ?ts=0 disables
+   it, ?az/?el/?d/?seed override view/island for by-eye tuning. Perf: 78 fps at
+   1600×1000 during 300× playback with staging + DOF, zero stalls, upload p95
+   2.8 ms — no regression vs slice 2. Tuning lessons: surface lighting needed
+   ~half the sun weight the cloud gets or the whole scene reads milk-white
+   through ACES; slope-threshold rock colouring on a jittered mesh speckles
+   (threshold 0.72, not 0.82); the platter must cover the volume box's
+   half-diagonal (37 km ≥ 36.8 km) or ground-level outflow floats past the rim.
 4. **Precipitation** — rain/hail instanced particles off near-surface slices,
    exaggeration counter-scaling.
 5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,
@@ -252,6 +276,10 @@ is always evidence.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
+**Slices 1–3 complete (2026-07-16) — the beauty gate review is now with the
+owner** (run `npm run dev` in diorama/ and orbit around frames 150 and 255;
+palette constants live in src/island.ts and the shader palette block in
+src/shaders.ts, all placeholder-by-design).
 
 ## 10. Decisions resolved / still open
 

@@ -1,17 +1,34 @@
-// Storm Diorama — slice 2: full-sequence playback. A decode worker inflates
-// gzipped bricks off the main thread; a ring of 3D textures streams ahead of
-// the play head (≤1 texture upload per rAF so uploads never hitch a frame);
-// the shader crossfades between the two frames bracketing fractional storm
-// time. Design: docs/design-diorama-web-viewer-2026-07-16.md §2, §4, slice 2.
+// Storm Diorama — slice 3: diorama staging. Three passes per frame: the
+// low-poly island/water platter rasterizes into a G-buffer; the fullscreen
+// composite raymarches the storm volume over it (the storm's shadow march
+// darkens the toy landscape) against a pastel backdrop; a tilt-shift pass
+// finishes the miniature read. Streaming playback is slice 2, unchanged: a
+// decode worker inflates gzipped bricks off the main thread; a ring of 3D
+// textures streams ahead of the play head (≤1 upload per rAF); the shader
+// crossfades the two frames bracketing fractional storm time.
+// Design: docs/design-diorama-web-viewer-2026-07-16.md §2, §4, §5.2, slice 3.
 
 import { basis, clampOrbit, direction, type OrbitState } from "./camera";
 import { BrickDecoder } from "./decoder";
-import { compileProgram, createVolumeTexture, drawFullscreen, getGL, uploadVolume } from "./gl";
+import {
+  compileProgram,
+  createColorTarget,
+  createGBuffer,
+  createMeshVAO,
+  createVolumeTexture,
+  drawFullscreen,
+  getGL,
+  uploadVolume,
+  type ColorTarget,
+  type GBuffer,
+} from "./gl";
+import { buildStaging } from "./island";
+import { multiply, perspective, project, view } from "./mat";
 import { advance, locate, wantedFrames } from "./playback";
 import { SlotPool } from "./ring";
 import { volumeBox } from "./scene";
 import { decodeConstants, loadManifest, type WebManifest } from "./volume";
-import { FRAG, VERT } from "./shaders";
+import { FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, VERT } from "./shaders";
 
 // Extinction weights per species — the numbers proven in the UE material
 // (docs/phase1-svt-custom-material-2026-07-16.md), so both axes read alike.
@@ -34,6 +51,11 @@ const RING_CAPACITY = 24;
 const READ_AHEAD = 10; // frames beyond the current pair kept warm
 const MAX_INFLIGHT = 4; // concurrent fetch+gunzip requests in the worker
 
+// Mesh-pass projection planes (rays are generated analytically; these only
+// bound the depth buffer — see mat.ts round-trip test).
+const NEAR = 0.2; // km
+const FAR = 700; // km
+
 const canvas = document.getElementById("view") as HTMLCanvasElement;
 const hud = document.getElementById("hud") as HTMLDivElement;
 const errBox = document.getElementById("err") as HTMLDivElement;
@@ -46,13 +68,16 @@ const clockEl = document.getElementById("clock") as HTMLSpanElement;
 const params = new URLSearchParams(location.search);
 const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
+const islandSeed = Number(params.get("seed") ?? "1337") || 1337;
+const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
 
+// starting view, overridable for tuning/captures: ?az=45&el=33&d=140 (deg, km)
 let orbit: OrbitState = {
-  target: { x: 0, y: 0, z: 5.5 },
-  azimuth: (45 * Math.PI) / 180,
-  elevation: (24 * Math.PI) / 180,
-  distance: 55,
-  fovY: (25 * Math.PI) / 180,
+  target: { x: 0, y: 0, z: 3.5 },
+  azimuth: ((Number(params.get("az") ?? "45") || 45) * Math.PI) / 180,
+  elevation: ((Number(params.get("el") ?? "33") || 33) * Math.PI) / 180,
+  distance: Number(params.get("d") ?? "140") || 140,
+  fovY: (22 * Math.PI) / 180,
 };
 
 function fmt(t: number): string {
@@ -61,9 +86,10 @@ function fmt(t: number): string {
 
 async function start() {
   const gl = getGL(canvas);
-  const prog = compileProgram(gl, VERT, FRAG);
-  gl.useProgram(prog);
-  const U = (n: string) => gl.getUniformLocation(prog, n);
+  const progGeo = compileProgram(gl, GEO_VERT, GEO_FRAG);
+  const progVol = compileProgram(gl, VERT, FRAG);
+  const progPost = compileProgram(gl, VERT, POST_FRAG);
+  const loc = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
 
   const man: WebManifest = await loadManifest("/data/web_manifest.json");
   const { nx, ny, nz } = man.grid;
@@ -73,6 +99,9 @@ async function start() {
   const tEnd = times[nFrames - 1];
   const box = volumeBox(man);
   const dec = decodeConstants(man.volume.channels);
+
+  // ---- staging (decorative, never sim terrain — design doc §5.2) ------------
+  const staging = createMeshVAO(gl, buildStaging(islandSeed).data);
 
   // ---- playback state -------------------------------------------------------
   // storm time is the single source of truth; speed is a pure UI multiplier
@@ -155,18 +184,33 @@ async function start() {
     orbit = clampOrbit({ ...orbit, distance: orbit.distance * Math.exp(e.deltaY * 0.001) });
   }, { passive: false });
 
-  hud.textContent = `drag orbit · wheel zoom · space play/pause · [ ] frame step\nthis storm is 52 km wide, 18 km tall`;
+  hud.textContent =
+    `drag orbit · wheel zoom · space play/pause · [ ] frame step\n` +
+    `this storm is 52 km wide, 18 km tall\n` +
+    `island & water are decorative staging, not simulation data`;
+
+  // ---- render targets (recreated on resize) ----------------------------------
+  let gbuf: GBuffer | null = null;
+  let sceneT: ColorTarget | null = null;
+  let blurT: ColorTarget | null = null;
 
   function resize() {
     const dpr = window.devicePixelRatio * renderScale;
     canvas.width = Math.round(canvas.clientWidth * dpr);
     canvas.height = Math.round(canvas.clientHeight * dpr);
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    gbuf?.dispose();
+    gbuf = createGBuffer(gl, canvas.width, canvas.height);
+    if (tiltShift) {
+      sceneT?.dispose();
+      blurT?.dispose();
+      sceneT = createColorTarget(gl, canvas.width, canvas.height);
+      blurT = createColorTarget(gl, canvas.width, canvas.height);
+    }
   }
   window.addEventListener("resize", resize);
   resize();
 
-  // ---- static uniforms ------------------------------------------------------
+  // ---- static uniforms (volume program) --------------------------------------
   const thr = new Float32Array(4);
   const k = new Float32Array(4);
   for (const c of man.volume.channels) {
@@ -174,17 +218,23 @@ async function start() {
     k[c.plane] = dec.k[c.plane];
   }
   const w = man.volume.channels.map((c) => WEIGHTS[c.name as keyof typeof WEIGHTS] ?? 0);
-  gl.uniform3f(U("uSunDir"), SUN.x, SUN.y, SUN.z);
-  gl.uniform3f(U("uBoxMin"), box.min.x, box.min.y, box.min.z);
-  gl.uniform3f(U("uBoxMax"), box.max.x, box.max.y, box.max.z);
-  gl.uniform1i(U("uVolA"), 0);
-  gl.uniform1i(U("uVolB"), 1);
-  gl.uniform4fv(U("uThr"), thr);
-  gl.uniform4fv(U("uK"), k);
-  gl.uniform4f(U("uWeights"), w[0], w[1], w[2], w[3]);
-  gl.uniform1f(U("uExtScale"), EXT_SCALE);
-  gl.uniform1f(U("uSteps"), 280);
-  gl.uniform1f(U("uExposure"), 0.75);
+  gl.useProgram(progVol);
+  gl.uniform3f(loc(progVol, "uSunDir"), SUN.x, SUN.y, SUN.z);
+  gl.uniform3f(loc(progVol, "uBoxMin"), box.min.x, box.min.y, box.min.z);
+  gl.uniform3f(loc(progVol, "uBoxMax"), box.max.x, box.max.y, box.max.z);
+  gl.uniform1i(loc(progVol, "uVolA"), 0);
+  gl.uniform1i(loc(progVol, "uVolB"), 1);
+  gl.uniform1i(loc(progVol, "uAlbedo"), 2);
+  gl.uniform1i(loc(progVol, "uNormalTex"), 3);
+  gl.uniform1i(loc(progVol, "uDepthTex"), 4);
+  gl.uniform1f(loc(progVol, "uNear"), NEAR);
+  gl.uniform1f(loc(progVol, "uFar"), FAR);
+  gl.uniform4fv(loc(progVol, "uThr"), thr);
+  gl.uniform4fv(loc(progVol, "uK"), k);
+  gl.uniform4f(loc(progVol, "uWeights"), w[0], w[1], w[2], w[3]);
+  gl.uniform1f(loc(progVol, "uExtScale"), EXT_SCALE);
+  gl.uniform1f(loc(progVol, "uSteps"), 280);
+  gl.uniform1f(loc(progVol, "uExposure"), 0.75);
 
   // ---- pacing stats (?stats — read by the headless verification driver) -----
   const stats = {
@@ -266,22 +316,77 @@ async function start() {
       buffering = true;
     }
 
-    if (bind) {
+    if (bind && gbuf) {
       pool.touch(bind.fa);
       pool.touch(bind.fb);
       const cam = basis(orbit);
-      gl.uniform2f(U("uRes"), canvas.width, canvas.height);
-      gl.uniform3f(U("uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
-      gl.uniform3f(U("uCamRight"), cam.right.x, cam.right.y, cam.right.z);
-      gl.uniform3f(U("uCamUp"), cam.up.x, cam.up.y, cam.up.z);
-      gl.uniform3f(U("uCamFwd"), cam.forward.x, cam.forward.y, cam.forward.z);
-      gl.uniform1f(U("uFovTan"), Math.tan(orbit.fovY / 2));
-      gl.uniform1f(U("uMix"), bind.mix);
+      const aspect = canvas.width / canvas.height;
+      const viewProj = multiply(perspective(orbit.fovY, aspect, NEAR, FAR), view(cam));
+
+      // -- pass 1: staging mesh into the g-buffer ------------------------------
+      gl.bindFramebuffer(gl.FRAMEBUFFER, gbuf.fbo);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.enable(gl.DEPTH_TEST);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.useProgram(progGeo);
+      gl.uniformMatrix4fv(loc(progGeo, "uViewProj"), false, viewProj);
+      gl.bindVertexArray(staging.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, staging.count);
+      gl.bindVertexArray(null);
+      gl.disable(gl.DEPTH_TEST);
+
+      // -- pass 2: volume raymarch + surface shading + backdrop ----------------
+      gl.bindFramebuffer(gl.FRAMEBUFFER, tiltShift && sceneT ? sceneT.fbo : null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.useProgram(progVol);
+      gl.uniform2f(loc(progVol, "uRes"), canvas.width, canvas.height);
+      gl.uniform3f(loc(progVol, "uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
+      gl.uniform3f(loc(progVol, "uCamRight"), cam.right.x, cam.right.y, cam.right.z);
+      gl.uniform3f(loc(progVol, "uCamUp"), cam.up.x, cam.up.y, cam.up.z);
+      gl.uniform3f(loc(progVol, "uCamFwd"), cam.forward.x, cam.forward.y, cam.forward.z);
+      gl.uniform1f(loc(progVol, "uFovTan"), Math.tan(orbit.fovY / 2));
+      gl.uniform1f(loc(progVol, "uMix"), bind.mix);
+      gl.uniform1f(loc(progVol, "uTime"), now / 1000);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_3D, textures[pool.slotOf(bind.fa)!]);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_3D, textures[pool.slotOf(bind.fb)!]);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, gbuf.albedo);
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, gbuf.normal);
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, gbuf.depth);
       drawFullscreen(gl);
+
+      // -- pass 3: tilt-shift (H then V + grade) --------------------------------
+      if (tiltShift && sceneT && blurT) {
+        // keep the sharp band pinned to the platter: project the diorama
+        // centre at ground level and focus there
+        const c = project(viewProj, { x: orbit.target.x, y: orbit.target.y, z: 0 });
+        const focusY = Math.min(0.85, Math.max(0.15, c.y * 0.5 + 0.5));
+        const maxRadius = Math.min(12, canvas.height * 0.009);
+        gl.useProgram(progPost);
+        gl.uniform1i(loc(progPost, "uTex"), 0);
+        gl.uniform2f(loc(progPost, "uRes"), canvas.width, canvas.height);
+        gl.uniform1f(loc(progPost, "uFocusY"), focusY);
+        gl.uniform1f(loc(progPost, "uBand"), 0.20);
+        gl.uniform1f(loc(progPost, "uMaxRadius"), maxRadius);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blurT.fbo);
+        gl.uniform2f(loc(progPost, "uDir"), 1, 0);
+        gl.uniform1f(loc(progPost, "uGrade"), 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, sceneT.tex);
+        drawFullscreen(gl);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.uniform2f(loc(progPost, "uDir"), 0, 1);
+        gl.uniform1f(loc(progPost, "uGrade"), 1);
+        gl.bindTexture(gl.TEXTURE_2D, blurT.tex);
+        drawFullscreen(gl);
+      }
       stats.drawn++;
     }
 

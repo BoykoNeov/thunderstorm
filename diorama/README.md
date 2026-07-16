@@ -35,13 +35,16 @@ time), scrubber, storm-time clock.
 
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
 the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
-for the verification driver).
+for the verification driver), `?az=45&el=33&d=140` (starting view, deg/km),
+`?seed=1337` (island), `?ts=0` (disable tilt-shift).
 
 ## Status
 
-Slice 2 (playback): a decode worker inflates bricks off the main thread; a
-24-slot ring of 3D textures streams ≤1 upload per rAF; the shader crossfades
-the two frames bracketing fractional storm time (the clock holds, never
-skips, if the ring underruns). Measured: 80 fps @ rs=0.8 at 60×–300×, zero
-stalls, uploads p95 ≤3.4 ms. Next: island + tilt-shift staging (3),
-precipitation (4), layers/cross-sections (5), lightning event list (6).
+Slices 1–3 done. Slice 3 (staging): the storm stands on a 74-km water platter
+with a seeded low-poly terraced island (decorative staging, never sim
+terrain) and a layered side wall. A G-buffer mesh pass feeds the composite
+raymarch, which shades land/water with the same sun shadow march as the cloud
+— the storm's shadow sweeps the island; tilt-shift DOF + pastel backdrop
+finish the miniature read. 78 fps @ 1600×1000 during 300× playback, zero
+stalls. Beauty-gate review is with the owner. Next: precipitation (4),
+layers/cross-sections (5), lightning event list (6).

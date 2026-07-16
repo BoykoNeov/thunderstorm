@@ -62,3 +62,104 @@ export function uploadVolume(
 export function drawFullscreen(gl: WebGL2RenderingContext): void {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
+
+// -- staging-mesh + render-target helpers (slice 3) ---------------------------
+
+export interface MeshVAO {
+  vao: WebGLVertexArrayObject;
+  count: number;
+}
+
+/** Static VAO for the staging triangle soup: pos(3) normal(3) color(3) mat(1). */
+export function createMeshVAO(gl: WebGL2RenderingContext, data: Float32Array): MeshVAO {
+  const vao = gl.createVertexArray()!;
+  gl.bindVertexArray(vao);
+  const vbo = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  const stride = 10 * 4;
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
+  gl.enableVertexAttribArray(2);
+  gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
+  gl.enableVertexAttribArray(3);
+  gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36);
+  gl.bindVertexArray(null);
+  return { vao, count: data.length / 10 };
+}
+
+export interface GBuffer {
+  fbo: WebGLFramebuffer;
+  albedo: WebGLTexture; // rgb albedo, a material flag
+  normal: WebGLTexture; // xyz*0.5+0.5
+  depth: WebGLTexture; // DEPTH_COMPONENT24, sampled for ray reconstruction
+  dispose(): void;
+}
+
+function tex2D(gl: WebGL2RenderingContext, w: number, h: number, fmt: number, filter: number): WebGLTexture {
+  const t = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, fmt, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+
+/** MRT target for the staging-mesh pass (albedo + normal + real depth). */
+export function createGBuffer(gl: WebGL2RenderingContext, w: number, h: number): GBuffer {
+  const albedo = tex2D(gl, w, h, gl.RGBA8, gl.NEAREST);
+  const normal = tex2D(gl, w, h, gl.RGBA8, gl.NEAREST);
+  const depth = tex2D(gl, w, h, gl.DEPTH_COMPONENT24, gl.NEAREST);
+  const fbo = gl.createFramebuffer()!;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, albedo, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, normal, 0);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depth, 0);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error("g-buffer framebuffer incomplete");
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return {
+    fbo,
+    albedo,
+    normal,
+    depth,
+    dispose() {
+      gl.deleteFramebuffer(fbo);
+      gl.deleteTexture(albedo);
+      gl.deleteTexture(normal);
+      gl.deleteTexture(depth);
+    },
+  };
+}
+
+export interface ColorTarget {
+  fbo: WebGLFramebuffer;
+  tex: WebGLTexture;
+  dispose(): void;
+}
+
+/** Plain RGBA8 color target (composite output / blur ping-pong). */
+export function createColorTarget(gl: WebGL2RenderingContext, w: number, h: number): ColorTarget {
+  const tex = tex2D(gl, w, h, gl.RGBA8, gl.LINEAR);
+  const fbo = gl.createFramebuffer()!;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    throw new Error("color target framebuffer incomplete");
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return {
+    fbo,
+    tex,
+    dispose() {
+      gl.deleteFramebuffer(fbo);
+      gl.deleteTexture(tex);
+    },
+  };
+}
