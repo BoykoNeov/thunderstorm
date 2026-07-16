@@ -107,3 +107,101 @@ input injection; ask the owner to stage the window.
 
 Chronology captures: `M:\claud_projects\temp\task5_visuals\cap20…cap34*.png`
 (cap24/25/27/29/30/32/33/34 all show `Requested Mip = 3.40282e38`).
+
+---
+
+## Session 2 (2026-07-16 later): the view hypothesis is NOT sufficient — every fix failed
+
+The whole first-session conclusion above says "register a view and it will stream." This
+session tested that directly, six independent ways, and **every one still shows
+`Requested Mip = 3.40282e38`.** The view-starvation mechanism is real and correctly
+diagnosed, but making views exist did **not** unblock streaming. Something else is also wrong.
+
+What was tried, each verified against UE 5.8 source first, all NEGATIVE:
+
+1. **Owner did the manual step.** Editor window on-screen, visible, focused; owner clicked
+   inside the level viewport and **right-drag-orbited for ~10 s** while the blob stayed in
+   view. Owner report: *"I see no change"* in the blob. Poll of the overlay every 4 s for
+   2 min (poll_00…29): FLT_MAX throughout. This refutes the "just needs a human click in a
+   visible viewport" unblock in §"What is still owed".
+2. **Live on-screen editor screenshot, not offscreen capture.** `CaptureEditorImage`
+   (real editor window incl. menu bar / Outliner "SvtPlayback (Play In Editor)" / Output
+   Log) during live Simulate — the storm overlay in the *actual* viewport reads FLT_MAX
+   (cap58_liveeditor_*). So the earlier idea that "offscreen `CaptureViewport` is the wrong
+   instrument and the live viewport really streams" is **also wrong** — the live viewport
+   shows the same FLT_MAX. (Offscreen capture IS still blind to residency, but that was not
+   what was hiding the result.)
+3. **Real PIE with a pawn spawned inside the storm bounds** (`StartPIE` bSimulate:false,
+   PlayMode_InViewPort, startTransform inside the volume). Game viewports register views
+   unconditionally per source. Still FLT_MAX (cap54/55).
+4. **`APlayerController::ClientAddTextureStreamingLoc`** invoked in Simulate via python
+   `pc.call_method("ClientAddTextureStreamingLoc", (loc, 100000.0, False))` → engine
+   `AddViewLocation(..., Duration=100000)`. Log confirms it ran
+   ("INJECT_VIEW: lasting streaming views injected via PlayerController_0"). Still FLT_MAX
+   (cap56/57).
+5. **Native `IStreamingManager::Get().AddViewInformation(...)`** — the EXACT entrypoint
+   editor viewports use — called via ctypes against the `UnrealEditor-Engine.dll` export
+   table (parsed PE exports for the mangled `Get@IStreamingManager` + `AddViewInformation`
+   symbols, built the FVector&/floats/bool/TWeakObjectPtr call). Editor survived, log clean.
+   Still FLT_MAX. (Caveat: the hand-built x64 ABI call could be a silent no-op; not
+   independently proven to have taken effect. But #3/#4 exercise the same view list through
+   real engine paths and also failed.)
+6. **`StreamingMipBias = -32`** on the component (so any finite per-view mip clamps to 0)
+   + world-thumbnail renders. No effect.
+
+### Revised reading
+
+- Zero-views → FLT_MAX is a real code path and explains the *blob*, but the blob **persists
+  even when views are made to exist** through multiple genuine engine paths. Either (a) the
+  views are added to a different streaming-manager view list than
+  `GetOptimalStreamingMipLevel` reads that same tick (ordering: `SetupViewInfos` runs at the
+  top of the streaming Tick, the component's `GetOptimalStreamingMipLevel` runs during actor
+  Tick — a view added mid-frame may not be visible until the next `SetupViewInfos`, and
+  `IStreamingManager::Tick` sets `bPendingRemoveViews=true` so the *next* `AddViewInformation`
+  wipes `PendingViewInfos`), or (b) there is a second gate downstream of mip selection.
+- The overlay's FLT_MAX line is the storm instance; its bound frame shows as
+  `EmptySparseVolumeTexture, Num Frames: 1` — i.e. the current frame is the non-resident
+  placeholder, consistent with "nothing streamed", but does not by itself prove the cause.
+- **Do not trust a hand-rolled ctypes ABI call as proof of anything** — it is the least
+  verifiable step here and should be replaced by a real editor-utility C++/BP call (inside
+  the throwaway probe only) if this path is pursued.
+
+### Recommended next moves (for the fresh session)
+
+1. **Stop injecting views blind; instrument instead.** With `LogVerbosity 3`, the
+   bandwidth/`InBudgetMipLevel` lines (`SparseVolumeTextureStreamingManager.cpp:944/956`)
+   only print when `GetNumViews()>0` and requested bandwidth>limit. Their absence in every
+   log dump this session = the manager's `CurrentViewInfos` is empty *at the moment the SVT
+   request is evaluated*, even right after an `AddViewInformation`. Confirm by logging
+   `GetNumViews()` directly (tiny probe-only C++ toolset, or an editor console cmd if one
+   exists) rather than inferring from the mip.
+2. **Test the frame-ordering hypothesis:** add the view with a **lasting Duration** AND from
+   inside the game viewport's own draw (real PIE, camera actually pointed at the storm and
+   left running >2 s so several `SetupViewInfos` cycles include it) — then read the overlay
+   from the SAME live PIE viewport (CaptureEditorImage), not a fresh transform.
+3. **Simplest reframe — this is an owner-gated live check, and it may already work for a
+   human.** The one configuration never cleanly tested: owner flies the **live Simulate
+   camera** right up to the storm (WASD + RMB) and reports whether it sharpens. Yesterday's
+   "sharp 46.5 km storm in Simulate" (handoff doc) was a live human Simulate session; no
+   remote path has reproduced it, and it is possible only a genuinely-driven PIE/Simulate
+   viewport (not MCP-driven) advances the view list here. If it sharpens for the owner,
+   the deliverable is met and the remote-capture pipeline is the only thing broken.
+
+### State left changed (throwaway SvtProbe project)
+
+- `BP_ConsoleExec` BeginPlay now also runs `Slate.AllowSlateToSleep 0`,
+  `Slate.bAllowThrottling 0`, `r.SparseVolumeTexture.Streaming.LogVerbosity 3`, and a
+  `py inject_view.py` line (the ctypes view injector). **All of this is debug scaffolding —
+  strip it when the render is fixed.**
+- Component `StreamingMipBias` left at **−32** on the editor-world HeterogeneousVolume — must
+  be reverted to 0 before any playback-performance testing (it forces finest mip).
+- Simulate/PIE may still be running from the last script.
+- Injection helper scripts + captures in `M:\claud_projects\temp\task5_visuals\`
+  (inject_view.py = ctypes injector; cap50–cap58 = this session; all FLT_MAX).
+
+### Etiquette (reaffirmed)
+
+Desktop input stays owner-driven: a persistent file-watching `exec()` daemon inside the
+editor was attempted as an injection channel and correctly **blocked** as an RCE/persistence
+surface. Do not install standing code-exec backdoors in the editor; use one-shot,
+auditable console/py calls and ask the owner for genuine viewport interaction.
