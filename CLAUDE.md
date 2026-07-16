@@ -213,9 +213,16 @@ Do not start a phase without explicit go from the owner.
   project ini); (3) **the editor world never streams non-resident SVT frames** — frame 0
   only; all visual verification must run in Simulate/PIE. Visual-improvement work (scene
   foundation done: physical sun 75000 lux, manual exposure, fog, 200 km ground plane,
-  ambient VolumetricCloud; density/albedo tuning + rain/hail/lightning pending) and one
-  open issue (SVT drops to lowest mip after many PIE cycles in one editor session — test:
-  restart editor) are in the handoff doc. Unreal MCP is now fully wired: EditorToolset /
+  ambient VolumetricCloud; density/albedo tuning + rain/hail/lightning pending) is in the
+  handoff doc. **The "lowest-mip after PIE cycles" issue is ROOT-CAUSED (2026-07-16,
+  docs/phase1-svt-streaming-views-rootcause.md): SVT streaming mip requests are VIEW-driven —
+  zero registered views ⇒ component requests FLT_MAX ⇒ nothing streams. Offscreen
+  CaptureViewport never registers views; a background-throttled editor
+  (`bThrottleCPUWhenNotForeground`, default on) or a parked/minimized editor window
+  registers none either; editor restart does NOT fix it, and item (3) above is the same
+  cause (view-based, not world-based). Unblock: editor window visible on screen + one
+  click in the level viewport, then drive via MCP. Diagnose with
+  `r.SparseVolumeTexture.Streaming.ShowDebugInfo 1` (Requested Mip 3.4e38 = no views).** Unreal MCP is now fully wired: EditorToolset /
   NiagaraToolsets / ConfigSettingsToolset plugins enabled in SvtProbe → 25 toolsets incl.
   CaptureViewport, StartPIE/StopPIE, generic property access, material/Blueprint authoring.
   **Method lesson, load-bearing:** `-nullrhi` underpinned all of task 3's and task 5's
