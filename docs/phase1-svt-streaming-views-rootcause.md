@@ -205,3 +205,119 @@ Desktop input stays owner-driven: a persistent file-watching `exec()` daemon ins
 editor was attempted as an injection channel and correctly **blocked** as an RCE/persistence
 surface. Do not install standing code-exec backdoors in the editor; use one-shot,
 auditable console/py calls and ask the owner for genuine viewport interaction.
+
+---
+
+## Session 3 (2026-07-16, later still): SOLVED — the real culprit was `bIssueBlockingRequests=true`, and the overlay never measured views at all
+
+**One-line:** the component's `bIssueBlockingRequests` was **true** (engine default is
+false; left on during earlier debugging). The debug overlay's "Requested Mip" field
+**excludes blocking requests by design**, so it prints FLT_MAX whenever all requests are
+blocking — every FLT_MAX reading in sessions 1–2 was this artifact, not "zero views".
+Flipping the flag to false made streaming work immediately, **in the plain editor world,
+driven entirely over MCP, with offscreen captures, no PIE, no human interaction.**
+
+### The overlay semantics that broke two sessions of diagnosis
+
+`FStreamingInstance` (`SparseVolumeTextureStreamingInstance.cpp`) keeps TWO mips:
+
+- `LowestRequestedMip` — min over **non-blocking** requests this update; reset to FLT_MAX
+  at the start of each update (`:74`); **blocking requests never touch it** (`:98-105`).
+- `LowestRequestedBlockingMip` — where blocking mips actually go. **Not displayed.**
+
+The overlay prints `Instance.RequestedMip = GetLowestRequestedMipLevel()` = the first one
+(`SparseVolumeTextureStreamingManager.cpp:592`). Additionally
+`GetRequestedBandwidth(bZeroIfBlocking=true)` returns 0 for a blocking instance (`:149-154`)
+— which is why the overlay always showed `Requested Peak Bandwidth: 0000.00 MiB/s`.
+
+So on this overlay, `Requested Mip: 3.40282e38` means **"no non-blocking requests arrived
+this update"** — it does NOT distinguish (a) zero views, (b) all-blocking requests,
+(c) no requests at all. Sessions 1–2 treated it as a view counter. It never was one.
+
+### What actually happened, reconstructed
+
+- The component (`StormVolume`) had `bIssueBlockingRequests=true` (component default is
+  **false**, `HeterogeneousVolumeComponent.cpp:271`; the flag was almost certainly toggled
+  during the 2026-07-15 debugging alongside the `ForceBlockingRequests` cvar experiment and
+  never reverted — the actor lives only in memory, so no diff exists to prove it).
+- With the flag true, every request took the blocking path and the overlay showed FLT_MAX
+  + 0 bandwidth **regardless of views** — including during the owner's genuine
+  click-and-orbit and all six view injections. None of those experiments measured anything.
+- Empirically, blocking requests also **did not stream** on this setup (residency bars
+  stayed at lowest-mip red). Why the blocking path stalls in-editor was NOT chased further
+  (suspects: editor DDC-backed IO with blocking waits; `Priority=uint8(-1)` scheduling) —
+  the component default (async) is correct for playback anyway.
+- With `bIssueBlockingRequests=false`: `Requested Mip: 0.00`, allocated bandwidth 7 MiB/s,
+  and the requested frame's residency bars went **green in seconds**. Verified twice
+  (Frame=60 → bars 59–62 green; Frame=100 → bars 100–103 green). A/B visibility toggle
+  (`bVisible` false/true + capture diff) shows the full-size storm mass appearing in the
+  render — transform, streaming, and rendering are all healthy.
+
+### Retractions (supersede sessions 1–2 conclusions)
+
+1. **"Zero registered views ⇒ FLT_MAX" as THE root cause — RETRACTED as diagnosis.** The
+   code path is real (`SparseVolumeTexture.cpp:985-1017`), but it was never shown to be the
+   operative failure. All post-window-restore FLT_MAX readings were the blocking artifact.
+   (The parked-window era may genuinely have had zero views — moot now.)
+2. **"Second gate / frame-ordering problem downstream of view registration" — RETRACTED.**
+   No such gate. The instrument was misread; nothing about `SetupViewInfos` ordering or
+   `bPendingRemoveViews` is broken. Lasting views land in `CurrentViewInfos` on the next
+   `FStreamingManagerCollection::Tick` (`EditorEngine.cpp:2459`, unconditional) as designed.
+3. **"The editor (non-PIE) world never streams SVT frames" — RETRACTED.** With async
+   requests, the editor world streams fine. View registration comes from
+   `UEditorEngine::UpdateSingleViewportClient` (`EditorEngine.cpp:2613-2618`), which
+   submits views **unconditionally for any perspective viewport it updates** (before the
+   throttle gate) — a visible-but-unfocused editor window with
+   `bThrottleCPUWhenNotForeground=false` (set in session 1) is sufficient. No click needed.
+4. **"All visual verification must run in Simulate/PIE" — WEAKENED.** Offscreen
+   `CaptureViewport` still registers no views itself, but it *observes* streamed residency
+   fine, and the on-screen editor viewport keeps views alive for it. Editor-world capture
+   verification is fully workable.
+
+### Overlay-reading gotchas (for the next person)
+
+- Residency strip bar positions scale with editor DPI: bar x ≈ `(8 + FrameIndex·9) × 1.5`
+  at this machine's 150 % DPI. A ~1700 px capture shows only frames ≲ 125 — a green bar
+  for Frame=255 is off-screen right, NOT absent. Test with a frame index < 120.
+- Red thin strip = lowest-mip-only residency (ResidentTiles fraction ≈ 0), green tall = resident.
+- `Frame: N` on the instance line updating proves requests ARE reaching the manager.
+
+### Current state (verified this session)
+
+| Item | Value |
+|---|---|
+| `bIssueBlockingRequests` | **false** (fix; engine default) |
+| `StreamingMipBias` | 0 |
+| Requested Mip (overlay) | 0.00, ~7 MiB/s allocated |
+| Residency | green for requested frame within ~10–20 s |
+| Density Scale (MI_SvtPlayback) | 0.05 (sweep captures taken, see below) |
+
+### ⚠ Persistence: the fix is IN MEMORY ONLY
+
+The `StormVolume` actor's external-actor package has **never been saved**
+(`save_actor` → "Asset does not exist: /Game/__ExternalActors__/Maps/SvtPlayback/8/QZ/…";
+the map package itself is not dirty under One-File-Per-Actor). **If the editor closes, the
+actor — and the `bIssueBlockingRequests=false` fix — vanish.** No MCP tool can save an
+unsaved external actor package (AssetTools.save_assets needs a registry entry).
+**Owner: press Ctrl+Shift+S (File → Save All) in the editor once.** Also note this proves
+the editor has NOT restarted since 2026-07-15 — the "editor restart does not fix it" claim
+in session 1 was tested against a restart that reverted nothing relevant.
+
+### Density Scale sweep (done this session, owner to judge)
+
+With streaming fixed, the planned sweep ran at Frame=255 (mature storm), mip 0 resident:
+`M:\claud_projects\temp\task5_visuals\sweep2_{0p003,0p010,0p030,0p050}_{south,sw}.png`
+(South = 0,−35 km,3 km @ pitch 8 yaw 90; Southwest = −32,−27 km,3.5 km @ pitch 6 yaw 40).
+Caveat: the scene currently reads dark/dusk-like and fog washes the storm heavily at these
+distances — the sweep is internally consistent but the anvil-translucent/core-solid call
+likely needs the lighting pass (sun angle/exposure) first. MI restored to 0.05 after.
+An A/B `bVisible` toggle diff (cap64_novol/cap64_vol, 18 km out) proves the volume renders
+full-size with structure sourced from mip 0.
+
+### Teardown still owed (unchanged)
+
+- Strip `BP_ConsoleExec` BeginPlay debug lines: `Slate.AllowSlateToSleep 0`,
+  `Slate.bAllowThrottling 0`, `LogVerbosity 3`, `ShowDebugInfo 1`, and **`py inject_view.py`**
+  (the ctypes injector — now known to be pointless; delete the line and the script).
+- Persist `bThrottleCPUWhenNotForeground=false` in editor prefs if remote driving continues.
+- Manifest `ue_placement_rule` correction still pending (scale=100, location=(0,0,0)).

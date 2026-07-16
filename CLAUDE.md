@@ -214,15 +214,18 @@ Do not start a phase without explicit go from the owner.
   only; all visual verification must run in Simulate/PIE. Visual-improvement work (scene
   foundation done: physical sun 75000 lux, manual exposure, fog, 200 km ground plane,
   ambient VolumetricCloud; density/albedo tuning + rain/hail/lightning pending) is in the
-  handoff doc. **The "lowest-mip after PIE cycles" issue is ROOT-CAUSED (2026-07-16,
-  docs/phase1-svt-streaming-views-rootcause.md): SVT streaming mip requests are VIEW-driven —
-  zero registered views ⇒ component requests FLT_MAX ⇒ nothing streams. Offscreen
-  CaptureViewport never registers views; a background-throttled editor
-  (`bThrottleCPUWhenNotForeground`, default on) or a parked/minimized editor window
-  registers none either; editor restart does NOT fix it, and item (3) above is the same
-  cause (view-based, not world-based). Unblock: editor window visible on screen + one
-  click in the level viewport, then drive via MCP. Diagnose with
-  `r.SparseVolumeTexture.Streaming.ShowDebugInfo 1` (Requested Mip 3.4e38 = no views).** Unreal MCP is now fully wired: EditorToolset /
+  handoff doc. **The "lowest-mip / blob" issue is SOLVED (2026-07-16 session 3,
+  docs/phase1-svt-streaming-views-rootcause.md): root cause was `bIssueBlockingRequests=true`
+  on the HeterogeneousVolumeComponent (engine default false; left on while debugging).
+  The debug overlay's "Requested Mip: 3.4e38" was an artifact — that field excludes blocking
+  requests by design and is NOT a view counter; the earlier "view-driven / zero views /
+  second gate" theories are retracted. With the flag false, the editor world streams fine
+  over MCP (offscreen captures, no PIE, no clicks; visible-but-unfocused editor window with
+  `bThrottleCPUWhenNotForeground=false` suffices). Overlay residency bars scale ×1.5 at
+  150 % DPI (frame-255 bar is off a 1700 px capture — test with frame <120). ⚠ The
+  StormVolume actor + fix are IN MEMORY ONLY (external-actor package never saved; no MCP
+  save path) — owner must Save All (Ctrl+Shift+S) in the editor or an editor close loses
+  the fix.** Unreal MCP is now fully wired: EditorToolset /
   NiagaraToolsets / ConfigSettingsToolset plugins enabled in SvtProbe → 25 toolsets incl.
   CaptureViewport, StartPIE/StopPIE, generic property access, material/Blueprint authoring.
   **Method lesson, load-bearing:** `-nullrhi` underpinned all of task 3's and task 5's
