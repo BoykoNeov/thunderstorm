@@ -459,12 +459,20 @@ conclusion is provisional until the owner's check confirms the storm reads ~46.5
 manifest's `ue_placement_rule` is worded as provisional for the same reason: a wrong pin
 here double-applies in Phase 2.
 
+> **SUPERSEDED (2026-07-15 evening, real GPU —
+> docs/session-handoff-2026-07-15-visuals.md):** the paragraph and formula below are the
+> `-nullrhi`-era conclusion and are **WRONG on a real RHI**. The component DOES apply the
+> asset's frame transform itself; the actor carries ONLY the units conversion:
+> **`scale = 100` (m→cm), `location = (0,0,0)`**. The ×25000 formula below renders the
+> volume 250× oversized. Y-flip remains open (candidate `scale.y = −100`, unverified).
+> The manifest's `ue_placement_rule` now states the proven rule (regenerated 2026-07-16).
+
 So "the asset carries the placement" is true only in the sense that it is the **source you
 read it from** — UE will not apply it for you. The actor must apply the frame transform
 **and** the units conversion together:
 
 ```
-scale    = frame.scale3d   * 100          # 250 m/voxel -> 25 000 cm/voxel
+scale    = frame.scale3d   * 100          # 250 m/voxel -> 25 000 cm/voxel   [WRONG — see banner above]
 location = frame.translation * 100        # with Y negated (CM1 right-handed -> UE left-handed)
 ```
 which yields the correct 46.5 km span. This is still exactly one conversion site, and it

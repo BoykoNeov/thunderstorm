@@ -314,10 +314,39 @@ likely needs the lighting pass (sun angle/exposure) first. MI restored to 0.05 a
 An A/B `bVisible` toggle diff (cap64_novol/cap64_vol, 18 km out) proves the volume renders
 full-size with structure sourced from mip 0.
 
-### Teardown still owed (unchanged)
+### Teardown — DONE (2026-07-16, after owner Save All)
 
-- Strip `BP_ConsoleExec` BeginPlay debug lines: `Slate.AllowSlateToSleep 0`,
-  `Slate.bAllowThrottling 0`, `LogVerbosity 3`, `ShowDebugInfo 1`, and **`py inject_view.py`**
-  (the ctypes injector — now known to be pointless; delete the line and the script).
-- Persist `bThrottleCPUWhenNotForeground=false` in editor prefs if remote driving continues.
-- Manifest `ue_placement_rule` correction still pending (scale=100, location=(0,0,0)).
+The owner pressed Save All: the StormVolume external-actor package now exists on disk
+(`Content/__ExternalActors__/Maps/SvtPlayback/8/QZ/NT9369DIF9YCDAHPAP3SSV.uasset`), so the
+actor and the `bIssueBlockingRequests=false` fix are durable. Then, all over MCP:
+
+- `BP_ConsoleExec` BeginPlay stripped of all debug lines (was 11 commands incl.
+  `Slate.*`, `LogVerbosity 3`, `ShowDebugInfo 1`, `py inject_view.py`; the five HV/SVT
+  render cvars it also carried were redundant — `Config/DefaultEngine.ini`
+  `[ConsoleVariables]` already persists them). Final BeginPlay: two idempotent reset
+  lines `ShowDebugInfo 0` + `LogVerbosity 0` (the graph DSL cannot express a bodyless
+  event — a `(event EventBeginPlay)` write is a no-op — so an explicit "debug off" is
+  the cleanest representable state). Executed once via a Simulate bounce; both cvars
+  verified back to 0 via SearchCVars. BP saved to disk. `inject_view.py` deleted.
+- `bThrottleCPUWhenNotForeground=False` persisted via ConfigSettingsToolset
+  (`SetSectionProperties` + `SaveSection`, container `Editor` / category `General` /
+  section `EditorPerformanceSettings`) — survives editor restarts; remote driving keeps
+  working with the window visible-but-unfocused.
+- Component verified post-teardown: `bIssueBlockingRequests=false`, `StreamingMipBias=0`,
+  `Frame=255`.
+- Manifest `ue_placement_rule` corrected to the proven rule (asset transform + actor
+  scale=100 @ origin; Y-flip still open) in `pipeline/cm1post/manifest.py` and the
+  shipped package's manifest.json regenerated in place (frames/origin byte-identical).
+
+### WSL boot regression found & fixed during teardown (2026-07-16)
+
+`wsl -d Ubuntu` failed with `Wsl/Service/CreateInstance/MountDisk/HCS/E_ACCESSDENIED`
+on the relocated `M:\wsl\Ubuntu\ext4.vhdx` — although a bare `wsl --mount --vhd … --bare`
+of the SAME file succeeded. Cause: the distro-start path re-grants disk access to the
+utility VM's per-boot SID **under the user's (non-elevated) session token**, which needs
+WRITE_DAC on the VHDX. Under `%LOCALAPPDATA%` the user has implicit Full Control; under
+`M:\wsl` the user only inherited `Authenticated Users:(M)` — Modify without WRITE_DAC.
+It worked 07-14/15 because the then-current VM SID's ACE was already on the file; the
+Host Compute Service restart on 07-16 08:48 minted a new VM SID and exposed the hole.
+**Fix (applied): `icacls M:\wsl /grant "boiko:(OI)(CI)F"` + same on ext4.vhdx.** Any
+future distro relocation to a non-profile drive needs this grant.

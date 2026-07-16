@@ -184,7 +184,14 @@ Do not start a phase without explicit go from the owner.
   hero runs (Phase 3) can approach 1 TB raw and would hit this ceiling. Provision the
   VHDX larger before the first hero run** (`wsl --manage Ubuntu --resize`, then
   `resize2fs`) — but NOT to 2 TB: M: is a ~72%-full backup drive, so the cap must stay
-  below M:'s safe headroom (owner's call on the exact number).
+  below M:'s safe headroom (owner's call on the exact number). ⚠ **ACL gotcha for
+  relocated VHDXs (hit + fixed 2026-07-16):** distro start re-grants disk access to the
+  utility VM's per-boot SID under the USER's session token, which needs WRITE_DAC on the
+  VHDX — implicit under `%LOCALAPPDATA%`, absent on M: (`Authenticated Users:(M)` only).
+  Symptom: `Wsl/Service/CreateInstance/MountDisk/HCS/E_ACCESSDENIED` after any Host
+  Compute Service restart, while `wsl --mount --vhd … --bare` of the same file works.
+  Fix applied: `icacls M:\wsl /grant "boiko:(OI)(CI)F"` (+ on ext4.vhdx). Details in
+  docs/phase1-svt-streaming-views-rootcause.md.
 - **Phase 1:** pipeline de-risking spike — a full-length, multi-grid,
   few-hundred-frame VDB sequence through UE SVT (explicitly NOT a one-frame demo);
   single-cell storm playback end to end. **Task 3 import/build VALIDATED; visual
@@ -208,7 +215,8 @@ Do not start a phase without explicit go from the owner.
   the storm renders full-size (46.5 km) on a real GPU in Simulate. Root causes: (1) the
   placement rule was wrong — on a real RHI the component DOES apply the SVT frame
   transform, so the correct actor transform is **scale=100 (m→cm), location=(0,0,0)**
-  (the ×25000 rule made it 250× oversized; manifest still needs correcting); (2)
+  (the ×25000 rule made it 250× oversized; manifest `ue_placement_rule` corrected and the
+  shipped manifest regenerated, 2026-07-16); (2)
   `r.HeterogeneousVolumes.MaxTraceDistance` 300 m default → 100 km (persisted in the probe
   project ini); (3) **the editor world never streams non-resident SVT frames** — frame 0
   only; all visual verification must run in Simulate/PIE. Visual-improvement work (scene
@@ -222,10 +230,11 @@ Do not start a phase without explicit go from the owner.
   second gate" theories are retracted. With the flag false, the editor world streams fine
   over MCP (offscreen captures, no PIE, no clicks; visible-but-unfocused editor window with
   `bThrottleCPUWhenNotForeground=false` suffices). Overlay residency bars scale ×1.5 at
-  150 % DPI (frame-255 bar is off a 1700 px capture — test with frame <120). ⚠ The
-  StormVolume actor + fix are IN MEMORY ONLY (external-actor package never saved; no MCP
-  save path) — owner must Save All (Ctrl+Shift+S) in the editor or an editor close loses
-  the fix.** Unreal MCP is now fully wired: EditorToolset /
+  150 % DPI (frame-255 bar is off a 1700 px capture — test with frame <120). The
+  StormVolume actor + fix are SAVED to disk (owner Save All, 2026-07-16) and the debug
+  scaffolding is torn down (BP_ConsoleExec BeginPlay reduced to two idempotent
+  debug-off resets; `bThrottleCPUWhenNotForeground=False` persisted in editor prefs;
+  inject_view.py deleted).** Unreal MCP is now fully wired: EditorToolset /
   NiagaraToolsets / ConfigSettingsToolset plugins enabled in SvtProbe → 25 toolsets incl.
   CaptureViewport, StartPIE/StopPIE, generic property access, material/Blueprint authoring.
   **Method lesson, load-bearing:** `-nullrhi` underpinned all of task 3's and task 5's
