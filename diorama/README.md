@@ -29,10 +29,19 @@ then copied out of WSL. The bricks are gzipped uint8 log-quantized volumes;
 
 ## Controls
 
-Drag = orbit · wheel = zoom · `[` / `]` = step frame
+Drag = orbit · wheel = zoom · space = play/pause · `[` / `]` = step frame ·
+bottom bar: play/pause, speed (15×–300×, a pure UI multiplier over storm
+time), scrubber, storm-time clock.
+
+URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
+the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
+for the verification driver).
 
 ## Status
 
-Slice 1 (volume on screen: one frame, sun self-shadowing, flat ground). Next:
-playback streaming (2), island + tilt-shift staging (3), precipitation (4),
-layers/cross-sections (5), lightning event list (6).
+Slice 2 (playback): a decode worker inflates bricks off the main thread; a
+24-slot ring of 3D textures streams ≤1 upload per rAF; the shader crossfades
+the two frames bracketing fractional storm time (the clock holds, never
+skips, if the ring underruns). Measured: 80 fps @ rs=0.8 at 60×–300×, zero
+stalls, uploads p95 ≤3.4 ms. Next: island + tilt-shift staging (3),
+precipitation (4), layers/cross-sections (5), lightning event list (6).

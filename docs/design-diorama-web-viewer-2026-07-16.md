@@ -222,6 +222,26 @@ is always evidence.
    channel at work) and the cold-pool outflow cloud ring.
 2. **Playback** — ring-buffer streaming, worker decode, time controls, temporal
    crossfade. *Gate: 0–60 min plays smoothly at 60 fps with no upload hitches.*
+   **DONE 2026-07-16** — gate met, measured headful on the real display (RTX
+   5090, ANGLE D3D11): **80 fps at render scale 0.8 at both 60× and 300×
+   playback, zero buffering stalls over full-sequence loop sweeps, upload cost
+   p50 ≈ 0.7–1.9 ms / p95 ≤ 3.4 ms**. Full-res on a 150 %-DPI display
+   (~3.2 Mpx) is ~51 fps — GPU-bound in the march, not in streaming; `?rs=` is
+   the sanctioned quality lever (§6). Design as built: a module worker does
+   fetch + native gunzip and transfers decoded 12.5 MB bricks zero-copy; a
+   **24-slot** RGBA8 3D-texture ring (~300 MB) streams ≤ 1 `texSubImage3D` per
+   rAF; the storm-time clock **holds rather than skips** when the ring
+   underruns (observed only during initial page load); crossfade decodes each
+   frame then mixes in q space (mixing ratios are linear). Two lessons worth
+   keeping: (a) the ring capacity must comfortably exceed the protected window
+   — with only ~2 rotating slots the first cut showed 50–77 ms upload spikes
+   and cascading buffering stalls (GPU-saturation backpressure); (b) the
+   **sun-shadow march samples the nearest frame instead of crossfading** —
+   imperceptible at 12 s frame spacing, and it took full-res from 29 → 51 fps
+   since the ~28 secondary samples dominate fetch cost. First concrete
+   evidence for the §2 interpolation answer: 12 s output × shader crossfade
+   reads as continuous motion at every speed (15×–300×); distinct intermediate
+   states verified by capture at uMix = 0.5.
 3. **Diorama staging** — low-poly island + water, pastel palette, tilt-shift DOF,
    background, storm ground-shadow. *Gate: a static screenshot reads as "toy
    diorama with a real storm," side-by-side with the reference image.*

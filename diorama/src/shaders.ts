@@ -33,7 +33,9 @@ uniform float uFovTan;        // tan(fovY/2)
 uniform vec3  uSunDir;        // unit, toward the sun
 uniform vec3  uBoxMin;        // volume bounds, km (z-exaggeration pre-applied)
 uniform vec3  uBoxMax;
-uniform sampler3D uVol;
+uniform sampler3D uVolA;      // frame i0
+uniform sampler3D uVolB;      // frame i1 (temporal crossfade partner)
+uniform float uMix;           // fractional storm time between the two frames
 
 uniform vec4  uThr;           // per-plane decode: q = thr * exp(k * (v255 - 1))
 uniform vec4  uK;
@@ -63,14 +65,33 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
 }
 
 // -- volume sampling ----------------------------------------------------------
+// decode log-uint8 codes back to mixing ratios; codes < ~0.5 are "empty"
+vec4 qDecode(vec4 v255) {
+  return uThr * exp(uK * (v255 - 1.0)) * step(0.5, v255);
+}
+
 float sigmaAt(vec3 p) {
   vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
-  vec4 v = texture(uVol, uvw) * 255.0;
-  // decode log-uint8 codes back to mixing ratios; codes < ~0.5 are "empty"
-  vec4 q = uThr * exp(uK * (v - 1.0)) * step(0.5, v);
+  // temporal crossfade: decode each frame, then mix — mixing ratios are
+  // linear quantities, so the blend happens in q space, not code space
+  vec4 q = qDecode(texture(uVolA, uvw) * 255.0);
+  if (uMix > 0.0001) {
+    q = mix(q, qDecode(texture(uVolB, uvw) * 255.0), uMix);
+  }
   float sig = uExtScale * dot(uWeights, q);
   // trim the faint decode halo so edges stay cloud, not fog (keeps the anvil:
   // its sigma is well above this floor)
+  return max(sig - 0.04, 0.0);
+}
+
+// Shadow-march sampling skips the crossfade and reads the nearest frame:
+// self-shadow differences between two adjacent 12 s frames are imperceptible,
+// and the ~28 secondary samples per primary sample dominate fetch cost —
+// single-fetch here nearly halves the whole march during playback.
+float sigmaShadowAt(vec3 p) {
+  vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
+  vec4 v = (uMix < 0.5 ? texture(uVolA, uvw) : texture(uVolB, uvw)) * 255.0;
+  float sig = uExtScale * dot(uWeights, qDecode(v));
   return max(sig - 0.04, 0.0);
 }
 
@@ -84,7 +105,7 @@ float sunTau(vec3 p) {
   float tau = 0.0;
   float s = ds * 0.5;
   for (int i = 0; i < M; i++) {
-    tau += sigmaAt(p + uSunDir * s) * ds;
+    tau += sigmaShadowAt(p + uSunDir * s) * ds;
     if (tau > 9.0) break;
     s += ds;
   }
