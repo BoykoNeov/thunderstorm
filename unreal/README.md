@@ -13,6 +13,11 @@ Key constraints (from `docs/advisor-review-2026-07-09.md`):
   text/annotations counter-scaled, particle motion velocity-compensated.
 
 Build artifacts (`Binaries/`, `Intermediate/`, `Saved/`, `DerivedDataCache/`) and UE
-binary assets are git-ignored. The exact UE `5.x.y` version will be pinned at Phase 1.
+binary assets are git-ignored. UE version pinned at Phase 1: **5.8.0** (root `CLAUDE.md`).
 
-_Empty until Phase 1. Do not start a phase without explicit go from the owner._
+`svt_probe/` is NOT the app — it is the disaster-recovery snapshot (configs verbatim,
+builder scripts, rebuild recipe) for the Phase 1 throwaway probe project that lives
+out-of-repo at `M:\claud_projects\temp\svt_probe\`. See `svt_probe/README.md`.
+
+_The playback app itself is still empty until its build phase. Do not start a phase
+without explicit go from the owner._
