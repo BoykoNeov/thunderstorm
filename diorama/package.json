@@ -1,0 +1,19 @@
+{
+  "name": "storm-diorama",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Isometric toy-scale web viewer for thunderstorm scenario packages (raymarched real CM1 volume)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.5.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Drive the CM1 -> VDB scenario export.
 
-    python3 export_scenario.py bbox   --run <dir>            # verify the padded box
-    python3 export_scenario.py export --run <dir> --out <dir> [--frames a:b]
+    python3 export_scenario.py bbox       --run <dir>        # verify the padded box
+    python3 export_scenario.py export     --run <dir> --out <dir> [--frames a:b]
+    python3 export_scenario.py export-web --run <dir> --out <dir> [--frames a:b]
 
 `bbox` re-measures the union active region over every frame and checks it against
 the box locked in cm1post/config.py. Run it whenever a threshold, a source field, or
@@ -23,7 +24,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from cm1post import config, densevol, fields, manifest, regrid
+from cm1post import config, densevol, fields, manifest, regrid, webvol
 
 DEFAULT_RUN = "/home/boiko/thunderstorm/runs/singlecell"
 DEFAULT_DENSE2VDB = "/home/boiko/thunderstorm/vdbwriter_build/dense2vdb"
@@ -127,6 +128,67 @@ def cmd_export(args):
     return 0
 
 
+def cmd_export_web(args):
+    """netCDF -> uint8 log-quantized gzipped bricks for the diorama web viewer.
+
+    Same fields/regrid path as the VDB export (one threshold, shared code -- the
+    bbox invariant holds by construction). See cm1post/webvol.py for the format.
+    """
+    files = fields.frame_files(args.run)
+    idx = parse_range(args.frames, len(files))
+    os.makedirs(args.out, exist_ok=True)
+
+    cm1_x, cm1_y, cm1_z = fields.read_grid(files[0])
+
+    # Pass 1: per-channel maxima over the whole sequence, on the CM1 source grid
+    # (a safe >= bound for every linearly-resampled frame -- see webvol.py).
+    print(f"scanning {len(files)} frames for per-channel maxima")
+    qmax = {c: 0.0 for c in config.CHANNELS}
+    t0 = time.time()
+    for i, path in enumerate(files):
+        ch, _ = fields.build_channels(path)
+        for c, arr in ch.items():
+            qmax[c] = max(qmax[c], float(arr.max()))
+        if i % 60 == 0:
+            print(f"  frame {i:3d}  ({(time.time()-t0)/(i+1):.2f} s/frame)")
+    print("  qmax: " + "  ".join(f"{c}={qmax[c]:.4g}" for c in config.CHANNELS))
+
+    query = regrid.build_query(cm1_x, cm1_y, cm1_z)
+    print(f"export grid {config.NX}x{config.NY}x{config.NZ} @ {config.EXPORT_VOXEL_M:.0f} m")
+    print(f"exporting {len(idx)} frames -> {args.out}")
+
+    records = []
+    t0 = time.time()
+    for n, i in enumerate(idx):
+        ch, storm_t = fields.build_channels(files[i])
+        enc = {}
+        for c in webvol.RGBA_CHANNELS:
+            res = regrid.resample(ch[c], cm1_x, cm1_y, cm1_z, query)
+            enc[c] = webvol.encode_log_u8(res, config.THRESHOLDS[c], qmax[c])
+        res = regrid.resample(ch["dbz"], cm1_x, cm1_y, cm1_z, query)
+        enc["dbz"] = webvol.encode_linear_u8(res, config.THRESHOLDS["dbz"], qmax["dbz"])
+
+        rec = webvol.write_frame(args.out, i, enc)
+        rec.update({"index": i, "time_s": storm_t})
+        records.append(rec)
+        if n % 20 == 0 or n == len(idx) - 1:
+            el = time.time() - t0
+            print(f"  [{n+1:3d}/{len(idx)}] f{i:04d} t={storm_t/60:5.1f}min "
+                  f"{rec['rgba_bytes']/1e6:5.2f} MB  ({el/(n+1):.1f} s/frame)")
+
+    doc = webvol.build_manifest(records, qmax, args.run)
+    webvol.write_manifest(os.path.join(args.out, "web_manifest.json"), doc)
+
+    tot = sum(r["rgba_bytes"] + r["dbz_bytes"] for r in records)
+    peak = max(records, key=lambda r: r["rgba_bytes"])
+    print(f"\ndone in {time.time()-t0:.0f} s")
+    print(f"  frames     : {len(records)}")
+    print(f"  total      : {tot/1e9:.3f} GB")
+    print(f"  mean/frame : {tot/len(records)/1e6:.2f} MB")
+    print(f"  PEAK rgba  : frame {peak['index']} at {peak['rgba_bytes']/1e6:.2f} MB")
+    return 0
+
+
 def read_provenance(run_dir):
     """Record what produced the data (charter: seed, build, ranks, decomposition)."""
     prov = {"cm1_version": "cm1r21.1",
@@ -159,6 +221,13 @@ def main():
     e.add_argument("--dense2vdb", default=DEFAULT_DENSE2VDB)
     e.add_argument("--keep-densevol", action="store_true")
     e.set_defaults(func=cmd_export)
+
+    w = sub.add_parser("export-web",
+                       help="write the diorama web-viewer bricks + web_manifest")
+    w.add_argument("--run", default=DEFAULT_RUN)
+    w.add_argument("--out", required=True)
+    w.add_argument("--frames", help="index range a:b (default all)")
+    w.set_defaults(func=cmd_export_web)
 
     args = ap.parse_args()
     sys.exit(args.func(args))

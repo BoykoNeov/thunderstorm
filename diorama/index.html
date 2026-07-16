@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Storm Diorama</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe0dd; }
+      #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      #hud {
+        position: absolute; left: 12px; bottom: 10px;
+        font: 12px/1.5 system-ui, sans-serif; color: #2b3a3d;
+        background: rgba(255, 255, 255, 0.55); border-radius: 6px;
+        padding: 6px 10px; pointer-events: none; white-space: pre;
+      }
+      #err {
+        position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
+        font: 14px system-ui, sans-serif; color: #7a2f2f; max-width: 46em;
+        background: rgba(255, 255, 255, 0.9); border-radius: 8px; padding: 14px 18px;
+        display: none; white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="hud"></div>
+    <div id="err"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

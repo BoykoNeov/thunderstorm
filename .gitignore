@@ -27,9 +27,15 @@ scenarios/**/*.exr
 scenarios/**/*.png
 scenarios/**/*.jpg
 scenarios/**/frames/
+# Web-viewer bricks (diorama/): gzipped quantized volumes, regenerable
+scenarios/**/web/
 # Keep scenario manifests/contracts and small docs tracked:
 !scenarios/**/manifest.json
 !scenarios/**/*.md
+
+# ── Diorama web viewer (diorama/) ────────────────────────────────────────────
+diorama/node_modules/
+diorama/dist/
 
 # ── Python (pipeline/) ───────────────────────────────────────────────────────
 __pycache__/

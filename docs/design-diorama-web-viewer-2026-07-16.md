@@ -1,8 +1,13 @@
 # Design: "Storm Diorama" — isometric toy-scale web viewer (2026-07-16)
 
-**Status: DESIGN — approved direction, not yet built.** Owner picked the venue
-(standalone web viewer), the data source (real CM1 scenario), and asked for this doc
-before any code.
+**Status: SLICE 1 GO (owner, 2026-07-16).** Owner picked the venue (standalone web
+viewer), the data source (real CM1 scenario), reviewed this doc and clarified:
+the **storm itself is never low-poly** — always the raymarched volume (only the
+staging is stylized); the palette (incl. teal water) is a placeholder, not a
+requirement; camera must eventually be movable (orbit ships early since it is
+nearly free); **cross-section views** (horizontal/vertical slices through the
+storm) are a wanted later feature (§7); no view-export/recording feature is
+needed; home is the `diorama/` subfolder of this repo, code committed.
 
 ## 1. What this is
 
@@ -122,8 +127,9 @@ Fullscreen raymarch pass, GLSL, structured like Black Hole Lab's scene shader:
 ### 5.2 The diorama staging
 
 - **Island:** procedural low-poly heightfield → flat-shaded mesh (computed once on
-  CPU, vitest-able), pastel palette from the reference image: green plateau, sand
-  rim, painted mountains, teal water plane with a simple animated normal ripple.
+  CPU, vitest-able). Palette is a **placeholder to be tuned by eye with the owner**
+  (the reference image's green plateau / sand rim / teal water is a starting point,
+  not a requirement); water gets a simple animated normal ripple.
   The island is **decorative staging, not sim terrain** — the Phase 1 scenario is
   flat — and the doc/UI must never imply otherwise. When Phase 3 terrain scenarios
   exist, the island mesh can be built from the scenario's real terrain heightfield
@@ -182,6 +188,10 @@ volume pass + bilateral upsample. Not designed in until measured.
 - Vertical-exaggeration slider (1×–3×).
 - Later, selectable layers: hydrometeor volume (default) / dBZ radar volume
   (labeled diagnostic) — the same manifest-driven layer idea as the UE app.
+- **Cross-sections (owner-requested, later):** horizontal and vertical slice planes
+  through the storm — a movable clip plane in the raymarch plus a flat slab view of
+  the sliced field (hydrometeors or dBZ). The 3D texture makes this nearly free to
+  render; the work is UI.
 
 ## 8. Testing (Black Hole Lab discipline)
 
@@ -203,6 +213,13 @@ is always evidence.
 1. **Volume on screen** — web exporter (pipeline) + loader/decoder + single-frame
    raymarch with sun shadow march, orbit camera, tone map. *Gate: frame 150 (the
    hero Cb) reads as a sunlit cumulonimbus over a flat ground plane.*
+   **DONE 2026-07-16** — gate met (tower + anvil + outflow ring + ground shadow;
+   verified by headless-Chrome captures on frames 150 and 255). Real numbers:
+   the full 301-frame web export is **89 MB total, peak 0.53 MB/frame** (gzip
+   eats the sparse uint8 bricks), 630 s export. Lighting constants are a first
+   by-eye pass over a slow screenshot loop — owner tunes live in the browser.
+   Bonus already visible in captures: rain-shaft haze under the core (the rain
+   channel at work) and the cold-pool outflow cloud ring.
 2. **Playback** — ring-buffer streaming, worker decode, time controls, temporal
    crossfade. *Gate: 0–60 min plays smoothly at 60 fps with no upload hitches.*
 3. **Diorama staging** — low-poly island + water, pastel palette, tilt-shift DOF,
@@ -210,17 +227,18 @@ is always evidence.
    diorama with a real storm," side-by-side with the reference image.*
 4. **Precipitation** — rain/hail instanced particles off near-surface slices,
    exaggeration counter-scaling.
-5. **Layers + education** — dBZ mode, scale chip, clock/scrubber polish.
+5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,
+   clock/scrubber polish.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
 
-## 10. Open decisions (owner)
+## 10. Decisions resolved / still open
 
-- **Go/no-go on slice 1**, and whether it may start before the UE track resumes.
-- **Repo placement confirmed?** `diorama/` top-level (this doc's assumption) vs a
-  separate repo. Top-level is recommended: it shares the scenario-package contract
-  and the docs/ provenance trail.
-- Whether the web export ships inside the scenario package (`web/` subfolder — the
-  package remains the one durable artifact, recommended) or as a separate derived
-  folder. Interacts with the still-open LFS vs out-of-repo decision.
+- **Slice 1: GO** (owner, 2026-07-16) — proceed before the UE track resumes.
+- **Placement: `diorama/` subfolder of this repo** (owner-confirmed). Code is
+  committed; scenario data stays out of plain git per the data policy.
+- **No view export/recording feature** — screenshots are the owner's own business.
+- Still open: whether the web export ships inside the scenario package (`web/`
+  subfolder — recommended) or as a separate derived folder. Interacts with the
+  still-open LFS vs out-of-repo decision.

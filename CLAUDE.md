@@ -107,6 +107,9 @@ plots + event lists + manifest JSON) → scenarios/ → UE5 playback app (Window
 - scenarios/ — finished scenario packages; the format is a versioned contract
   (manifest carries `format_version`; UE refuses newer major versions)
 - unreal/ — UE5 project
+- diorama/ — Storm Diorama web viewer (second visualization axis: isometric toy-scale,
+  TS + WebGL2, no engine, Black-Hole-Lab architecture; a second "dumb player" of the
+  same scenario packages via a web export — docs/design-diorama-web-viewer-2026-07-16.md)
 - docs/ — science provenance (every parameterization cites its paper), reviews,
   decision records
 
