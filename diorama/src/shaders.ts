@@ -3,7 +3,8 @@
 //      into albedo+material, flat normal, and a real depth buffer.
 //   2. Composite — fullscreen raymarch of the storm volume over the staging:
 //      surface pixels are shaded here (so the storm's shadow march darkens
-//      the toy landscape), background is a pastel gradient, then tone map.
+//      the toy landscape), background is a real horizon (pastel sky over an
+//      infinite sea, the platter floating above it), then tone map.
 //   3. Tilt-shift — separable variable-radius blur keyed to a horizontal
 //      focus band + a light toy grade (the classic miniature cue).
 //
@@ -96,14 +97,16 @@ uniform vec4  uWeights;       // per-species extinction weights
 uniform float uExtScale;      // km^-1 per weighted (kg/kg)
 uniform float uSteps;         // primary march step count
 uniform float uExposure;
+uniform float uShadowKm;      // sun-march occluder cap, km (scales with z-exag)
 
 const float PI = 3.14159265;
 
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
 const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
-const vec3 BG_TOP       = vec3(0.58, 0.73, 0.88);  // pastel backdrop, upper
-const vec3 BG_HORIZON   = vec3(0.95, 0.94, 0.91);
-const vec3 BG_LOW       = vec3(0.72, 0.78, 0.85);  // soft blue wash below
+const vec3 BG_TOP       = vec3(0.50, 0.68, 0.88);  // zenith blue
+const vec3 BG_HAZE      = vec3(0.88, 0.90, 0.92);  // horizon haze band
+const vec3 SEA_DEEP     = vec3(0.10, 0.33, 0.44);  // open sea under the platter
+const float SEA_Z       = -6.0;                    // km; below the slab bottom
 const vec3 AMB_HIGH     = vec3(0.38, 0.48, 0.60);  // sky light on upper cloud
 const vec3 AMB_LOW      = vec3(0.14, 0.17, 0.22);  // bounce light near base
 const vec3 CLOUD_ALB    = vec3(0.93, 0.94, 0.96);
@@ -150,9 +153,9 @@ float sigmaShadowAt(vec3 p) {
 
 float sunTau(vec3 p) {
   vec2 tb = rayBox(p, uSunDir, uBoxMin, uBoxMax);
-  // 15 km of occluder is plenty — capping it keeps the steps dense where the
-  // shadow actually forms instead of spreading them across the whole box.
-  float end = min(max(tb.y, 0.0), 15.0);
+  // ~15 km of occluder (× vertical exaggeration) is plenty — capping it keeps
+  // the steps dense where the shadow forms instead of across the whole box.
+  float end = min(max(tb.y, 0.0), uShadowKm);
   const int M = 28;
   float ds = end / float(M);
   float tau = 0.0;
@@ -170,13 +173,26 @@ float hg(float c, float g) {
   return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * c, 1.5));
 }
 
-// -- background: pastel gradient, not a physical sky ---------------------------
+// -- background: a real horizon — pastel sky over an infinite sea --------------
+// The sea plane sits below the slab bottom, so the diorama still reads as a
+// floating platter; distance fog pulls the sea into the haze band exactly at
+// rd.z = 0, so sky and sea meet seamlessly at the horizon line.
 vec3 background(vec3 rd) {
-  vec3 col = mix(BG_HORIZON, BG_TOP, smoothstep(-0.02, 0.55, rd.z));
-  col = mix(col, BG_LOW, smoothstep(-0.08, -0.55, rd.z));
   float s = max(dot(rd, uSunDir), 0.0);
-  col += vec3(1.0, 0.9, 0.75) * pow(s, 9.0) * 0.07; // faint warm cast, no sun disc
-  return col;
+  if (rd.z >= 0.0) {
+    // tight gradient: the default view only sees a few degrees of sky, so the
+    // blue has to arrive fast or the whole strip reads as flat haze
+    vec3 col = mix(BG_HAZE, BG_TOP, pow(smoothstep(0.0, 0.30, rd.z), 0.8));
+    col += vec3(1.0, 0.9, 0.75) * pow(s, 9.0) * 0.07; // warm cast, no sun disc
+    return col;
+  }
+  float t = (SEA_Z - uCamPos.z) / rd.z; // camera is always above the sea plane
+  // fog is capped below 1 so the sea keeps some colour at grazing angles —
+  // that residual is what draws the horizon line (fully honest fog erases it)
+  float fog = (1.0 - exp(-t * 0.0025)) * 0.78;
+  vec3 rr = vec3(rd.x, rd.y, -rd.z);    // mirror off the flat sea
+  vec3 sea = SEA_DEEP + SUN_COL * pow(max(dot(rr, uSunDir), 0.0), 60.0) * 0.05;
+  return mix(sea, BG_HAZE, fog);
 }
 
 // -- staging surface ------------------------------------------------------------

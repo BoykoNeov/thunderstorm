@@ -274,6 +274,21 @@ is always evidence.
    through ACES; slope-threshold rock colouring on a jittered mesh speckles
    (threshold 0.72, not 0.82); the platter must cover the volume box's
    half-diagonal (37 km ≥ 36.8 km) or ground-level outflow floats past the rim.
+   **Owner feedback round 2 (2026-07-17):** (a) the studio gradient replaced by
+   a **real horizon** — pastel sky over an infinite sea plane at z = −6 km (below
+   the slab bottom, so the platter still floats); the sea's distance fog is
+   deliberately capped at 0.78 because fully honest fog converges to exactly the
+   haze colour at grazing angles and *erases* the horizon line — the residual sea
+   colour is what draws it. Seeing a horizon at all constrains the camera:
+   elevation must be under ~fov/2, so the default view moved from el 33°/fov 22°
+   to el 11°/fov 34°/d 145 (?fov now a URL param). (b) **2× vertical
+   exaggeration by default** (?zx, clamped 1–3, render-time only per charter):
+   implemented by stretching the volume box in `volumeBox(man, zx)` — sampling,
+   ambient height grading, surface shadowing and the ground shadow all follow
+   automatically; the sun-march occluder cap scales with it (uShadowKm = 15·zx);
+   staging stays 1× and the HUD states the exaggeration honestly. The DOF band
+   widened 0.20 → 0.26 — at 2× the anvil sits far above the focus line and the
+   tight band smeared it entirely.
 4. **Precipitation** — rain/hail instanced particles off near-surface slices,
    exaggeration counter-scaling.
 5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,

@@ -70,14 +70,19 @@ const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
 const islandSeed = Number(params.get("seed") ?? "1337") || 1337;
 const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
+// vertical exaggeration — render-time only, never baked into data (charter);
+// staging stays 1×, so the island keeps its proportions under the taller storm
+const zExag = Math.min(3, Math.max(1, Number(params.get("zx") ?? "2") || 2));
 
-// starting view, overridable for tuning/captures: ?az=45&el=33&d=140 (deg, km)
+// starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
+// (deg, km). The default elevation is low enough that the sea horizon sits in
+// frame above the platter — elevation must stay below ~fov/2 to see it at all.
 let orbit: OrbitState = {
   target: { x: 0, y: 0, z: 3.5 },
   azimuth: ((Number(params.get("az") ?? "45") || 45) * Math.PI) / 180,
-  elevation: ((Number(params.get("el") ?? "33") || 33) * Math.PI) / 180,
-  distance: Number(params.get("d") ?? "140") || 140,
-  fovY: (22 * Math.PI) / 180,
+  elevation: ((Number(params.get("el") ?? "11") || 11) * Math.PI) / 180,
+  distance: Number(params.get("d") ?? "145") || 145,
+  fovY: ((Number(params.get("fov") ?? "34") || 34) * Math.PI) / 180,
 };
 
 function fmt(t: number): string {
@@ -97,7 +102,7 @@ async function start() {
   const times = man.frames.map((f) => f.time_s);
   const nFrames = man.frames.length;
   const tEnd = times[nFrames - 1];
-  const box = volumeBox(man);
+  const box = volumeBox(man, zExag);
   const dec = decodeConstants(man.volume.channels);
 
   // ---- staging (decorative, never sim terrain — design doc §5.2) ------------
@@ -186,7 +191,8 @@ async function start() {
 
   hud.textContent =
     `drag orbit · wheel zoom · space play/pause · [ ] frame step\n` +
-    `this storm is 52 km wide, 18 km tall\n` +
+    `this storm is 52 km wide, 18 km tall` +
+    (zExag !== 1 ? ` — shown at ${zExag}× vertical exaggeration` : "") + `\n` +
     `island & water are decorative staging, not simulation data`;
 
   // ---- render targets (recreated on resize) ----------------------------------
@@ -235,6 +241,7 @@ async function start() {
   gl.uniform1f(loc(progVol, "uExtScale"), EXT_SCALE);
   gl.uniform1f(loc(progVol, "uSteps"), 280);
   gl.uniform1f(loc(progVol, "uExposure"), 0.75);
+  gl.uniform1f(loc(progVol, "uShadowKm"), 15 * zExag);
 
   // ---- pacing stats (?stats — read by the headless verification driver) -----
   const stats = {
@@ -371,7 +378,9 @@ async function start() {
         gl.uniform1i(loc(progPost, "uTex"), 0);
         gl.uniform2f(loc(progPost, "uRes"), canvas.width, canvas.height);
         gl.uniform1f(loc(progPost, "uFocusY"), focusY);
-        gl.uniform1f(loc(progPost, "uBand"), 0.20);
+        // wider than slice 3's 0.20: at 2× vertical exaggeration the anvil
+        // sits far above the focus line and a tight band smears it entirely
+        gl.uniform1f(loc(progPost, "uBand"), 0.26);
         gl.uniform1f(loc(progPost, "uMaxRadius"), maxRadius);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, blurT.fbo);

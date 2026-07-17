@@ -35,8 +35,10 @@ time), scrubber, storm-time clock.
 
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
 the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
-for the verification driver), `?az=45&el=33&d=140` (starting view, deg/km),
-`?seed=1337` (island), `?ts=0` (disable tilt-shift).
+for the verification driver), `?az=45&el=11&d=145&fov=34` (starting view,
+deg/km), `?seed=1337` (island), `?ts=0` (disable tilt-shift), `?zx=2`
+(vertical exaggeration of the storm volume, render-time only, clamped 1–3;
+default 2 — the HUD states it, staging stays 1×).
 
 ## Status
 
@@ -44,7 +46,9 @@ Slices 1–3 done. Slice 3 (staging): the storm stands on a 74-km water platter
 with a seeded low-poly terraced island (decorative staging, never sim
 terrain) and a layered side wall. A G-buffer mesh pass feeds the composite
 raymarch, which shades land/water with the same sun shadow march as the cloud
-— the storm's shadow sweeps the island; tilt-shift DOF + pastel backdrop
-finish the miniature read. 78 fps @ 1600×1000 during 300× playback, zero
-stalls. Beauty-gate review is with the owner. Next: precipitation (4),
-layers/cross-sections (5), lightning event list (6).
+— the storm's shadow sweeps the island; tilt-shift DOF finishes the miniature
+read. The backdrop is a real horizon — pastel sky over an infinite sea, the
+platter floating above it — and the storm renders at 2× vertical exaggeration
+by default (owner request; `?zx=1` for true proportions). 78 fps @ 1600×1000
+during 300× playback, zero stalls. Beauty-gate review is with the owner.
+Next: precipitation (4), layers/cross-sections (5), lightning event list (6).
