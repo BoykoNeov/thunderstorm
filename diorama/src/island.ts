@@ -68,11 +68,11 @@ function fbm(x: number, y: number, seed: number): number {
 const ISLE_CX = 4.5;
 const ISLE_CY = -3.5;
 
-/** Stepped-plateau shaping — the stock-diorama terraced look. */
+/** Gentle stepped-plateau shaping — terraces without hard stair edges. */
 function terrace(h: number, step: number): number {
   const k = h / step;
   const f = k - Math.floor(k);
-  return (Math.floor(k) + smooth(Math.min(1, Math.max(0, (f - 0.35) / 0.3)))) * step;
+  return (Math.floor(k) + smooth(Math.min(1, Math.max(0, (f - 0.2) / 0.6)))) * step;
 }
 
 /** Toy terrain height (km) at world (x, y). Deterministic for a given seed. */
@@ -80,12 +80,23 @@ export function heightAt(x: number, y: number, seed: number): number {
   const dx = x - ISLE_CX;
   const dy = y - ISLE_CY;
   const r = Math.hypot(dx, dy);
-  const dome = Math.exp(-(r * r) / (6.5 * 6.5)); // main island dome
+  // broad island shield + named features: a summit cone NE, a carved bay on
+  // the south rim, and a small offshore islet NW
+  const body = Math.exp(-(r * r) / (12 * 12)) * 0.95;
+  const dPeak = Math.hypot(x - 9.0, y - 0.5);
+  const peak = Math.exp(-(dPeak * dPeak) / (3.4 * 3.4)) * 0.95;
+  const dBay = Math.hypot(x - 2.0, y + 9.5);
+  const bay = Math.exp(-(dBay * dBay) / (4.5 * 4.5)) * 1.0;
+  const dIslet = Math.hypot(x + 13.5, y - 7.5);
+  const islet = Math.exp(-(dIslet * dIslet) / (2.4 * 2.4)) * 0.5;
   const n = fbm(x * 0.09, y * 0.09, seed);
-  const reach = Math.max(0, 1 - r / 14); // noise islets fade out by ~14 km
-  let h = dome * 1.2 + (n - 0.5) * 1.9 * reach - 0.16;
-  if (h > 0.12) h = 0.12 + terrace(h - 0.12, 0.34);
-  return Math.max(h, -0.5); // shallow toy seabed; hidden by the water disk
+  const reach = Math.max(0, 1 - r / 24); // noise texture fades out by ~24 km
+  let h =
+    body + peak + islet - bay + (n - 0.5) * 1.5 * reach - 0.12 -
+    0.3 * smooth(Math.min(1, Math.max(0, (r - 20) / 6))); // shelf drops to deep sea
+  if (h > 1.2) h = 1.2 + (h - 1.2) * 0.55; // soft-compress summits (toy scale)
+  if (h > 0.12) h = 0.12 + terrace(h - 0.12, 0.3);
+  return Math.max(h, -0.55); // shallow toy seabed; hidden by the water disk
 }
 
 // -- mesh assembly ----------------------------------------------------------------
@@ -130,6 +141,7 @@ const SAND: [number, number, number] = [0.86, 0.73, 0.45];
 const GRASS_A: [number, number, number] = [0.33, 0.63, 0.28];
 const GRASS_B: [number, number, number] = [0.17, 0.44, 0.23];
 const ROCK: [number, number, number] = [0.5, 0.5, 0.46];
+const SNOW: [number, number, number] = [0.93, 0.94, 0.95];
 const WATER: [number, number, number] = [0.21, 0.58, 0.58];
 const WALL_BANDS: [number, [number, number, number]][] = [
   // [band bottom z, color] — sediment layers of the toy base, top to bottom
@@ -146,8 +158,9 @@ function faceColor(
   seed: number,
 ): [number, number, number] {
   let c: [number, number, number];
-  if (nz < 0.72 || havg > 1.25) c = ROCK; // steep terrace cliffs read as rock
-  else if (havg < 0.05) c = SAND;
+  if (havg > 1.3) c = SNOW; // summit cap — makes the peak read as a mountain
+  else if (nz < 0.72 || havg > 1.18) c = ROCK; // steep cliffs + a thin summit ring
+  else if (havg < 0.04) c = SAND;
   else {
     const t = fbm(jx * 0.35, jy * 0.35, seed + 977);
     c = [
@@ -157,7 +170,7 @@ function faceColor(
     ];
   }
   // small per-face value jitter sells the faceted low-poly look
-  const j = (hash2(Math.round(jx * 37), Math.round(jy * 37), seed + 31) - 0.5) * 0.07;
+  const j = (hash2(Math.round(jx * 37), Math.round(jy * 37), seed + 31) - 0.5) * 0.045;
   return [
     Math.min(1, Math.max(0, c[0] + j)),
     Math.min(1, Math.max(0, c[1] + j)),
@@ -173,8 +186,8 @@ export function buildStaging(seed: number): StagingMesh {
   const soup = new SoupBuilder();
 
   // --- island heightfield, jittered grid, flat-shaded --------------------------
-  const EXTENT = 21; // km half-size of the meshed square around the island
-  const N = 116; // cells per side (~0.36 km cells — chunky low-poly)
+  const EXTENT = 27; // km half-size of the meshed square around the island
+  const N = 200; // cells per side (~0.27 km cells — faceted but not chunky)
   const cell = (2 * EXTENT) / N;
   // lattice with consistent per-vertex jitter so neighbouring faces share verts
   const px = new Float32Array((N + 1) * (N + 1));
@@ -183,8 +196,8 @@ export function buildStaging(seed: number): StagingMesh {
   for (let j = 0; j <= N; j++) {
     for (let i = 0; i <= N; i++) {
       const id = j * (N + 1) + i;
-      const jx = (hash2(i, j, seed + 7) - 0.5) * 0.6 * cell;
-      const jy = (hash2(i, j, seed + 8) - 0.5) * 0.6 * cell;
+      const jx = (hash2(i, j, seed + 7) - 0.5) * 0.45 * cell;
+      const jy = (hash2(i, j, seed + 8) - 0.5) * 0.45 * cell;
       const x = ISLE_CX - EXTENT + i * cell + (i > 0 && i < N ? jx : 0);
       const y = ISLE_CY - EXTENT + j * cell + (j > 0 && j < N ? jy : 0);
       px[id] = x;
@@ -201,6 +214,9 @@ export function buildStaging(seed: number): StagingMesh {
       const i11 = i01 + 1;
       const quad = [i00, i10, i11, i01];
       if (quad.every((q) => pz[q] < SUBMERGED)) continue;
+      // the meshed square's corners poke past the platter — drop open-sea
+      // cells out there so every emitted vertex stays on the platter
+      if (quad.some((q) => Math.hypot(px[q], py[q]) > PLATTER_RADIUS - 0.5)) continue;
       const P = (q: number): [number, number, number] => [px[q], py[q], pz[q]];
       // alternate the diagonal per cell parity — avoids a visible grid bias
       const tris =

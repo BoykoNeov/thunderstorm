@@ -264,7 +264,12 @@ is always evidence.
    platter centre, plus +13 % saturation and a gentle vignette; ?ts=0 disables
    it, ?az/?el/?d/?seed override view/island for by-eye tuning. Perf: 78 fps at
    1600×1000 during 300× playback with staging + DOF, zero stalls, upload p95
-   2.8 ms — no regression vs slice 2. Tuning lessons: surface lighting needed
+   2.8 ms — no regression vs slice 2. **Owner feedback round (2026-07-17):**
+   finer mesh (0.27 km cells, less jitter — "less blocky"), island grown to
+   ~30 km with named features (snowcapped summit cone, carved lagoon bay with
+   sand rim, offshore islet), and the backdrop brightened from grey to a
+   pastel blue-white studio gradient (vignette halved). Tuning lessons:
+   surface lighting needed
    ~half the sun weight the cloud gets or the whole scene reads milk-white
    through ACES; slope-threshold rock colouring on a jittered mesh speckles
    (threshold 0.72, not 0.82); the platter must cover the volume box's

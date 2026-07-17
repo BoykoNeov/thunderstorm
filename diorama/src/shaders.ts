@@ -101,9 +101,9 @@ const float PI = 3.14159265;
 
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
 const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
-const vec3 BG_TOP       = vec3(0.56, 0.71, 0.85);  // pastel backdrop, upper
-const vec3 BG_HORIZON   = vec3(0.88, 0.90, 0.89);
-const vec3 BG_LOW       = vec3(0.83, 0.79, 0.71);  // below the platter
+const vec3 BG_TOP       = vec3(0.58, 0.73, 0.88);  // pastel backdrop, upper
+const vec3 BG_HORIZON   = vec3(0.95, 0.94, 0.91);
+const vec3 BG_LOW       = vec3(0.72, 0.78, 0.85);  // soft blue wash below
 const vec3 AMB_HIGH     = vec3(0.38, 0.48, 0.60);  // sky light on upper cloud
 const vec3 AMB_LOW      = vec3(0.14, 0.17, 0.22);  // bounce light near base
 const vec3 CLOUD_ALB    = vec3(0.93, 0.94, 0.96);
@@ -173,7 +173,7 @@ float hg(float c, float g) {
 // -- background: pastel gradient, not a physical sky ---------------------------
 vec3 background(vec3 rd) {
   vec3 col = mix(BG_HORIZON, BG_TOP, smoothstep(-0.02, 0.55, rd.z));
-  col = mix(col, BG_LOW, smoothstep(-0.03, -0.35, rd.z));
+  col = mix(col, BG_LOW, smoothstep(-0.08, -0.55, rd.z));
   float s = max(dot(rd, uSunDir), 0.0);
   col += vec3(1.0, 0.9, 0.75) * pow(s, 9.0) * 0.07; // faint warm cast, no sun disc
   return col;
@@ -330,7 +330,7 @@ void main() {
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = clamp(mix(vec3(l), col, 1.13), 0.0, 1.0);
     vec2 v = uv - 0.5;
-    col *= 1.0 - 0.30 * dot(v, v);
+    col *= 1.0 - 0.16 * dot(v, v);
   }
   fragColor = vec4(col, 1.0);
 }

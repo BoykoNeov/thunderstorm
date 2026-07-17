@@ -35,7 +35,7 @@ describe("island heightfield", () => {
         hi = Math.max(hi, h);
       }
     }
-    expect(lo).toBeGreaterThanOrEqual(-0.5);
+    expect(lo).toBeGreaterThanOrEqual(-0.55);
     expect(hi).toBeLessThan(2.0); // staging must stay well under the ~1–2 km cloud base
   });
 });
