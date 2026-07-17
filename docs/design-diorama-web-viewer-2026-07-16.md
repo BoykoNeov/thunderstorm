@@ -330,6 +330,32 @@ is always evidence.
    playback (a first 49.7 fps "regression" was entirely that). ?precip=0
    disables; HUD gains the honesty line "rain & hail are stylized particles
    gated by the simulated near-surface fields".
+   **De-blocking + distant-rain pass (owner feedback, 2026-07-17)** — "make
+   everything look non blocky and the rain look like real rain in the distance
+   (keep the falling lines)". One new asset: a 64³ tileable RG8 3D value-noise
+   texture (src/noise3d.ts — pure, deterministic, 8 tests; R coarse 2.5 km /
+   G fine 0.4 km wavelengths in storm km, so the effect is sx-invariant),
+   baked once and bound on unit 5. Three uses in the primary march only
+   (shadow marches stay noise-free — 28× cost, imperceptible difference):
+   (a) **domain warp** — the sample position bends by ~±0.4 storm-km of smooth
+   vector noise before the volume lookup. This is THE de-blocking step: the
+   250 m trilinear lattice facets, collar striping and terraced "pancake"
+   rings are iso-surface artifacts, and magnitude modulation cannot remove
+   them — moving the lookup can. (b) **edge wisps** — near-zero-mean noise
+   modulation fading out with density. The first cut was a classic subtractive
+   erode and DELETED THE ANVIL — it is optically thin everywhere, so
+   "edge-only" erosion ate all of it; zero-mean modulation adds structure
+   without eating mean opacity. (c) **rain veil** — the rain channel splits
+   out of the cloud extinction sum (uWeightsCld/uRainVeil) and shades as a
+   darker cooler curtain (RAIN_ALB 0.55/0.60/0.68, weaker phase), modulated by
+   vertically-stretched sheets (xy 0.75 km / z 3.5 km) scrolling down on wall
+   time; shadow weights carry the same veil weight so the curtain darkens the
+   island. Streaks retuned many/fine/faint (60 000 × α 0.35 × halfWidth
+   0.045) — at diorama distance they fuse into the gray curtain real rain
+   reads as, up close they stay individual falling lines. Cost: ~16 % on the
+   worst-case frame (85→71 fps @1600×1000 paused-frame A/B, RTX 5090);
+   ?er= / ?veil= expose strength (0 = off, reclaiming the cost). Erosion
+   default 0.45: at 0.8 the wisp modulation punches dark blotches — don't.
 5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,
    clock/scrubber polish.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
@@ -339,7 +365,8 @@ Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
 reviewed via six captures (frames 150/255, three orbits, plus ?sx=1 true-scale)
 and the live viewer; verdict "GO — proceed to slice 4". Known cosmetic backlog,
 deliberately deferred (all render-time, none block slices 4–6): cloud softness
-(inherent 500 m data at 2×; candidate fix is render-time detail noise), warmer
+(inherent 500 m data at 2×; candidate fix is render-time detail noise — **done
+2026-07-17**, see the slice-4 de-blocking pass above), warmer
 sun/ambient split in the cloud shading, shore-shallows water gradient, softer
 sky horizon band. Palette constants remain placeholder-by-design in
 src/island.ts and the shader palette block in src/shaders.ts.

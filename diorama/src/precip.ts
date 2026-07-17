@@ -50,17 +50,20 @@ export interface PrecipSpec {
 // reaches the ground ~frame 200 of this run — the hero frame 150 is honestly
 // rain-free at the surface) and against the measured gate-layer magnitudes:
 // rain up to ~9e-3 kg/kg, hail only ~6e-4 kg/kg over ~1.5 km².
+// Many fine faint lines beat few bold ones: at diorama camera distances the
+// dense curtain fuses into the translucent gray sheet real rain reads as,
+// while each line stays an individual streak up close.
 export const RAIN: PrecipSpec = {
-  count: 24000,
+  count: 60000,
   gateChannel: "rain",
   qFloor: 2e-4,
   qFull: 2.5e-3,
   fallSpeed: 1.1,
   length: 1.05,
-  halfWidth: 0.06,
+  halfWidth: 0.045,
   zTop: 2.0,
   color: [0.62, 0.72, 0.82],
-  alpha: 0.5,
+  alpha: 0.35,
   spawnFrac: 1.0,
 };
 

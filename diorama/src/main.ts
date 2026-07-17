@@ -16,6 +16,7 @@ import {
   createGBuffer,
   createInstancedVAO,
   createMeshVAO,
+  createNoiseTexture,
   createVolumeTexture,
   drawFullscreen,
   getGL,
@@ -24,6 +25,7 @@ import {
   type GBuffer,
 } from "./gl";
 import { buildStaging, PLATTER_RADIUS } from "./island";
+import { buildNoise3D, NOISE_SIZE } from "./noise3d";
 import { multiply, perspective, project, view } from "./mat";
 import { advance, locate, wantedFrames } from "./playback";
 import { buildPrecipInstances, HAIL, RAIN, type PrecipSpec } from "./precip";
@@ -77,6 +79,16 @@ const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
 // island reads smaller under the bigger storm — that contrast is the point
 const stormScale = Math.min(3, Math.max(1, Number(params.get("sx") ?? "2") || 2));
 const precipOn = params.get("precip") !== "0"; // ?precip=0 disables the particles
+// numeric param where 0 is a legitimate value (the `|| default` idiom eats it)
+const numParam = (name: string, def: number) => {
+  const raw = params.get(name);
+  const v = Number(raw);
+  return raw !== null && Number.isFinite(v) ? v : def;
+};
+// cloud edge detail-erosion strength (?er=0 disables — the pre-erosion look)
+const erosion = Math.min(1, Math.max(0, numParam("er", 0.45)));
+// rain-veil extinction weight (?veil=0 disables the veil entirely)
+const veilW = Math.max(0, numParam("veil", 0.12));
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -112,6 +124,13 @@ async function start() {
 
   // ---- staging (decorative, never sim terrain — design doc §5.2) ------------
   const staging = createMeshVAO(gl, buildStaging(islandSeed).data);
+
+  // ---- detail noise (presentation only: edge erosion + rain veil) -----------
+  // bound once on unit 5 — nothing else touches that unit, so it stays bound
+  const noiseTex = createNoiseTexture(gl, NOISE_SIZE, buildNoise3D(1));
+  gl.activeTexture(gl.TEXTURE5);
+  gl.bindTexture(gl.TEXTURE_3D, noiseTex);
+  gl.activeTexture(gl.TEXTURE0);
 
   // ---- precipitation instances (slice 4; presentation, never physics) -------
   const rainVAO = createInstancedVAO(gl, buildPrecipInstances(RAIN.count, islandSeed + 11, RAIN.spawnFrac));
@@ -235,6 +254,21 @@ async function start() {
     k[c.plane] = dec.k[c.plane];
   }
   const w = man.volume.channels.map((c) => WEIGHTS[c.name as keyof typeof WEIGHTS] ?? 0);
+  // The primary march splits species: cloud/ice/graupel keep the UE-parity
+  // weights; rain leaves the cloud sum and becomes the veil (darker albedo,
+  // noise-modulated, weight veilW). Shadow marches see the same total the eye
+  // does (minus the noise), so the veil darkens the island like real rain.
+  const rainPlane = planeOf("rain");
+  const wCld = w.map((v, i) => (i === rainPlane ? 0 : v));
+  const wShadow = w.map((v, i) => (i === rainPlane ? veilW : v));
+  const veilMask = [0, 0, 0, 0];
+  if (rainPlane !== undefined) veilMask[rainPlane] = veilW;
+  // storm-km box size (display / sx): veil noise coords stay scale-invariant
+  const sizeStorm = {
+    x: (box.max.x - box.min.x) / stormScale,
+    y: (box.max.y - box.min.y) / stormScale,
+    z: (box.max.z - box.min.z) / stormScale,
+  };
   gl.useProgram(progVol);
   gl.uniform3f(loc(progVol, "uSunDir"), SUN.x, SUN.y, SUN.z);
   gl.uniform3f(loc(progVol, "uBoxMin"), box.min.x, box.min.y, box.min.z);
@@ -248,7 +282,9 @@ async function start() {
   gl.uniform1f(loc(progVol, "uFar"), FAR);
   gl.uniform4fv(loc(progVol, "uThr"), thr);
   gl.uniform4fv(loc(progVol, "uK"), k);
-  gl.uniform4f(loc(progVol, "uWeights"), w[0], w[1], w[2], w[3]);
+  gl.uniform4f(loc(progVol, "uWeights"), wShadow[0], wShadow[1], wShadow[2], wShadow[3]);
+  gl.uniform4f(loc(progVol, "uWeightsCld"), wCld[0], wCld[1], wCld[2], wCld[3]);
+  gl.uniform4f(loc(progVol, "uRainVeil"), veilMask[0], veilMask[1], veilMask[2], veilMask[3]);
   // Uniform magnification must keep optical depth invariant: paths through the
   // storm are stormScale× longer in km, so per-km extinction divides by the
   // scale (and the sun-march cap grows with it). The 2× storm then looks like
@@ -257,6 +293,12 @@ async function start() {
   gl.uniform1f(loc(progVol, "uSteps"), 280);
   gl.uniform1f(loc(progVol, "uExposure"), 0.75);
   gl.uniform1f(loc(progVol, "uShadowKm"), 15 * stormScale);
+  gl.uniform1i(loc(progVol, "uNoise"), 5);
+  gl.uniform3f(loc(progVol, "uSizeStorm"), sizeStorm.x, sizeStorm.y, sizeStorm.z);
+  gl.uniform1f(loc(progVol, "uErosion"), erosion);
+  // sigC is per DISPLAY km (÷sx), so "coreness" renormalizes by sx: the same
+  // storm erodes identically at any display scale (core threshold 0.8 km⁻¹)
+  gl.uniform1f(loc(progVol, "uCoreNorm"), 1.25 * stormScale);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as
@@ -271,7 +313,7 @@ async function start() {
   gl.uniform1i(loc(progPrecip, "uDepthTex"), 4);
   gl.uniform4fv(loc(progPrecip, "uThr"), thr);
   gl.uniform4fv(loc(progPrecip, "uK"), k);
-  gl.uniform4f(loc(progPrecip, "uWeights"), w[0], w[1], w[2], w[3]);
+  gl.uniform4f(loc(progPrecip, "uWeights"), wShadow[0], wShadow[1], wShadow[2], wShadow[3]);
   gl.uniform1f(loc(progPrecip, "uExtScale"), EXT_SCALE / stormScale);
   gl.uniform1f(loc(progPrecip, "uShadowKm"), 15 * stormScale);
   gl.uniform2f(loc(progPrecip, "uTilt"), 0.1, 0.04); // slight wind-shear lean

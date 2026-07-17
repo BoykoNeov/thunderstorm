@@ -45,6 +45,26 @@ export function createVolumeTexture(
   return tex;
 }
 
+/** Small tileable RG8 3D value-noise texture (REPEAT, trilinear) — detail
+ *  erosion + rain-veil modulation in the volume march (noise3d.ts bakes it). */
+export function createNoiseTexture(
+  gl: WebGL2RenderingContext,
+  size: number,
+  data: Uint8Array,
+): WebGLTexture {
+  const tex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.texStorage3D(gl.TEXTURE_3D, 1, gl.RG8, size, size, size);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.REPEAT);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, size, size, size, gl.RG, gl.UNSIGNED_BYTE, data);
+  return tex;
+}
+
 export function uploadVolume(
   gl: WebGL2RenderingContext,
   tex: WebGLTexture,

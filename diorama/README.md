@@ -39,7 +39,9 @@ for the verification driver), `?az=45&el=11&d=145&fov=34` (starting view,
 deg/km), `?seed=1337` (island), `?ts=0` (disable tilt-shift), `?sx=2`
 (uniform display scale of the storm volume — proportions stay true; render-time
 only, clamped 1–3; default 2 — the HUD states it, staging stays 1×),
-`?precip=0` (disable the rain/hail particles).
+`?precip=0` (disable the rain/hail particles), `?er=0.45` (cloud detail
+noise strength: domain warp + edge wisps, 0 = raw voxel look), `?veil=0.12`
+(rain-veil extinction weight, 0 disables the volumetric rain curtain).
 
 ## Status
 
@@ -61,4 +63,14 @@ by coarse marches through the cloud, occluded by the island via the G-buffer
 depth, wall-time animated, counter-scaled under `?sx`. Near-surface rain first
 reaches the ground ~frame 200 of this run — the frame-150 hero is honestly
 rain-free at the surface. Cost is <1 % (paused-frame A/B on the real GPU).
+De-blocking + distant-rain pass (owner feedback): a small tileable 3D value
+noise (noise3d.ts, baked once) drives (a) a ~1.5-voxel domain warp of the
+volume lookup plus zero-mean edge wisps — the 250 m trilinear voxel facets,
+collar striping and terraced rings dissolve into organic cauliflower while
+cores and the (optically thin) anvil keep their opacity; and (b) a volumetric
+rain veil: the rain channel splits out of the cloud extinction and renders as
+a darker gray curtain modulated by vertically-stretched sheets scrolling down
+on wall time. Rain streaks became many/fine/faint (60k × α 0.35) so they fuse
+into that curtain at distance but stay individual lines up close. Costs ~16 %
+on the worst frame (85→71 fps full-res; `?er=0&veil=0` reclaims it).
 Next: layers/cross-sections (5), lightning event list (6).

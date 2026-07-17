@@ -15,6 +15,17 @@
 // cores. Extinction is physical-per-species: the four RGBA planes decode back
 // to mixing ratios (kg/kg) and combine with per-species weights — the same
 // weights the UE material uses (docs/phase1-svt-custom-material-2026-07-16.md).
+//
+// Two presentation layers on top of the data (never physics — they modulate
+// how the 250 m field LOOKS, not what it says):
+//  - detail erosion: tileable value noise erodes the cloud EDGE extinction,
+//    adding sub-voxel structure the grid can't carry — without it trilinear
+//    sampling shows the voxel lattice as smooth blocky facets. Cores are
+//    untouched (erosion weight → 0 with density), so opacity/shape hold.
+//  - rain veil: the rain channel is split out of the cloud sum and rendered
+//    as a darker translucent curtain, modulated by vertically-stretched noise
+//    scrolling downward — the "gray sheets of distant rain" read. The streak
+//    particles (pass 2.5) stay; the veil is what distance actually looks like.
 
 export const VERT = `#version 300 es
 void main() {
@@ -180,6 +191,14 @@ uniform float uTime;          // wall seconds — water ripple only, never physi
 
 uniform float uSteps;         // primary march step count
 uniform float uExposure;
+
+uniform sampler3D uNoise;     // tileable RG value noise (R coarse, G fine)
+uniform vec3  uSizeStorm;     // box size in storm km (display / sx) — noise coords
+uniform float uErosion;       // 0..1 edge erosion strength (?er=)
+uniform float uCoreNorm;      // sigma → "coreness"; scales with sx so the same
+                              // cloud erodes identically at any display scale
+uniform vec4  uWeightsCld;    // uWeights with the rain plane zeroed
+uniform vec4  uRainVeil;      // one-hot rain plane × veil extinction weight (?veil=)
 ${VOL_COMMON}
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
 const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
@@ -190,6 +209,54 @@ const float SEA_Z       = -6.0;                    // km; below the slab bottom
 const vec3 AMB_HIGH     = vec3(0.38, 0.48, 0.60);  // sky light on upper cloud
 const vec3 AMB_LOW      = vec3(0.14, 0.17, 0.22);  // bounce light near base
 const vec3 CLOUD_ALB    = vec3(0.93, 0.94, 0.96);
+const vec3 RAIN_ALB     = vec3(0.55, 0.60, 0.68);  // veil: darker, cooler
+
+// Extinction split for the primary march: x = cloud/ice/graupel de-blocked by
+// noise (domain warp + edge modulation), y = rain veil with falling-sheet
+// modulation. The shadow marches keep the plain sigmaShadowAt — noise there
+// costs 28× per sample and self-shadow differences are imperceptible.
+vec2 sigma2At(vec3 p) {
+  vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
+  vec3 pS = uvw * uSizeStorm;
+  // Domain warp — THE de-blocking step: bend the sample position with smooth
+  // vector noise (~2 km wavelength, ~1.5-voxel amplitude) so the trilinear
+  // iso-surfaces stop being voxel-aligned. Magnitude modulation alone cannot
+  // remove the lattice facets/striping; moving the lookup can. The fine
+  // octave rides along for the edge wisps below.
+  float nFine = 0.5;
+  if (uErosion > 0.001) {
+    vec3 c = pS * 0.125;
+    vec2 nA = texture(uNoise, c).rg;
+    float ny = texture(uNoise, c + vec3(0.37, 0.71, 0.19)).r;
+    float nz = texture(uNoise, c + vec3(0.61, 0.13, 0.47)).r;
+    nFine = nA.g;
+    vec3 warp = (vec3(nA.r, ny, nz) - 0.5) * (uErosion * 1.7);
+    uvw += warp / uSizeStorm;
+  }
+  vec4 q = qDecode(texture(uVolA, uvw) * 255.0);
+  if (uMix > 0.0001) {
+    q = mix(q, qDecode(texture(uVolB, uvw) * 255.0), uMix);
+  }
+  float sigC = max(uExtScale * dot(uWeightsCld, q) - 0.04, 0.0);
+  if (sigC > 1e-4) {
+    // near-zero-mean wisp modulation at cloud edges, fading out in cores —
+    // NOT a subtractive erode: that deletes thin extended features (the anvil
+    // is optically thin everywhere and vanished under it)
+    float core = min(sigC * uCoreNorm, 1.0);
+    float e = uErosion * (1.0 - core);
+    if (e > 0.001) {
+      sigC *= max(1.0 + e * (2.2 * nFine - 1.25), 0.0);
+    }
+  }
+  float sigR = uExtScale * dot(uRainVeil, q);
+  if (sigR > 1e-4) {
+    // vertically-stretched sheets, scrolling down on wall time (presentation,
+    // like the water ripples — storm time at 300× would strobe)
+    float v = texture(uNoise, vec3(pS.xy * 0.33, pS.z * 0.07 + uTime * 0.05)).r;
+    sigR *= 0.15 + 1.7 * v * v; // squared: crisper sheet/gap contrast
+  }
+  return vec2(sigC, sigR);
+}
 
 float hg(float c, float g) {
   float g2 = g * g;
@@ -298,13 +365,17 @@ void main() {
     for (int i = 0; i < 512; i++) {
       if (float(i) >= N || t >= t1) break;
       vec3 p = ro + rd * t;
-      float sig = sigmaAt(p);
+      vec2 s2 = sigma2At(p);
+      float sig = s2.x + s2.y;
       if (sig > 1e-4) {
         float shadow = exp(-sunTau(p));
         float hfrac = clamp((p.z - uBoxMin.z) / (uBoxMax.z - uBoxMin.z), 0.0, 1.0);
         vec3 amb = mix(AMB_LOW, AMB_HIGH, hfrac) * (0.25 + 0.45 * hfrac);
-        float powder = 1.0 - 0.7 * exp(-sig * 1.2);
-        vec3 S = CLOUD_ALB * (SUN_COL * (shadow * phase * powder) + amb);
+        float powder = 1.0 - 0.7 * exp(-s2.x * 1.2);
+        vec3 Sc = CLOUD_ALB * (SUN_COL * (shadow * phase * powder) + amb);
+        // rain: dimmer sun response, mostly ambient — a gray translucent veil
+        vec3 Sr = RAIN_ALB * (SUN_COL * (shadow * phase * 0.55) + amb);
+        vec3 S = (Sc * s2.x + Sr * s2.y) / sig;
         float a = 1.0 - exp(-sig * dt);
         acc += T * a * S;
         T *= 1.0 - a;
