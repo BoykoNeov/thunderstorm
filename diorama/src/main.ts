@@ -14,6 +14,7 @@ import {
   compileProgram,
   createColorTarget,
   createGBuffer,
+  createInstancedVAO,
   createMeshVAO,
   createVolumeTexture,
   drawFullscreen,
@@ -22,13 +23,14 @@ import {
   type ColorTarget,
   type GBuffer,
 } from "./gl";
-import { buildStaging } from "./island";
+import { buildStaging, PLATTER_RADIUS } from "./island";
 import { multiply, perspective, project, view } from "./mat";
 import { advance, locate, wantedFrames } from "./playback";
+import { buildPrecipInstances, HAIL, RAIN, type PrecipSpec } from "./precip";
 import { SlotPool } from "./ring";
 import { volumeBox } from "./scene";
 import { decodeConstants, loadManifest, type WebManifest } from "./volume";
-import { FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, VERT } from "./shaders";
+import { FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, PRECIP_FRAG, PRECIP_VERT, VERT } from "./shaders";
 
 // Extinction weights per species — the numbers proven in the UE material
 // (docs/phase1-svt-custom-material-2026-07-16.md), so both axes read alike.
@@ -74,6 +76,7 @@ const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
 // render-time only, never baked into data (charter); staging stays 1×, so the
 // island reads smaller under the bigger storm — that contrast is the point
 const stormScale = Math.min(3, Math.max(1, Number(params.get("sx") ?? "2") || 2));
+const precipOn = params.get("precip") !== "0"; // ?precip=0 disables the particles
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -95,6 +98,7 @@ async function start() {
   const progGeo = compileProgram(gl, GEO_VERT, GEO_FRAG);
   const progVol = compileProgram(gl, VERT, FRAG);
   const progPost = compileProgram(gl, VERT, POST_FRAG);
+  const progPrecip = compileProgram(gl, PRECIP_VERT, PRECIP_FRAG);
   const loc = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
 
   const man: WebManifest = await loadManifest("/data/web_manifest.json");
@@ -108,6 +112,11 @@ async function start() {
 
   // ---- staging (decorative, never sim terrain — design doc §5.2) ------------
   const staging = createMeshVAO(gl, buildStaging(islandSeed).data);
+
+  // ---- precipitation instances (slice 4; presentation, never physics) -------
+  const rainVAO = createInstancedVAO(gl, buildPrecipInstances(RAIN.count, islandSeed + 11, RAIN.spawnFrac));
+  const hailVAO = createInstancedVAO(gl, buildPrecipInstances(HAIL.count, islandSeed + 23, HAIL.spawnFrac));
+  const planeOf = (name: string) => man.volume.channels.find((c) => c.name === name)?.plane;
 
   // ---- playback state -------------------------------------------------------
   // storm time is the single source of truth; speed is a pure UI multiplier
@@ -194,7 +203,8 @@ async function start() {
     `drag orbit · wheel zoom · space play/pause · [ ] frame step\n` +
     `this storm is 52 km wide, 18 km tall` +
     (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
-    `island & water are decorative staging, not simulation data`;
+    `island & water are decorative staging, not simulation data` +
+    (precipOn ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "");
 
   // ---- render targets (recreated on resize) ----------------------------------
   let gbuf: GBuffer | null = null;
@@ -247,6 +257,45 @@ async function start() {
   gl.uniform1f(loc(progVol, "uSteps"), 280);
   gl.uniform1f(loc(progVol, "uExposure"), 0.75);
   gl.uniform1f(loc(progVol, "uShadowKm"), 15 * stormScale);
+
+  // ---- static uniforms (precip program) --------------------------------------
+  // The shared VOL_COMMON chunk gives this program the same names/values as
+  // the volume pass; particle speeds/lengths pre-scale by the display scale so
+  // the bigger storm sheds bigger rain (same transit time, same proportions).
+  gl.useProgram(progPrecip);
+  gl.uniform3f(loc(progPrecip, "uSunDir"), SUN.x, SUN.y, SUN.z);
+  gl.uniform3f(loc(progPrecip, "uBoxMin"), box.min.x, box.min.y, box.min.z);
+  gl.uniform3f(loc(progPrecip, "uBoxMax"), box.max.x, box.max.y, box.max.z);
+  gl.uniform1i(loc(progPrecip, "uVolA"), 0);
+  gl.uniform1i(loc(progPrecip, "uVolB"), 1);
+  gl.uniform1i(loc(progPrecip, "uDepthTex"), 4);
+  gl.uniform4fv(loc(progPrecip, "uThr"), thr);
+  gl.uniform4fv(loc(progPrecip, "uK"), k);
+  gl.uniform4f(loc(progPrecip, "uWeights"), w[0], w[1], w[2], w[3]);
+  gl.uniform1f(loc(progPrecip, "uExtScale"), EXT_SCALE / stormScale);
+  gl.uniform1f(loc(progPrecip, "uShadowKm"), 15 * stormScale);
+  gl.uniform2f(loc(progPrecip, "uTilt"), 0.1, 0.04); // slight wind-shear lean
+  gl.uniform1f(loc(progPrecip, "uGateZ"), 2.5 / nz); // ~625 m: the near-surface layers
+  gl.uniform1f(loc(progPrecip, "uMaxR"), PLATTER_RADIUS - 0.8); // rain stays on the diorama
+
+  function drawPrecip(spec: PrecipSpec, vao: WebGLVertexArrayObject, count: number) {
+    const plane = planeOf(spec.gateChannel);
+    if (plane === undefined) return; // package without that channel: no particles
+    const mask = [0, 0, 0, 0];
+    mask[plane] = 1;
+    gl.uniform4f(loc(progPrecip, "uGateMask"), mask[0], mask[1], mask[2], mask[3]);
+    gl.uniform1f(loc(progPrecip, "uQFloor"), spec.qFloor);
+    gl.uniform1f(loc(progPrecip, "uQFull"), spec.qFull);
+    gl.uniform1f(loc(progPrecip, "uFallSpeed"), spec.fallSpeed * stormScale);
+    gl.uniform1f(loc(progPrecip, "uLen"), spec.length * stormScale);
+    gl.uniform1f(loc(progPrecip, "uHalfWidth"), spec.halfWidth);
+    gl.uniform1f(loc(progPrecip, "uZTop"), spec.zTop * stormScale);
+    gl.uniform3f(loc(progPrecip, "uColor"), spec.color[0], spec.color[1], spec.color[2]);
+    gl.uniform1f(loc(progPrecip, "uAlphaMax"), spec.alpha);
+    gl.bindVertexArray(vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
+    gl.bindVertexArray(null);
+  }
 
   // ---- pacing stats (?stats — read by the headless verification driver) -----
   const stats = {
@@ -371,6 +420,23 @@ async function start() {
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, gbuf.depth);
       drawFullscreen(gl);
+
+      // -- pass 2.5: precipitation particles (same target, before tilt-shift so
+      //    the DOF treats rain like everything else; volume + depth textures are
+      //    still bound on units 0/1/4) -----------------------------------------
+      if (precipOn) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.useProgram(progPrecip);
+        gl.uniformMatrix4fv(loc(progPrecip, "uViewProj"), false, viewProj);
+        gl.uniform3f(loc(progPrecip, "uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
+        gl.uniform1f(loc(progPrecip, "uMix"), bind.mix);
+        gl.uniform1f(loc(progPrecip, "uTimeWall"), now / 1000);
+        gl.uniform2f(loc(progPrecip, "uRes"), canvas.width, canvas.height);
+        drawPrecip(RAIN, rainVAO.vao, RAIN.count);
+        drawPrecip(HAIL, hailVAO.vao, HAIL.count);
+        gl.disable(gl.BLEND);
+      }
 
       // -- pass 3: tilt-shift (H then V + grade) --------------------------------
       if (tiltShift && sceneT && blurT) {

@@ -302,15 +302,47 @@ is always evidence.
    data magnified, not DOF (verified ?ts=0). HUD: "shown at 2× scale".
 4. **Precipitation** — rain/hail instanced particles off near-surface slices,
    exaggeration counter-scaling.
+   **DONE 2026-07-17** — rain streaks + hail pellets as instanced quads
+   (24 000 / 4 000), everything in the vertex shader against the SAME resident
+   3D textures the raymarch streams (§5.3 as designed: no CPU readback): the
+   near-surface layer (~625 m) of rain/graupelhail gates a per-instance jitter
+   threshold so LOCAL population follows the field; a coarse sun march tints by
+   the storm's own shadow and a coarse view march fades particles behind/inside
+   cloud (both sampled at the streak's LOWER third — sampled at the head, a
+   streak emerging from the base inherits inside-the-cloud optical depth and
+   the whole curtain vanishes; that was the first cut's bug). Fall animation is
+   WALL time (like ripples; storm time at 300× would teleport), mirrored and
+   unit-tested in precip.ts (12 new tests). Uniform-scale counter-scaling: fall
+   speed, streak length and cycle top pre-scale by sx (same transit time, same
+   proportions); half-width deliberately does not (screen presence). G-buffer
+   depth occludes against the island; particles draw before tilt-shift so DOF
+   treats them like everything else. Data lessons (measured from the bricks):
+   near-surface rain first reaches the ground ~frame 200 — the frame-150 hero
+   is honestly rain-free at the surface — and surface hail is real but tiny
+   (~1.5 km², q ≤ 7e-4 kg/kg at frames 230–255), so hail candidates spawn in a
+   centred disk (spawnFrac 0.35; presentation-side pool concentration — the
+   gate still decides visibility; revisit for moving-domain scenarios) with a
+   gate matched to those magnitudes. Verified on the real GPU (headless Chrome
+   runs ANGLE/D3D11 on the 5090 — checked): deterministic paused-frame A/B
+   shows <1 % cost (within noise), zero stalls at 300× playback; motion diff
+   localizes exactly to the curtain band. Beware sequence-content variance in
+   playback perf numbers — A/B on the same paused frame, not on free-running
+   playback (a first 49.7 fps "regression" was entirely that). ?precip=0
+   disables; HUD gains the honesty line "rain & hail are stylized particles
+   gated by the simulated near-surface fields".
 5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,
    clock/scrubber polish.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
-**Slices 1–3 complete (2026-07-16) — the beauty gate review is now with the
-owner** (run `npm run dev` in diorama/ and orbit around frames 150 and 255;
-palette constants live in src/island.ts and the shader palette block in
-src/shaders.ts, all placeholder-by-design).
+**Slices 1–3 complete (2026-07-16) — beauty gate PASSED (owner GO, 2026-07-17):**
+reviewed via six captures (frames 150/255, three orbits, plus ?sx=1 true-scale)
+and the live viewer; verdict "GO — proceed to slice 4". Known cosmetic backlog,
+deliberately deferred (all render-time, none block slices 4–6): cloud softness
+(inherent 500 m data at 2×; candidate fix is render-time detail noise), warmer
+sun/ambient split in the cloud shading, shore-shallows water gradient, softer
+sky horizon band. Palette constants remain placeholder-by-design in
+src/island.ts and the shader palette block in src/shaders.ts.
 
 ## 10. Decisions resolved / still open
 

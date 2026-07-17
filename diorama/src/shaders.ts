@@ -62,56 +62,28 @@ void main() {
 }
 `;
 
-// -- pass 2: volume raymarch + surface shading + background --------------------
+// -- shared volume-sampling chunk ----------------------------------------------
+// Uniform declarations + decode/extinction/occlusion marches, interpolated into
+// BOTH the composite fragment shader and the precipitation vertex shader (which
+// gates particle spawn on the same resident 3D textures). One definition, one
+// set of uniform names — main.ts sets them per program.
 
-export const FRAG = `#version 300 es
-precision highp float;
-precision highp sampler3D;
-
-out vec4 fragColor;
-
-uniform vec2  uRes;
-uniform vec3  uCamPos;
-uniform vec3  uCamRight;
-uniform vec3  uCamUp;
-uniform vec3  uCamFwd;
-uniform float uFovTan;        // tan(fovY/2)
-
+const VOL_COMMON = `
 uniform vec3  uSunDir;        // unit, toward the sun
-uniform vec3  uBoxMin;        // volume bounds, km (z-exaggeration pre-applied)
+uniform vec3  uCamPos;
+uniform vec3  uBoxMin;        // volume bounds, km (display scale pre-applied)
 uniform vec3  uBoxMax;
 uniform sampler3D uVolA;      // frame i0
 uniform sampler3D uVolB;      // frame i1 (temporal crossfade partner)
 uniform float uMix;           // fractional storm time between the two frames
-
-uniform sampler2D uAlbedo;    // g-buffer: staging albedo + material flag
-uniform sampler2D uNormalTex; // g-buffer: flat face normal
-uniform sampler2D uDepthTex;  // g-buffer: depth (ray-distance reconstruction)
-uniform float uNear;
-uniform float uFar;
-uniform float uTime;          // wall seconds — water ripple only, never physics
-
 uniform vec4  uThr;           // per-plane decode: q = thr * exp(k * (v255 - 1))
 uniform vec4  uK;
 uniform vec4  uWeights;       // per-species extinction weights
 uniform float uExtScale;      // km^-1 per weighted (kg/kg)
-uniform float uSteps;         // primary march step count
-uniform float uExposure;
-uniform float uShadowKm;      // sun-march occluder cap, km (scales with z-exag)
+uniform float uShadowKm;      // sun-march occluder cap, km (scales with sx)
 
 const float PI = 3.14159265;
 
-// -- palette (placeholder; owner tunes by eye) ---------------------------------
-const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
-const vec3 BG_TOP       = vec3(0.50, 0.68, 0.88);  // zenith blue
-const vec3 BG_HAZE      = vec3(0.88, 0.90, 0.92);  // horizon haze band
-const vec3 SEA_DEEP     = vec3(0.10, 0.33, 0.44);  // open sea under the platter
-const float SEA_Z       = -6.0;                    // km; below the slab bottom
-const vec3 AMB_HIGH     = vec3(0.38, 0.48, 0.60);  // sky light on upper cloud
-const vec3 AMB_LOW      = vec3(0.14, 0.17, 0.22);  // bounce light near base
-const vec3 CLOUD_ALB    = vec3(0.93, 0.94, 0.96);
-
-// -- geometry -----------------------------------------------------------------
 vec2 rayBox(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
   vec3 inv = 1.0 / rd;
   vec3 a = (bmin - ro) * inv;
@@ -120,7 +92,6 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax) {
   return vec2(max(max(lo.x, lo.y), lo.z), min(min(hi.x, hi.y), hi.z));
 }
 
-// -- volume sampling ----------------------------------------------------------
 // decode log-uint8 codes back to mixing ratios; codes < ~0.5 are "empty"
 vec4 qDecode(vec4 v255) {
   return uThr * exp(uK * (v255 - 1.0)) * step(0.5, v255);
@@ -153,8 +124,8 @@ float sigmaShadowAt(vec3 p) {
 
 float sunTau(vec3 p) {
   vec2 tb = rayBox(p, uSunDir, uBoxMin, uBoxMax);
-  // ~15 km of occluder (× vertical exaggeration) is plenty — capping it keeps
-  // the steps dense where the shadow forms instead of across the whole box.
+  // ~15 km of occluder (× display scale) is plenty — capping it keeps the
+  // steps dense where the shadow forms instead of across the whole box.
   float end = min(max(tb.y, 0.0), uShadowKm);
   const int M = 28;
   float ds = end / float(M);
@@ -167,6 +138,58 @@ float sunTau(vec3 p) {
   }
   return tau;
 }
+
+// Coarse directional optical depth for the particle pass (per-vertex budget:
+// a handful of steps, nearest-frame sampling — tint/attenuation, not imagery).
+float tauDir(vec3 p, vec3 dir, float maxKm, int steps) {
+  vec2 tb = rayBox(p, dir, uBoxMin, uBoxMax);
+  float end = min(max(tb.y, 0.0), maxKm);
+  float ds = end / float(steps);
+  float tau = 0.0;
+  float s = ds * 0.5;
+  for (int i = 0; i < 16; i++) {
+    if (i >= steps) break;
+    tau += sigmaShadowAt(p + dir * s) * ds;
+    if (tau > 9.0) break;
+    s += ds;
+  }
+  return tau;
+}
+`;
+
+// -- pass 2: volume raymarch + surface shading + background --------------------
+
+export const FRAG = `#version 300 es
+precision highp float;
+precision highp sampler3D;
+
+out vec4 fragColor;
+
+uniform vec2  uRes;
+uniform vec3  uCamRight;
+uniform vec3  uCamUp;
+uniform vec3  uCamFwd;
+uniform float uFovTan;        // tan(fovY/2)
+
+uniform sampler2D uAlbedo;    // g-buffer: staging albedo + material flag
+uniform sampler2D uNormalTex; // g-buffer: flat face normal
+uniform sampler2D uDepthTex;  // g-buffer: depth (ray-distance reconstruction)
+uniform float uNear;
+uniform float uFar;
+uniform float uTime;          // wall seconds — water ripple only, never physics
+
+uniform float uSteps;         // primary march step count
+uniform float uExposure;
+${VOL_COMMON}
+// -- palette (placeholder; owner tunes by eye) ---------------------------------
+const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
+const vec3 BG_TOP       = vec3(0.50, 0.68, 0.88);  // zenith blue
+const vec3 BG_HAZE      = vec3(0.88, 0.90, 0.92);  // horizon haze band
+const vec3 SEA_DEEP     = vec3(0.10, 0.33, 0.44);  // open sea under the platter
+const float SEA_Z       = -6.0;                    // km; below the slab bottom
+const vec3 AMB_HIGH     = vec3(0.38, 0.48, 0.60);  // sky light on upper cloud
+const vec3 AMB_LOW      = vec3(0.14, 0.17, 0.22);  // bounce light near base
+const vec3 CLOUD_ALB    = vec3(0.93, 0.94, 0.96);
 
 float hg(float c, float g) {
   float g2 = g * g;
@@ -349,5 +372,117 @@ void main() {
     col *= 1.0 - 0.16 * dot(v, v);
   }
   fragColor = vec4(col, 1.0);
+}
+`;
+
+// -- pass 2.5: precipitation particles (slice 4) --------------------------------
+// Instanced quads — rain streaks and hail pellets. Everything happens in the
+// vertex shader against the SAME resident volume textures the raymarch uses
+// (design doc §5.3: no CPU readback): the near-surface field of the species
+// gates spawn density; a coarse sun march tints the particle by the storm's
+// own shadow; a coarse view march fades particles behind/inside the cloud so
+// streaks never glow through an opaque core. Fall animation runs on WALL time
+// (like the water ripples — presentation, never physics) and mirrors
+// precip.ts fallCycle/cycleFade, which carry the unit tests.
+
+export const PRECIP_VERT = `#version 300 es
+precision highp float;
+precision highp sampler3D;
+
+layout(location = 0) in vec4 aInst; // u, v within footprint; phase; jitter
+
+uniform mat4  uViewProj;
+uniform float uTimeWall;   // wall seconds
+uniform vec2  uTilt;       // horizontal slope of the fall axis (wind-shear cue)
+uniform float uFallSpeed;  // km/s of display space (pre-scaled by sx)
+uniform float uLen;        // streak length along the fall axis, km (pre-scaled)
+uniform float uHalfWidth;  // km — screen presence, deliberately NOT scaled
+uniform float uZTop;       // top of the fall cycle, km (pre-scaled)
+uniform float uGateZ;      // normalized texture z of the near-surface gate
+uniform vec4  uGateMask;   // selects the species plane (dot with decoded q)
+uniform float uQFloor;     // kg/kg where particles start appearing
+uniform float uQFull;      // kg/kg of full population
+uniform float uMaxR;       // spawn radius cap, km — rain stays on the diorama
+uniform vec3  uColor;
+uniform float uAlphaMax;
+${VOL_COMMON}
+out vec2 vUV;              // x: -1..1 across the streak, y: 0..1 along it
+flat out vec4 vTint;       // rgb tint, a peak alpha
+
+void main() {
+  vec2 xy = mix(uBoxMin.xy, uBoxMax.xy, aInst.xy);
+  float phase = aInst.z;
+  float jit = aInst.w;
+
+  // near-surface gate, crossfaded exactly like the raymarch's sigmaAt
+  vec3 guvw = vec3(aInst.xy, uGateZ);
+  float qA = dot(qDecode(texture(uVolA, guvw) * 255.0), uGateMask);
+  float qB = dot(qDecode(texture(uVolB, guvw) * 255.0), uGateMask);
+  float q = mix(qA, qB, uMix);
+  // population thinning: each instance has a fixed jitter threshold, so the
+  // LOCAL count follows the field smoothly instead of stepping on/off
+  float dens = smoothstep(uQFloor, uQFull, q);
+  if (dens <= jit || length(xy) > uMaxR) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0); // degenerate: clipped away
+    vUV = vec2(0.0);
+    vTint = vec4(0.0);
+    return;
+  }
+
+  // cyclic fall (mirrors precip.ts fallCycle; unit-tested there)
+  float speed = uFallSpeed * (0.85 + 0.3 * jit);
+  float f = fract(uTimeWall * speed / uZTop + phase);
+  vec3 head = vec3(xy, uZTop - f * uZTop);
+
+  // ends-of-cycle fade (mirrors precip.ts cycleFade)
+  float fade = smoothstep(0.0, 0.1, f) * (1.0 - smoothstep(0.85, 1.0, f));
+
+  // quad corner from gl_VertexID: (0,0)(1,0)(1,1) (0,0)(1,1)(0,1)
+  int vid = gl_VertexID;
+  vec2 corner = vec2(
+    (vid == 1 || vid == 2 || vid == 4) ? 1.0 : 0.0,
+    (vid == 2 || vid == 4 || vid == 5) ? 1.0 : 0.0);
+  float cx = corner.x * 2.0 - 1.0;
+
+  vec3 axis = normalize(vec3(uTilt, -1.0));
+  vec3 toCam = normalize(uCamPos - head);
+  vec3 side = normalize(cross(axis, toCam));
+  vec3 p = head + axis * (corner.y * uLen) + side * (cx * uHalfWidth * (0.8 + 0.4 * jit));
+
+  // lit by the storm itself: sun shadow tints, view-path extinction hides
+  // particles under/behind an opaque core (coarse marches — tint, not imagery).
+  // Both sample the streak's LOWER third — the part that hangs below the cloud
+  // base; measured at the head, a streak emerging from the base gets the
+  // inside-the-cloud optical depth and the whole curtain vanishes.
+  vec3 pLow = head + axis * (0.7 * uLen);
+  float light = mix(0.35, 1.0, exp(-tauDir(pLow, uSunDir, uShadowKm, 10)));
+  float tView = exp(-tauDir(pLow, toCam, 3.0 * uShadowKm, 12));
+
+  vUV = vec2(cx, corner.y);
+  vTint = vec4(uColor * light, uAlphaMax * (0.55 + 0.45 * dens) * tView * fade);
+  gl_Position = uViewProj * vec4(p, 1.0);
+}
+`;
+
+export const PRECIP_FRAG = `#version 300 es
+precision highp float;
+
+in vec2 vUV;
+flat in vec4 vTint;
+
+uniform sampler2D uDepthTex; // g-buffer depth — manual occlusion by the staging
+uniform vec2  uRes;
+
+out vec4 fragColor;
+
+void main() {
+  // same viewProj as the G-pass, so window depths compare directly
+  float d = texture(uDepthTex, gl_FragCoord.xy / uRes).r;
+  if (d < 1.0 && gl_FragCoord.z > d + 1e-5) discard;
+  float lat = 1.0 - vUV.x * vUV.x;                                  // soft sides
+  float lon = smoothstep(0.0, 0.15, vUV.y) * (1.0 - smoothstep(0.85, 1.0, vUV.y));
+  float a = vTint.a * lat * lon;
+  if (a < 0.003) discard;
+  fragColor = vec4(vTint.rgb, a);
 }
 `;

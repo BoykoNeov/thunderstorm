@@ -90,6 +90,21 @@ export function createMeshVAO(gl: WebGL2RenderingContext, data: Float32Array): M
   return { vao, count: data.length / 10 };
 }
 
+/** Static per-instance VAO for the precip pass: one vec4 attribute, divisor 1.
+ *  Quad corners come from gl_VertexID; draw with drawArraysInstanced(…, 6, count). */
+export function createInstancedVAO(gl: WebGL2RenderingContext, data: Float32Array): MeshVAO {
+  const vao = gl.createVertexArray()!;
+  gl.bindVertexArray(vao);
+  const vbo = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 16, 0);
+  gl.vertexAttribDivisor(0, 1);
+  gl.bindVertexArray(null);
+  return { vao, count: data.length / 4 };
+}
+
 export interface GBuffer {
   fbo: WebGLFramebuffer;
   albedo: WebGLTexture; // rgb albedo, a material flag
