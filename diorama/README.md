@@ -10,6 +10,15 @@ exported and computes no science.
 
 ## Run
 
+Easiest: double-click **`Start Storm Diorama.bat`** (repo root). It reuses a
+dev server that is already serving *this* project if one is running — found by
+fetching ports 5173–5204 and matching `index.html`'s `<title>` via
+`tools/find-server.mjs`, never by port alone (vite climbs past busy ports, so
+a port number identifies nothing) — and starts one only otherwise. Reuse is
+safe at any age (vite transforms from disk per request); only a
+`vite.config.ts` change needs a fresh start. The `<title>` string is
+load-bearing for this — comments at both ends guard the rename.
+
 ```
 npm install
 npm run dev     # http://localhost:5173  (?frame=NNN, ?rs=0.5 render scale)
