@@ -289,6 +289,17 @@ is always evidence.
    staging stays 1× and the HUD states the exaggeration honestly. The DOF band
    widened 0.20 → 0.26 — at 2× the anvil sits far above the focus line and the
    tight band smeared it entirely.
+   **Owner feedback round 3 (2026-07-17):** vertical-only exaggeration rejected
+   ("twice as high is ok, but [only] if it is also twice as wide") → replaced by
+   **2× UNIFORM scale** (?sx, clamped 1–3, default 2): `volumeBox(man, sx)` now
+   magnifies xy about the box centre and z about the floor, so proportions stay
+   true and the storm base stays on the platter. Two invariants make the bigger
+   storm look like the *same* storm shown larger rather than a denser one:
+   per-km extinction divides by the scale (uExtScale = EXT_SCALE/sx — path
+   lengths grow sx×, optical depth stays fixed) and the sun-march cap grows
+   with it (uShadowKm = 15·sx). Per-voxel sampling density is unchanged (steps
+   span a box that grew with the voxels). The 2× storm's softness is the 500 m
+   data magnified, not DOF (verified ?ts=0). HUD: "shown at 2× scale".
 4. **Precipitation** — rain/hail instanced particles off near-surface slices,
    exaggeration counter-scaling.
 5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,

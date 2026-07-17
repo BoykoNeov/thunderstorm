@@ -75,10 +75,13 @@ describe("volumeBox placement (the ONE m→km conversion site)", () => {
     expect(b.max.z).toBeCloseTo(18, 10);
   });
 
-  it("z-exaggeration stretches about the ground only (charter: render-time only)", () => {
+  it("scale magnifies uniformly: xy about the centre, z about the ground (render-time only)", () => {
     const b = volumeBox(man, 2);
     expect(b.min.z).toBeCloseTo(0, 10);
     expect(b.max.z).toBeCloseTo(36, 10);
-    expect(b.max.x).toBeCloseTo(26, 10); // horizontal untouched
+    expect(b.min.x).toBeCloseTo(-52, 10); // xy doubles about the centre —
+    expect(b.max.x).toBeCloseTo(52, 10); //  proportions stay true
+    expect(b.min.y).toBeCloseTo(-52, 10);
+    expect(b.max.y).toBeCloseTo(52, 10);
   });
 });

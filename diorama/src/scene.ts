@@ -6,9 +6,10 @@
 // units (charter: the coordinate/units conversion lives in exactly one module).
 //
 // The diorama LOOK (toy scale) is a presentation effect — camera, staging,
-// depth-of-field — never a change to these coordinates. Vertical exaggeration
-// (charter: render-time only, 1×–3×) stretches the volume box here, at
-// placement, and is never baked into data.
+// depth-of-field — never a change to these coordinates. The storm's display
+// scale (charter: render-time only, 1×–3×) is a UNIFORM magnification applied
+// to the volume box here, at placement — proportions stay true — and is never
+// baked into data.
 
 import type { WebManifest } from "./volume";
 
@@ -30,21 +31,24 @@ export interface Box {
  *
  * The manifest's origin_m is the CENTRE of voxel (0,0,0) (OpenVDB convention,
  * carried over), so the box extends half a voxel beyond the first/last centres.
- * `zExaggeration` stretches z about the ground plane (z = box floor).
+ * `scale` magnifies the storm uniformly (proportions stay true): horizontally
+ * about the box centre, vertically about the ground plane (z = box floor), so
+ * the storm base stays on the platter.
  */
-export function volumeBox(man: WebManifest, zExaggeration = 1): Box {
+export function volumeBox(man: WebManifest, scale = 1): Box {
   const g = man.grid;
   const [ox, oy, oz] = g.origin_m;
   const v = g.voxel_m;
-  const min = {
-    x: (ox - v / 2) * M_TO_WORLD,
-    y: (oy - v / 2) * M_TO_WORLD,
-    z: (oz - v / 2) * M_TO_WORLD,
+  const x0 = (ox - v / 2) * M_TO_WORLD;
+  const x1 = (ox + (g.nx - 0.5) * v) * M_TO_WORLD;
+  const y0 = (oy - v / 2) * M_TO_WORLD;
+  const y1 = (oy + (g.ny - 0.5) * v) * M_TO_WORLD;
+  const z0 = (oz - v / 2) * M_TO_WORLD;
+  const z1 = (oz + (g.nz - 0.5) * v) * M_TO_WORLD;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  return {
+    min: { x: cx + (x0 - cx) * scale, y: cy + (y0 - cy) * scale, z: z0 },
+    max: { x: cx + (x1 - cx) * scale, y: cy + (y1 - cy) * scale, z: z0 + (z1 - z0) * scale },
   };
-  const max = {
-    x: (ox + (g.nx - 0.5) * v) * M_TO_WORLD,
-    y: (oy + (g.ny - 0.5) * v) * M_TO_WORLD,
-    z: min.z + ((oz + (g.nz - 0.5) * v) * M_TO_WORLD - min.z) * zExaggeration,
-  };
-  return { min, max };
 }

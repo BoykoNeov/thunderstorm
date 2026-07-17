@@ -70,9 +70,10 @@ const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
 const islandSeed = Number(params.get("seed") ?? "1337") || 1337;
 const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
-// vertical exaggeration — render-time only, never baked into data (charter);
-// staging stays 1×, so the island keeps its proportions under the taller storm
-const zExag = Math.min(3, Math.max(1, Number(params.get("zx") ?? "2") || 2));
+// storm display scale — UNIFORM magnification (proportions stay true),
+// render-time only, never baked into data (charter); staging stays 1×, so the
+// island reads smaller under the bigger storm — that contrast is the point
+const stormScale = Math.min(3, Math.max(1, Number(params.get("sx") ?? "2") || 2));
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -102,7 +103,7 @@ async function start() {
   const times = man.frames.map((f) => f.time_s);
   const nFrames = man.frames.length;
   const tEnd = times[nFrames - 1];
-  const box = volumeBox(man, zExag);
+  const box = volumeBox(man, stormScale);
   const dec = decodeConstants(man.volume.channels);
 
   // ---- staging (decorative, never sim terrain — design doc §5.2) ------------
@@ -192,7 +193,7 @@ async function start() {
   hud.textContent =
     `drag orbit · wheel zoom · space play/pause · [ ] frame step\n` +
     `this storm is 52 km wide, 18 km tall` +
-    (zExag !== 1 ? ` — shown at ${zExag}× vertical exaggeration` : "") + `\n` +
+    (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
     `island & water are decorative staging, not simulation data`;
 
   // ---- render targets (recreated on resize) ----------------------------------
@@ -238,10 +239,14 @@ async function start() {
   gl.uniform4fv(loc(progVol, "uThr"), thr);
   gl.uniform4fv(loc(progVol, "uK"), k);
   gl.uniform4f(loc(progVol, "uWeights"), w[0], w[1], w[2], w[3]);
-  gl.uniform1f(loc(progVol, "uExtScale"), EXT_SCALE);
+  // Uniform magnification must keep optical depth invariant: paths through the
+  // storm are stormScale× longer in km, so per-km extinction divides by the
+  // scale (and the sun-march cap grows with it). The 2× storm then looks like
+  // the same cloud shown bigger — not a denser one.
+  gl.uniform1f(loc(progVol, "uExtScale"), EXT_SCALE / stormScale);
   gl.uniform1f(loc(progVol, "uSteps"), 280);
   gl.uniform1f(loc(progVol, "uExposure"), 0.75);
-  gl.uniform1f(loc(progVol, "uShadowKm"), 15 * zExag);
+  gl.uniform1f(loc(progVol, "uShadowKm"), 15 * stormScale);
 
   // ---- pacing stats (?stats — read by the headless verification driver) -----
   const stats = {
