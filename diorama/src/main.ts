@@ -1,5 +1,5 @@
 // Storm Diorama — slice 3: diorama staging. Three passes per frame: the
-// low-poly island/water platter rasterizes into a G-buffer; the fullscreen
+// low-poly countryside slab rasterizes into a G-buffer; the fullscreen
 // composite raymarches the storm volume over it (the storm's shadow march
 // darkens the toy landscape) against a pastel backdrop; a tilt-shift pass
 // finishes the miniature read. Streaming playback is slice 2, unchanged: a
@@ -24,7 +24,7 @@ import {
   type ColorTarget,
   type GBuffer,
 } from "./gl";
-import { buildStaging, PLATTER_RADIUS } from "./island";
+import { buildStaging, GROUND_HALF } from "./land";
 import { buildNoise3D, NOISE_SIZE } from "./noise3d";
 import { multiply, perspective, project, view } from "./mat";
 import { advance, locate, wantedFrames } from "./playback";
@@ -72,11 +72,11 @@ const clockEl = document.getElementById("clock") as HTMLSpanElement;
 const params = new URLSearchParams(location.search);
 const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
-const islandSeed = Number(params.get("seed") ?? "1337") || 1337;
+const stagingSeed = Number(params.get("seed") ?? "1337") || 1337;
 const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
 // storm display scale — UNIFORM magnification (proportions stay true),
 // render-time only, never baked into data (charter); staging stays 1×, so the
-// island reads smaller under the bigger storm — that contrast is the point
+// landscape reads smaller under the bigger storm — that contrast is the point
 const stormScale = Math.min(3, Math.max(1, Number(params.get("sx") ?? "2") || 2));
 const precipOn = params.get("precip") !== "0"; // ?precip=0 disables the particles
 // numeric param where 0 is a legitimate value (the `|| default` idiom eats it)
@@ -123,7 +123,7 @@ async function start() {
   const dec = decodeConstants(man.volume.channels);
 
   // ---- staging (decorative, never sim terrain — design doc §5.2) ------------
-  const staging = createMeshVAO(gl, buildStaging(islandSeed).data);
+  const staging = createMeshVAO(gl, buildStaging(stagingSeed).data);
 
   // ---- detail noise (presentation only: edge erosion + rain veil) -----------
   // bound once on unit 5 — nothing else touches that unit, so it stays bound
@@ -133,8 +133,8 @@ async function start() {
   gl.activeTexture(gl.TEXTURE0);
 
   // ---- precipitation instances (slice 4; presentation, never physics) -------
-  const rainVAO = createInstancedVAO(gl, buildPrecipInstances(RAIN.count, islandSeed + 11, RAIN.spawnFrac));
-  const hailVAO = createInstancedVAO(gl, buildPrecipInstances(HAIL.count, islandSeed + 23, HAIL.spawnFrac));
+  const rainVAO = createInstancedVAO(gl, buildPrecipInstances(RAIN.count, stagingSeed + 11, RAIN.spawnFrac));
+  const hailVAO = createInstancedVAO(gl, buildPrecipInstances(HAIL.count, stagingSeed + 23, HAIL.spawnFrac));
   const planeOf = (name: string) => man.volume.channels.find((c) => c.name === name)?.plane;
 
   // ---- playback state -------------------------------------------------------
@@ -222,7 +222,7 @@ async function start() {
     `drag orbit · wheel zoom · space play/pause · [ ] frame step\n` +
     `this storm is 52 km wide, 18 km tall` +
     (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
-    `island & water are decorative staging, not simulation data` +
+    `land, towns & forests are decorative staging, not simulation data` +
     (precipOn ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "");
 
   // ---- render targets (recreated on resize) ----------------------------------
@@ -257,7 +257,7 @@ async function start() {
   // The primary march splits species: cloud/ice/graupel keep the UE-parity
   // weights; rain leaves the cloud sum and becomes the veil (darker albedo,
   // noise-modulated, weight veilW). Shadow marches see the same total the eye
-  // does (minus the noise), so the veil darkens the island like real rain.
+  // does (minus the noise), so the veil darkens the landscape like real rain.
   const rainPlane = planeOf("rain");
   const wCld = w.map((v, i) => (i === rainPlane ? 0 : v));
   const wShadow = w.map((v, i) => (i === rainPlane ? veilW : v));
@@ -318,7 +318,7 @@ async function start() {
   gl.uniform1f(loc(progPrecip, "uShadowKm"), 15 * stormScale);
   gl.uniform2f(loc(progPrecip, "uTilt"), 0.1, 0.04); // slight wind-shear lean
   gl.uniform1f(loc(progPrecip, "uGateZ"), 2.5 / nz); // ~625 m: the near-surface layers
-  gl.uniform1f(loc(progPrecip, "uMaxR"), PLATTER_RADIUS - 0.8); // rain stays on the diorama
+  gl.uniform1f(loc(progPrecip, "uMaxR"), GROUND_HALF - 1); // rain stays on the diorama slab
 
   function drawPrecip(spec: PrecipSpec, vao: WebGLVertexArrayObject, count: number) {
     const plane = planeOf(spec.gateChannel);

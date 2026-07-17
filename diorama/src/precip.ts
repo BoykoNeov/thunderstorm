@@ -81,7 +81,7 @@ export const HAIL: PrecipSpec = {
   spawnFrac: 0.35,
 };
 
-/** Same integer-lattice hash family as island.ts; deterministic everywhere. */
+/** Same integer-lattice hash family as land.ts; deterministic everywhere. */
 function hash1(i: number, seed: number): number {
   let h = (i * 374761393 + seed * 1442695041) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);

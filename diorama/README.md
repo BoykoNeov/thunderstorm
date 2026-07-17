@@ -45,7 +45,7 @@ time), scrubber, storm-time clock.
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
 the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
 for the verification driver), `?az=45&el=11&d=145&fov=34` (starting view,
-deg/km), `?seed=1337` (island), `?ts=0` (disable tilt-shift), `?sx=2`
+deg/km), `?seed=1337` (staging), `?ts=0` (disable tilt-shift), `?sx=2`
 (uniform display scale of the storm volume — proportions stay true; render-time
 only, clamped 1–3; default 2 — the HUD states it, staging stays 1×),
 `?precip=0` (disable the rain/hail particles), `?er=0.45` (cloud detail
@@ -54,21 +54,26 @@ noise strength: domain warp + edge wisps, 0 = raw voxel look), `?veil=0.12`
 
 ## Status
 
-Slices 1–4 done; beauty gate PASSED (owner GO, 2026-07-17). Slice 3 (staging):
-the storm stands on a 74-km water platter
-with a seeded low-poly terraced island (decorative staging, never sim
-terrain) and a layered side wall. A G-buffer mesh pass feeds the composite
+Slices 1–4 done; beauty gate PASSED (owner GO, 2026-07-17). Slice 3 (staging,
+reworked 2026-07-17 per owner request): the storm stands on a 110×110 km
+square slab of seeded low-poly continuous countryside (decorative staging,
+never sim terrain) — terraced rolling hills, three craggy mountain massifs on
+a ring 20–38 km off the storm axis (rock/snow ramps; kept clear of the cloud
+base), carved lakes with a z=0 water sheet, ~3.5k cone-tree forests and up to
+8 toy towns of pitched-roof houses (`land.ts`, placement unit-tested) — with
+a layered sediment side wall. A G-buffer mesh pass feeds the composite
 raymarch, which shades land/water with the same sun shadow march as the cloud
-— the storm's shadow sweeps the island; tilt-shift DOF finishes the miniature
-read. The backdrop is a real horizon — pastel sky over an infinite sea, the
-platter floating above it — and the storm renders at 2× uniform scale by
-default (owner request; `?sx=1` for true size — extinction is divided by the
-scale so the bigger storm keeps the same look). 78 fps @ 1600×1000
-during 300× playback, zero stalls.
+— the storm's shadow sweeps the countryside; tilt-shift DOF finishes the
+miniature read. The backdrop is a real horizon — dark storm sky over an
+infinite sea, the slab floating above it — and the storm renders at 2×
+uniform scale by default (owner request; `?sx=1` for true size — extinction
+is divided by the scale so the bigger storm keeps the same look). 78 fps @
+1600×1000 during 300× playback, zero stalls (pre-rework platter; slab mesh is
+~2.4× the triangles, cost is G-pass raster only).
 Slice 4 (precipitation): rain streaks and hail pellets as instanced quads,
 gated in the vertex shader by the near-surface rain/graupelhail voxels of the
 same streamed 3D textures (no CPU readback), shadow-tinted and view-attenuated
-by coarse marches through the cloud, occluded by the island via the G-buffer
+by coarse marches through the cloud, occluded by the terrain via the G-buffer
 depth, wall-time animated, counter-scaled under `?sx`. Near-surface rain first
 reaches the ground ~frame 200 of this run — the frame-150 hero is honestly
 rain-free at the surface. Cost is <1 % (paused-frame A/B on the real GPU).

@@ -1,10 +1,10 @@
 // GLSL, three passes (slice 3):
-//   1. G-pass — rasterize the low-poly staging mesh (island/water/base wall)
+//   1. G-pass — rasterize the low-poly staging mesh (land/water/base wall)
 //      into albedo+material, flat normal, and a real depth buffer.
 //   2. Composite — fullscreen raymarch of the storm volume over the staging:
 //      surface pixels are shaded here (so the storm's shadow march darkens
-//      the toy landscape), background is a real horizon (pastel sky over an
-//      infinite sea, the platter floating above it), then tone map.
+//      the toy landscape), background is a real horizon (dark storm sky over
+//      an infinite sea, the slab floating above it), then tone map.
 //   3. Tilt-shift — separable variable-radius blur keyed to a horizontal
 //      focus band + a light toy grade (the classic miniature cue).
 //
@@ -202,9 +202,11 @@ uniform vec4  uRainVeil;      // one-hot rain plane × veil extinction weight (?
 ${VOL_COMMON}
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
 const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
-const vec3 BG_TOP       = vec3(0.50, 0.68, 0.88);  // zenith blue
-const vec3 BG_HAZE      = vec3(0.88, 0.90, 0.92);  // horizon haze band
-const vec3 SEA_DEEP     = vec3(0.10, 0.33, 0.44);  // open sea under the platter
+// NOTE: these are pre-tonemap linear values — ACES + gamma lifts them a lot,
+// so "dark" here must be numerically much smaller than the target screen grey
+const vec3 BG_TOP       = vec3(0.035, 0.045, 0.075); // dark slate zenith — storm sky
+const vec3 BG_HAZE      = vec3(0.10, 0.11, 0.13);    // dark-grey horizon haze band
+const vec3 SEA_DEEP     = vec3(0.02, 0.05, 0.08);    // open sea under the slab
 const float SEA_Z       = -6.0;                    // km; below the slab bottom
 const vec3 AMB_HIGH     = vec3(0.38, 0.48, 0.60);  // sky light on upper cloud
 const vec3 AMB_LOW      = vec3(0.14, 0.17, 0.22);  // bounce light near base
@@ -263,16 +265,16 @@ float hg(float c, float g) {
   return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * c, 1.5));
 }
 
-// -- background: a real horizon — pastel sky over an infinite sea --------------
+// -- background: a real horizon — dark storm sky over an infinite sea ----------
 // The sea plane sits below the slab bottom, so the diorama still reads as a
-// floating platter; distance fog pulls the sea into the haze band exactly at
+// floating slab; distance fog pulls the sea into the haze band exactly at
 // rd.z = 0, so sky and sea meet seamlessly at the horizon line.
 vec3 background(vec3 rd) {
   float s = max(dot(rd, uSunDir), 0.0);
   if (rd.z >= 0.0) {
     // tight gradient: the default view only sees a few degrees of sky, so the
-    // blue has to arrive fast or the whole strip reads as flat haze
-    vec3 col = mix(BG_HAZE, BG_TOP, pow(smoothstep(0.0, 0.30, rd.z), 0.8));
+    // dark zenith has to arrive fast or the whole strip reads as flat haze
+    vec3 col = mix(BG_HAZE, BG_TOP, pow(smoothstep(0.0, 0.22, rd.z), 0.8));
     col += vec3(1.0, 0.9, 0.75) * pow(s, 9.0) * 0.07; // warm cast, no sun disc
     return col;
   }

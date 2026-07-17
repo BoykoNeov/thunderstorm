@@ -13,7 +13,7 @@ export const NOISE_SIZE = 64;
 export const CELLS_R = 4; // coarse octave: wavelength = tile / 4
 export const CELLS_G = 16; // fine octave: wavelength = tile / 16
 
-/** Same integer-lattice hash family as island.ts / precip.ts. */
+/** Same integer-lattice hash family as land.ts / precip.ts. */
 function hash3(x: number, y: number, z: number, seed: number): number {
   let h = (x * 374761393 + y * 668265263 + z * 1440662683 + seed * 1442695041) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
