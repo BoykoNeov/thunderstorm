@@ -92,6 +92,11 @@ const erosion = Math.min(1, Math.max(0, numParam("er", 0.45)));
 const veilW = Math.max(0, numParam("veil", 0.12));
 // sun-transmittance light cache (?lc=0: live per-sample sun march — the A/B ref)
 const lightCache = params.get("lc") !== "0";
+// multi-scatter octaves (beauty 1): octave weight (?msw=0 → single scatter) and
+// per-octave optical-depth attenuation (?msa=). msw lifts shadowed cores from
+// black to luminous grey; msNorm keeps the sunlit side at the same level.
+const msW = Math.max(0, numParam("msw", 0.55));
+const msA = Math.min(1, Math.max(0.05, numParam("msa", 0.35)));
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -317,6 +322,8 @@ async function start() {
   // sigC is per DISPLAY km (÷sx), so "coreness" renormalizes by sx: the same
   // storm erodes identically at any display scale (core threshold 0.8 km⁻¹)
   gl.uniform1f(loc(progVol, "uCoreNorm"), 1.25 * stormScale);
+  gl.uniform1f(loc(progVol, "uMsW"), msW);
+  gl.uniform1f(loc(progVol, "uMsA"), msA);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as

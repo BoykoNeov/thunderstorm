@@ -232,6 +232,8 @@ uniform float uExposure;
 uniform sampler3D uNoise;     // tileable RG value noise (R coarse, G fine)
 uniform vec3  uSizeStorm;     // box size in storm km (display / sx) — noise coords
 uniform float uErosion;       // 0..1 edge erosion strength (?er=)
+uniform float uMsW;           // multi-scatter octave weight (?msw=0 → single scatter)
+uniform float uMsA;           // per-octave optical-depth attenuation (?msa=)
 uniform float uCoreNorm;      // sigma → "coreness"; scales with sx so the same
                               // cloud erodes identically at any display scale
 uniform vec4  uWeightsCld;    // uWeights with the rain plane zeroed
@@ -398,22 +400,35 @@ void main() {
     float dt = (t1 - t0) / N;
     float t = t0 + dt * hash12(gl_FragCoord.xy);
     float cosSun = dot(rd, uSunDir);
-    // moderately-peaked dual lobe: side-lit cloud still receives real phase
-    // weight (a hard 0.65 forward lobe starves every sun-at-the-side view)
-    float phase = mix(hg(cosSun, -0.2), hg(cosSun, 0.45), 0.65) * 4.0 * PI;
+    // multi-scatter octaves (Wrenninge-style): octave i sees optical depth
+    // scaled by uMsA^i (pow of the cached transmittance) and phase eccentricity
+    // scaled by MS_B^i (higher orders are more isotropic). The dual lobe is the
+    // slice-3 one: a hard forward lobe starves every sun-at-the-side view.
+    const float MS_B = 0.6;
+    float ph0 = mix(hg(cosSun, -0.2), hg(cosSun, 0.45), 0.65) * 4.0 * PI;
+    float ph1 = mix(hg(cosSun, -0.2 * MS_B), hg(cosSun, 0.45 * MS_B), 0.65) * 4.0 * PI;
+    float ph2 = mix(hg(cosSun, -0.2 * MS_B * MS_B), hg(cosSun, 0.45 * MS_B * MS_B), 0.65) * 4.0 * PI;
+    // renormalize so uMsW does not change overall brightness, only shadow lift
+    float msNorm = 1.0 / (1.0 + uMsW + uMsW * uMsW);
     for (int i = 0; i < 512; i++) {
       if (float(i) >= N || t >= t1) break;
       vec3 p = ro + rd * t;
       vec2 s2 = sigma2At(p);
       float sig = s2.x + s2.y;
       if (sig > 1e-4) {
-        float shadow = sunTrans(p);
+        float Tsun = sunTrans(p);
         float hfrac = clamp((p.z - uBoxMin.z) / (uBoxMax.z - uBoxMin.z), 0.0, 1.0);
         vec3 amb = mix(AMB_LOW, AMB_HIGH, hfrac) * (0.25 + 0.45 * hfrac);
         float powder = 1.0 - 0.7 * exp(-s2.x * 1.2);
-        vec3 Sc = CLOUD_ALB * (SUN_COL * (shadow * phase * powder) + amb);
+        // sum the octaves: each deeper order attenuates the sun path less
+        // (pow of Tsun toward 1) and phases flatter — that is the creamy lift
+        // in the shadowed cores that single scattering renders black.
+        float ms = (ph0 * Tsun
+                  + uMsW * ph1 * pow(Tsun, uMsA)
+                  + uMsW * uMsW * ph2 * pow(Tsun, uMsA * uMsA)) * msNorm;
+        vec3 Sc = CLOUD_ALB * (SUN_COL * (ms * powder) + amb);
         // rain: dimmer sun response, mostly ambient — a gray translucent veil
-        vec3 Sr = RAIN_ALB * (SUN_COL * (shadow * phase * 0.55) + amb);
+        vec3 Sr = RAIN_ALB * (SUN_COL * (ms * 0.55) + amb);
         vec3 S = (Sc * s2.x + Sr * s2.y) / sig;
         float a = 1.0 - exp(-sig * dt);
         acc += T * a * S;
