@@ -50,7 +50,13 @@ deg/km), `?seed=1337` (staging), `?ts=0` (disable tilt-shift), `?sx=2`
 only, clamped 1–3; default 2 — the HUD states it, staging stays 1×),
 `?precip=0` (disable the rain/hail particles), `?er=0.45` (cloud detail
 noise strength: domain warp + edge wisps, 0 = raw voxel look), `?veil=0.12`
-(rain-veil extinction weight, 0 disables the volumetric rain curtain).
+(rain-veil extinction weight, 0 disables the volumetric rain curtain),
+`?acc=0` (disable idle temporal accumulation: default on, it averages successive
+jittered renders into a grain-free still whenever the view and storm frame hold
+still — and freezes the animation clock while doing so, so pausing freezes the
+whole miniature; `?acc=0` keeps the always-live look). The other beauty knobs
+(`lc`, `msw`, `msa`, `silver`, `rays`, `rayh`) get a full table at the beauty
+wrap-up.
 
 ## Status
 

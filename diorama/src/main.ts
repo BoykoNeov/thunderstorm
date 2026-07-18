@@ -8,6 +8,7 @@
 // crossfades the two frames bracketing fractional storm time.
 // Design: docs/design-diorama-web-viewer-2026-07-16.md §2, §4, §5.2, slice 3.
 
+import { ACC_CAP, jitterSeq, nextCount, sameView, type ViewKey } from "./accum";
 import { basis, clampOrbit, direction, type OrbitState } from "./camera";
 import { BrickDecoder } from "./decoder";
 import {
@@ -76,6 +77,12 @@ const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
 const stagingSeed = Number(params.get("seed") ?? "1337") || 1337;
 const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
+// idle temporal accumulation (beauty step 4): when the view AND the bound storm
+// frame hold still, average successive jittered renders into a float buffer for
+// a grain-free "beauty still". ON by default; ?acc=0 restores the always-live
+// look (and, with it, a live animation clock while paused). The actual enable
+// also needs EXT_color_buffer_float — resolved inside start() as accEnabled.
+const accumOn = params.get("acc") !== "0";
 // storm display scale — UNIFORM magnification (proportions stay true),
 // render-time only, never baked into data (charter); staging stays 1×, so the
 // landscape reads smaller under the bigger storm — that contrast is the point
@@ -145,6 +152,10 @@ function fmt(t: number): string {
 
 async function start() {
   const gl = getGL(canvas);
+  // RGBA16F render target needs this extension; without it accumulation is a
+  // no-op (accEnabled false ⇒ no float target, no clock freeze, live look).
+  const floatOK = !!gl.getExtension("EXT_color_buffer_float");
+  const accEnabled = accumOn && floatOK;
   const progGeo = compileProgram(gl, GEO_VERT, GEO_FRAG);
   const progVol = compileProgram(gl, VERT, FRAG);
   const progPost = compileProgram(gl, VERT, POST_FRAG);
@@ -288,9 +299,16 @@ async function start() {
     (precipOn ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "");
 
   // ---- render targets (recreated on resize) ----------------------------------
+  // These MUST be declared before resize() runs — resize() writes accT/accN.
   let gbuf: GBuffer | null = null;
-  let sceneT: ColorTarget | null = null;
-  let blurT: ColorTarget | null = null;
+  let sceneT: ColorTarget | null = null; // composite output (when not direct-to-screen)
+  let blurT: ColorTarget | null = null; // tilt-shift ping-pong
+  let accT: ColorTarget | null = null; // RGBA16F idle-accumulation running average
+  // accumulation bookkeeping (see accum.ts): frames averaged so far, the last
+  // view key, and the frozen animation clock while a still is converging.
+  let accN = 0;
+  let prevKey: ViewKey | null = null;
+  let tFrozen = 0;
 
   function resize() {
     const dpr = window.devicePixelRatio * renderScale;
@@ -298,11 +316,21 @@ async function start() {
     canvas.height = Math.round(canvas.clientHeight * dpr);
     gbuf?.dispose();
     gbuf = createGBuffer(gl, canvas.width, canvas.height);
-    if (tiltShift) {
+    // sceneT exists whenever we do NOT draw the composite straight to screen
+    // (tilt-shift and/or accumulation on); blurT only for tilt-shift; accT only
+    // for accumulation. All-off keeps the direct-to-screen fast path.
+    if (tiltShift || accEnabled) {
       sceneT?.dispose();
-      blurT?.dispose();
       sceneT = createColorTarget(gl, canvas.width, canvas.height);
+    }
+    if (tiltShift) {
+      blurT?.dispose();
       blurT = createColorTarget(gl, canvas.width, canvas.height);
+    }
+    if (accEnabled) {
+      accT?.dispose();
+      accT = createColorTarget(gl, canvas.width, canvas.height, gl.RGBA16F);
+      accN = 0; // resize invalidates accumulation history
     }
   }
   window.addEventListener("resize", resize);
@@ -541,6 +569,25 @@ async function start() {
       buffering = true;
     }
 
+    // idle temporal accumulation: when the camera AND the bound frame pair hold
+    // perfectly still, re-render with a fresh jitter each rAF and average into a
+    // float buffer → the grain dissolves to a clean still. Any drag/scrub/frame
+    // change makes `same` false, which resets the count and unfreezes the clock,
+    // so motion (and playback) look exactly as they do live. While a still is
+    // converging the animation clock (tAnim) is frozen so water/veil/precip do
+    // not smear the average — pausing therefore freezes the whole miniature.
+    const key: ViewKey = {
+      az: orbit.azimuth, el: orbit.elevation, dist: orbit.distance,
+      fovY: orbit.fovY, targetZ: orbit.target.z,
+      fa: bind?.fa ?? -1, fb: bind?.fb ?? -1, mix: bind?.mix ?? -1,
+    };
+    const same = accEnabled && !dragging && !scrubbing && sameView(prevKey, key);
+    prevKey = key;
+    accN = nextCount(same, accN);
+    if (!same) tFrozen = now / 1000;
+    const tAnim = same ? tFrozen : now / 1000;
+    const converged = same && accN >= ACC_CAP;
+
     if (bind && gbuf) {
       pool.touch(bind.fa);
       pool.touch(bind.fb);
@@ -548,95 +595,151 @@ async function start() {
       const aspect = canvas.width / canvas.height;
       const viewProj = multiply(perspective(orbit.fovY, aspect, NEAR, FAR), view(cam));
 
-      // -- pass 1: staging mesh into the g-buffer ------------------------------
-      gl.bindFramebuffer(gl.FRAMEBUFFER, gbuf.fbo);
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.enable(gl.DEPTH_TEST);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      gl.useProgram(progGeo);
-      gl.uniformMatrix4fv(loc(progGeo, "uViewProj"), false, viewProj);
-      gl.bindVertexArray(staging.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, staging.count);
-      gl.bindVertexArray(null);
-      gl.disable(gl.DEPTH_TEST);
+      // Composite straight to screen only when BOTH tilt-shift and accumulation
+      // are off (today's fast path); otherwise into sceneT for the post chain.
+      const directToScreen = !tiltShift && !accEnabled;
+      const compositeFbo = directToScreen ? null : sceneT!.fbo;
 
-      // -- pass 2: volume raymarch + surface shading + backdrop ----------------
-      gl.bindFramebuffer(gl.FRAMEBUFFER, tiltShift && sceneT ? sceneT.fbo : null);
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.useProgram(progVol);
-      gl.uniform2f(loc(progVol, "uRes"), canvas.width, canvas.height);
-      gl.uniform3f(loc(progVol, "uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
-      gl.uniform3f(loc(progVol, "uCamRight"), cam.right.x, cam.right.y, cam.right.z);
-      gl.uniform3f(loc(progVol, "uCamUp"), cam.up.x, cam.up.y, cam.up.z);
-      gl.uniform3f(loc(progVol, "uCamFwd"), cam.forward.x, cam.forward.y, cam.forward.z);
-      gl.uniform1f(loc(progVol, "uFovTan"), Math.tan(orbit.fovY / 2));
-      gl.uniform1f(loc(progVol, "uMix"), bind.mix);
-      gl.uniform1f(loc(progVol, "uTime"), now / 1000);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_3D, textures[pool.slotOf(bind.fa)!]);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_3D, textures[pool.slotOf(bind.fb)!]);
-      gl.activeTexture(gl.TEXTURE2);
-      gl.bindTexture(gl.TEXTURE_2D, gbuf.albedo);
-      gl.activeTexture(gl.TEXTURE3);
-      gl.bindTexture(gl.TEXTURE_2D, gbuf.normal);
-      gl.activeTexture(gl.TEXTURE4);
-      gl.bindTexture(gl.TEXTURE_2D, gbuf.depth);
-      // sun-transmittance caches for the bound pair (units 6/7); the slots were
-      // baked in the same rAF they were filled, so no stale cache is possible.
-      // Left bound for the precip pass, which reads them too.
-      gl.activeTexture(gl.TEXTURE6);
-      gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fa)!]);
-      gl.activeTexture(gl.TEXTURE7);
-      gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fb)!]);
-      drawFullscreen(gl);
+      // The heavy passes (staging, 280-step raymarch, precip, accumulate) are
+      // skipped once the still has converged — accT already holds the finished
+      // image and only the cheap present below re-runs, so idle GPU load drops.
+      if (!converged) {
+        // -- pass 1: staging mesh into the g-buffer ----------------------------
+        gl.bindFramebuffer(gl.FRAMEBUFFER, gbuf.fbo);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.enable(gl.DEPTH_TEST);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.useProgram(progGeo);
+        gl.uniformMatrix4fv(loc(progGeo, "uViewProj"), false, viewProj);
+        gl.bindVertexArray(staging.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, staging.count);
+        gl.bindVertexArray(null);
+        gl.disable(gl.DEPTH_TEST);
 
-      // -- pass 2.5: precipitation particles (same target, before tilt-shift so
-      //    the DOF treats rain like everything else; volume + depth textures are
-      //    still bound on units 0/1/4) -----------------------------------------
-      if (precipOn) {
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        gl.useProgram(progPrecip);
-        gl.uniformMatrix4fv(loc(progPrecip, "uViewProj"), false, viewProj);
-        gl.uniform3f(loc(progPrecip, "uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
-        gl.uniform1f(loc(progPrecip, "uMix"), bind.mix);
-        gl.uniform1f(loc(progPrecip, "uTimeWall"), now / 1000);
-        gl.uniform2f(loc(progPrecip, "uRes"), canvas.width, canvas.height);
-        drawPrecip(RAIN, rainVAO.vao, RAIN.count);
-        drawPrecip(HAIL, hailVAO.vao, HAIL.count);
-        gl.disable(gl.BLEND);
+        // -- pass 2: volume raymarch + surface shading + backdrop --------------
+        gl.bindFramebuffer(gl.FRAMEBUFFER, compositeFbo);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(progVol);
+        gl.uniform2f(loc(progVol, "uRes"), canvas.width, canvas.height);
+        gl.uniform3f(loc(progVol, "uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
+        gl.uniform3f(loc(progVol, "uCamRight"), cam.right.x, cam.right.y, cam.right.z);
+        gl.uniform3f(loc(progVol, "uCamUp"), cam.up.x, cam.up.y, cam.up.z);
+        gl.uniform3f(loc(progVol, "uCamFwd"), cam.forward.x, cam.forward.y, cam.forward.z);
+        gl.uniform1f(loc(progVol, "uFovTan"), Math.tan(orbit.fovY / 2));
+        gl.uniform1f(loc(progVol, "uMix"), bind.mix);
+        gl.uniform1f(loc(progVol, "uTime"), tAnim);
+        // fresh jitter per accumulation pass while holding still; 0 during motion
+        // and with ?acc=0 ⇒ bit-for-bit today's image.
+        gl.uniform1f(loc(progVol, "uJitter"), same ? jitterSeq(accN) : 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_3D, textures[pool.slotOf(bind.fa)!]);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_3D, textures[pool.slotOf(bind.fb)!]);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, gbuf.albedo);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, gbuf.normal);
+        gl.activeTexture(gl.TEXTURE4);
+        gl.bindTexture(gl.TEXTURE_2D, gbuf.depth);
+        // sun-transmittance caches for the bound pair (units 6/7); the slots were
+        // baked in the same rAF they were filled, so no stale cache is possible.
+        // Left bound for the precip pass, which reads them too.
+        gl.activeTexture(gl.TEXTURE6);
+        gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fa)!]);
+        gl.activeTexture(gl.TEXTURE7);
+        gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fb)!]);
+        drawFullscreen(gl);
+
+        // -- pass 2.5: precipitation particles (same target, before tilt-shift so
+        //    the DOF treats rain like everything else; volume + depth textures are
+        //    still bound on units 0/1/4) ---------------------------------------
+        if (precipOn) {
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.useProgram(progPrecip);
+          gl.uniformMatrix4fv(loc(progPrecip, "uViewProj"), false, viewProj);
+          gl.uniform3f(loc(progPrecip, "uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
+          gl.uniform1f(loc(progPrecip, "uMix"), bind.mix);
+          gl.uniform1f(loc(progPrecip, "uTimeWall"), tAnim);
+          gl.uniform2f(loc(progPrecip, "uRes"), canvas.width, canvas.height);
+          drawPrecip(RAIN, rainVAO.vao, RAIN.count);
+          drawPrecip(HAIL, hailVAO.vao, HAIL.count);
+          gl.disable(gl.BLEND);
+        }
+
+        // -- accumulate: running mean sceneT → accT --------------------------
+        // accN==1 overwrites (fresh render, nothing to blend); accN>1 blends the
+        // new render with weight 1/accN → a true running average. Because we
+        // overwrite on every non-`same` frame, accT is never stale entering a
+        // still period (no ghost from the previous convergence).
+        if (accEnabled && sceneT && accT) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, accT.fbo);
+          gl.viewport(0, 0, canvas.width, canvas.height);
+          gl.useProgram(progPost); // radius 0 + grade 0 ⇒ plain copy
+          gl.uniform1i(loc(progPost, "uTex"), 0);
+          gl.uniform2f(loc(progPost, "uRes"), canvas.width, canvas.height);
+          gl.uniform1f(loc(progPost, "uMaxRadius"), 0);
+          gl.uniform1f(loc(progPost, "uGrade"), 0);
+          gl.uniform2f(loc(progPost, "uDir"), 0, 0);
+          if (accN > 1) {
+            gl.enable(gl.BLEND);
+            gl.blendColor(0, 0, 0, 1 / accN);
+            gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
+          }
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, sceneT.tex);
+          drawFullscreen(gl);
+          gl.disable(gl.BLEND);
+        }
       }
 
-      // -- pass 3: tilt-shift (H then V + grade) --------------------------------
-      if (tiltShift && sceneT && blurT) {
-        // keep the sharp band pinned to the platter: project the diorama
-        // centre at ground level and focus there
-        const c = project(viewProj, { x: orbit.target.x, y: orbit.target.y, z: 0 });
-        const focusY = Math.min(0.85, Math.max(0.15, c.y * 0.5 + 0.5));
-        const maxRadius = Math.min(12, canvas.height * 0.009);
-        gl.useProgram(progPost);
-        gl.uniform1i(loc(progPost, "uTex"), 0);
-        gl.uniform2f(loc(progPost, "uRes"), canvas.width, canvas.height);
-        gl.uniform1f(loc(progPost, "uFocusY"), focusY);
-        // wider than slice 3's 0.20: at 2× vertical exaggeration the anvil
-        // sits far above the focus line and a tight band smears it entirely
-        gl.uniform1f(loc(progPost, "uBand"), 0.26);
-        gl.uniform1f(loc(progPost, "uMaxRadius"), maxRadius);
+      // -- present to screen (ALWAYS — even when the march was skipped, so the
+      //    default framebuffer is never left undefined) -----------------------
+      if (!directToScreen) {
+        const postSrc = accEnabled && accT ? accT.tex : sceneT!.tex;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        if (tiltShift && sceneT && blurT) {
+          // tilt-shift H (postSrc → blurT), then V + grade (blurT → screen).
+          // Keep the sharp band pinned to the platter: project the diorama
+          // centre at ground level and focus there.
+          const c = project(viewProj, { x: orbit.target.x, y: orbit.target.y, z: 0 });
+          const focusY = Math.min(0.85, Math.max(0.15, c.y * 0.5 + 0.5));
+          const maxRadius = Math.min(12, canvas.height * 0.009);
+          gl.useProgram(progPost);
+          gl.uniform1i(loc(progPost, "uTex"), 0);
+          gl.uniform2f(loc(progPost, "uRes"), canvas.width, canvas.height);
+          gl.uniform1f(loc(progPost, "uFocusY"), focusY);
+          // wider than slice 3's 0.20: at 2× vertical exaggeration the anvil
+          // sits far above the focus line and a tight band smears it entirely
+          gl.uniform1f(loc(progPost, "uBand"), 0.26);
+          gl.uniform1f(loc(progPost, "uMaxRadius"), maxRadius);
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, blurT.fbo);
-        gl.uniform2f(loc(progPost, "uDir"), 1, 0);
-        gl.uniform1f(loc(progPost, "uGrade"), 0);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, sceneT.tex);
-        drawFullscreen(gl);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, blurT.fbo);
+          gl.uniform2f(loc(progPost, "uDir"), 1, 0);
+          gl.uniform1f(loc(progPost, "uGrade"), 0);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, postSrc);
+          drawFullscreen(gl);
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.uniform2f(loc(progPost, "uDir"), 0, 1);
-        gl.uniform1f(loc(progPost, "uGrade"), 1);
-        gl.bindTexture(gl.TEXTURE_2D, blurT.tex);
-        drawFullscreen(gl);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.uniform2f(loc(progPost, "uDir"), 0, 1);
+          gl.uniform1f(loc(progPost, "uGrade"), 1);
+          gl.bindTexture(gl.TEXTURE_2D, blurT.tex);
+          drawFullscreen(gl);
+        } else {
+          // accumulation on, tilt-shift off: blit postSrc → screen (plain copy)
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.useProgram(progPost);
+          gl.uniform1i(loc(progPost, "uTex"), 0);
+          gl.uniform2f(loc(progPost, "uRes"), canvas.width, canvas.height);
+          gl.uniform1f(loc(progPost, "uMaxRadius"), 0);
+          gl.uniform1f(loc(progPost, "uGrade"), 0);
+          gl.uniform2f(loc(progPost, "uDir"), 0, 0);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, postSrc);
+          drawFullscreen(gl);
+        }
       }
       stats.drawn++;
     }

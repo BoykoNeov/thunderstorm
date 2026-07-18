@@ -197,9 +197,16 @@ export interface ColorTarget {
   dispose(): void;
 }
 
-/** Plain RGBA8 color target (composite output / blur ping-pong). */
-export function createColorTarget(gl: WebGL2RenderingContext, w: number, h: number): ColorTarget {
-  const tex = tex2D(gl, w, h, gl.RGBA8, gl.LINEAR);
+/** Color target (composite output / blur ping-pong / accumulation buffer).
+ *  Defaults to RGBA8; pass gl.RGBA16F for the float accumulation target
+ *  (renderable only once EXT_color_buffer_float is enabled — the caller checks). */
+export function createColorTarget(
+  gl: WebGL2RenderingContext,
+  w: number,
+  h: number,
+  fmt: number = gl.RGBA8,
+): ColorTarget {
+  const tex = tex2D(gl, w, h, fmt, gl.LINEAR);
   const fbo = gl.createFramebuffer()!;
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);

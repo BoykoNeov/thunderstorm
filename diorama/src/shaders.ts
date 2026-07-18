@@ -232,6 +232,7 @@ uniform float uExposure;
 uniform sampler3D uNoise;     // tileable RG value noise (R coarse, G fine)
 uniform vec3  uSizeStorm;     // box size in storm km (display / sx) — noise coords
 uniform float uErosion;       // 0..1 edge erosion strength (?er=)
+uniform float uJitter;        // idle-accumulation ray-start offset, [0,1) (0 = live look)
 uniform float uMsW;           // multi-scatter octave weight (?msw=0 → single scatter)
 uniform float uMsA;           // per-octave optical-depth attenuation (?msa=)
 uniform float uSilver;        // silver-lining forward-spike weight (?silver=0 off)
@@ -401,7 +402,9 @@ void main() {
   if (t1 > t0) {
     float N = uSteps;
     float dt = (t1 - t0) / N;
-    float t = t0 + dt * hash12(gl_FragCoord.xy);
+    // per-pixel jitter, offset per accumulation pass so the grain averages out
+    // when the view is held still (uJitter=0 ⇒ bit-for-bit the live image)
+    float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
     float cosSun = dot(rd, uSunDir);
     // multi-scatter octaves (Wrenninge-style): octave i sees optical depth
     // scaled by uMsA^i (pow of the cached transmittance) and phase eccentricity
