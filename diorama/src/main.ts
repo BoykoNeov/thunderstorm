@@ -139,6 +139,13 @@ const rays = Math.max(0, numParam("rays", 0.004));
 // typical aerosol scale height (well-mixed boundary layer); smaller = a tighter
 // low deck, larger = haze reaches further up. Owner's taste dial via ?rayh=.
 const rayh = Math.max(0.1, numParam("rayh", 1.5));
+// tonemap (beauty 6): AgX by default — it holds white on the bright sunlit
+// cauliflower where the ACES fit skews orange near clipping. ?tm=aces reverts.
+// Owner-gated taste default: presented as an A/B, not self-picked here.
+const tonemap = (params.get("tm") ?? "agx") === "agx" ? 1 : 0;
+// warm/cool split-tone in the grade pass (beauty 6): highlights warm, shadows
+// cool — the warm/cool tension of storm-light photography. ?split=0 disables.
+const split = Math.max(0, numParam("split", 1));
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -405,6 +412,7 @@ async function start() {
   gl.uniform1f(loc(progVol, "uSilver"), silver);
   gl.uniform1f(loc(progVol, "uRays"), rays);
   gl.uniform1f(loc(progVol, "uHazeH"), rayh);
+  gl.uniform1f(loc(progVol, "uTonemap"), tonemap);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as
@@ -743,6 +751,7 @@ async function start() {
           gl.bindFramebuffer(gl.FRAMEBUFFER, preFxaaFbo);
           gl.uniform2f(loc(progPost, "uDir"), 0, 1);
           gl.uniform1f(loc(progPost, "uGrade"), 1);
+          gl.uniform1f(loc(progPost, "uSplit"), split);
           gl.bindTexture(gl.TEXTURE_2D, blurT.tex);
           drawFullscreen(gl);
         } else if (!fxaaOn) {

@@ -228,6 +228,7 @@ uniform float uTime;          // wall seconds — water ripple only, never physi
 
 uniform float uSteps;         // primary march step count
 uniform float uExposure;
+uniform float uTonemap;       // 1 = AgX, 0 = ACES fit (?tm=aces)
 
 uniform sampler3D uNoise;     // tileable RG value noise (R coarse, G fine)
 uniform vec3  uSizeStorm;     // box size in storm km (display / sx) — noise coords
@@ -480,9 +481,35 @@ void main() {
 
   vec3 col = acc + T * bg;
 
-  // tone map (ACES fit) + gamma + a whisper of dither against banding
+  // tone map (AgX or ACES fit) + gamma + a whisper of dither against banding
   col *= uExposure;
-  col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);
+  if (uTonemap > 0.5) {
+    // AgX (Sobotka; matrices/polynomial as in the three.js implementation).
+    // Pipeline: inset matrix → log2 encode → sigmoid contrast → outset matrix
+    // → back to linear; the shared gamma below then encodes for display. AgX
+    // holds white on the bright sunlit cauliflower where the ACES fit tints
+    // it orange near clipping (?tm=aces reverts).
+    const mat3 AGX_IN = mat3(
+      0.842479062253094,  0.0423282422610123, 0.0423756549057051,
+      0.0784335999999992, 0.878468636469772,  0.0784336,
+      0.0792237451477643, 0.0791661274605434, 0.879142973793104);
+    const mat3 AGX_OUT = mat3(
+       1.19687900512017,   -0.0528968517574562, -0.0529716355144438,
+      -0.0980208811401368,  1.15190312990417,   -0.0980434501171241,
+      -0.0990297440797205, -0.0989611768448433,  1.15107367264116);
+    const float EV_MIN = -12.47393;
+    const float EV_MAX = 4.026069;
+    col = AGX_IN * col;
+    col = clamp((log2(max(col, vec3(1e-10))) - EV_MIN) / (EV_MAX - EV_MIN), 0.0, 1.0);
+    vec3 x2 = col * col;
+    vec3 x4 = x2 * x2;
+    col = 15.5 * x4 * x2 - 40.14 * x4 * col + 31.96 * x4
+        - 6.868 * x2 * col + 0.4298 * x2 + 0.1191 * col - 0.00232;
+    col = AGX_OUT * col;
+    col = pow(max(col, vec3(0.0)), vec3(2.2)); // AgX outputs 2.2-encoded; back to linear
+  } else {
+    col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);
+  }
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
   col += (hash12(gl_FragCoord.xy + 0.5) - 0.5) / 255.0;
   fragColor = vec4(col, 1.0);
@@ -507,6 +534,7 @@ uniform float uFocusY;     // normalized screen y of the focus line
 uniform float uBand;       // half-width of the fully sharp band
 uniform float uMaxRadius;  // blur radius ceiling, px
 uniform float uGrade;      // 1 on the final pass: saturation + vignette
+uniform float uSplit;      // warm/cool split-tone strength (?split=0 off)
 
 float cocAt(float y) {
   return uMaxRadius * smoothstep(uBand, uBand * 3.0, abs(y - uFocusY));
@@ -532,6 +560,10 @@ void main() {
   if (uGrade > 0.5) {
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = clamp(mix(vec3(l), col, 1.13), 0.0, 1.0);
+    // warm/cool split-tone: highlights toward storm-light warmth, shadows
+    // toward blue-grey — luma-hinged so mid-grey stays neutral (?split=0 off)
+    col += (l - 0.55) * vec3(0.045, 0.015, -0.045) * uSplit;
+    col = clamp(col, 0.0, 1.0);
     vec2 v = uv - 0.5;
     col *= 1.0 - 0.16 * dot(v, v);
   }
