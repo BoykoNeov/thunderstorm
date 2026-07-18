@@ -100,15 +100,25 @@ const msW = Math.max(0, numParam("msw", 0.55));
 const msA = Math.min(1, Math.max(0.05, numParam("msa", 0.35)));
 // silver-lining forward spike on thin sun-facing edges (?silver=0 disables).
 const silver = Math.max(0, numParam("silver", 0.15));
-// sunlit haze inside the box (beauty 3): a faint constant extinction lit by the
-// cached sun transmittance → crepuscular gloom under/beside the anvil and a soft
-// backlit atmosphere. km^-1; ?rays=0 disables (restores the empty-air skip).
-// NOTE: the plan's 0.0035 blew out — the box is ~52 km (2x display), so its long
-// haze-path integral makes any value that reads "faint" over a few km a milky
-// slab across the whole box. Empirical sane range 0.0004-0.0008 (temp/step3
-// captures); 0.0008 default shows the under-storm gloom head-on without washing
-// out the backlit view. Owner tunes via ?rays=; see the A/B sweep.
-const rays = Math.max(0, numParam("rays", 0.0008));
+// sunlit haze inside the box (beauty 3): extinction lit by the cached sun
+// transmittance → crepuscular gloom under/beside the anvil and a soft backlit
+// atmosphere. km^-1; ?rays=0 disables (restores the empty-air skip).
+// This is now the SURFACE (peak) value: the haze is height-graded exp(-alt/rayh)
+// — dense near the platter, ~0 aloft — a real vertical profile, not the uniform
+// soup a constant fill implied. Grading to ~0 at the box top also removes the
+// boxy anvil-level glow the constant term produced.
+// NOTE: the old constant-fill range (0.0004-0.0008) is VOID — that integrated
+// over the whole ~18 km box, so it capped low to avoid a milky slab. With the
+// column now concentrated in the low ~rayh km, the integral is ~rayh/boxheight
+// smaller, so the surface value can go higher before washout. Re-swept fresh
+// (temp/step3v2): clean up to 0.010 now that the deck also fades before the XY
+// walls (see the shader's `edge` term). 0.004 shows the backlit under-anvil glow
+// and low gloom without over-hazing head-on; owner tunes 0.003-0.008 via ?rays=.
+const rays = Math.max(0, numParam("rays", 0.004));
+// haze scale height (storm-km): how deep the haze layer feels. ~1.5 km is a
+// typical aerosol scale height (well-mixed boundary layer); smaller = a tighter
+// low deck, larger = haze reaches further up. Owner's taste dial via ?rayh=.
+const rayh = Math.max(0.1, numParam("rayh", 1.5));
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -350,6 +360,7 @@ async function start() {
   gl.uniform1f(loc(progVol, "uMsA"), msA);
   gl.uniform1f(loc(progVol, "uSilver"), silver);
   gl.uniform1f(loc(progVol, "uRays"), rays);
+  gl.uniform1f(loc(progVol, "uHazeH"), rayh);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as

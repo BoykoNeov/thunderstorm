@@ -235,7 +235,8 @@ uniform float uErosion;       // 0..1 edge erosion strength (?er=)
 uniform float uMsW;           // multi-scatter octave weight (?msw=0 → single scatter)
 uniform float uMsA;           // per-octave optical-depth attenuation (?msa=)
 uniform float uSilver;        // silver-lining forward-spike weight (?silver=0 off)
-uniform float uRays;          // sunlit-haze extinction, km^-1 (?rays=0 off)
+uniform float uRays;          // sunlit-haze SURFACE extinction, km^-1 (?rays=0 off)
+uniform float uHazeH;         // haze scale height, storm-km (?rayh=): density ~ exp(-alt/H)
 uniform float uCoreNorm;      // sigma → "coreness"; scales with sx so the same
                               // cloud erodes identically at any display scale
 uniform vec4  uWeightsCld;    // uWeights with the rain plane zeroed
@@ -426,10 +427,26 @@ void main() {
       if (float(i) >= N || t >= t1) break;
       vec3 p = ro + rd * t;
       vec2 s2 = sigma2At(p);
-      float sig = s2.x + s2.y + uRays;   // uRays: constant sunlit-haze extinction
+      // altitude above the platter (uBoxMin.z is the ground datum) in storm-km,
+      // then height-grade the sunlit haze: aerosol/air density falls off ~expo-
+      // nentially with altitude (scale height uHazeH), so the box fills with
+      // low gloom and clears aloft — a real vertical profile, not uniform soup.
+      // Fading to ~0 near the top is ALSO what removes the boxy anvil-level glow
+      // a constant term produced (haze no longer meets the box's top wall).
+      vec3 nrm = (p - uBoxMin) / (uBoxMax - uBoxMin);
+      float hfrac = clamp(nrm.z, 0.0, 1.0);
+      // real haze has no walls — it thins to the horizon. The exp grade clears
+      // the box TOP; without this the dense low deck would instead meet the box
+      // SIDE walls and, backlit, glow as a hard rectangular rim (a lit box, not
+      // atmosphere). Fade the haze toward the XY perimeter over a fixed margin
+      // so the deck vanishes before every wall — the storm is centred, so the
+      // under-anvil gloom this term is for is untouched.
+      float edge = smoothstep(0.0, 0.16, min(min(nrm.x, 1.0 - nrm.x),
+                                             min(nrm.y, 1.0 - nrm.y)));
+      float haze = uRays * exp(-hfrac * uSizeStorm.z / uHazeH) * edge;
+      float sig = s2.x + s2.y + haze;
       if (sig > 1e-4) {
         float Tsun = sunTrans(p);
-        float hfrac = clamp((p.z - uBoxMin.z) / (uBoxMax.z - uBoxMin.z), 0.0, 1.0);
         vec3 amb = mix(AMB_LOW, AMB_HIGH, hfrac) * (0.25 + 0.45 * hfrac);
         float powder = 1.0 - 0.7 * exp(-s2.x * 1.2);
         // sum the octaves: each deeper order attenuates the sun path less
@@ -443,12 +460,12 @@ void main() {
         Sc += CLOUD_ALB * SUN_COL * (silverPh * Tsun);
         // rain: dimmer sun response, mostly ambient — a gray translucent veil
         vec3 Sr = RAIN_ALB * (SUN_COL * (ms * 0.55) + amb);
-        // sunlit haze: a faint constant extinction filling the box, lit only by
-        // the cached sun transmittance → bright where sun reaches the air, dark
-        // under the anvil's shadow (crepuscular shafts + under-storm gloom).
+        // sunlit haze: the height-graded extinction (dense low, thin aloft), lit
+        // only by the cached sun transmittance → bright where sun reaches the air,
+        // dark under the anvil's shadow (crepuscular shafts + under-storm gloom).
         // Not gutted by powder (thin-air term), so it survives where step 2 warned.
         vec3 Sh = SUN_COL * (phHaze * Tsun) + AMB_HIGH * 0.3;
-        vec3 S = (Sc * s2.x + Sr * s2.y + Sh * uRays) / sig;
+        vec3 S = (Sc * s2.x + Sr * s2.y + Sh * haze) / sig;
         float a = 1.0 - exp(-sig * dt);
         acc += T * a * S;
         T *= 1.0 - a;
