@@ -100,6 +100,15 @@ const msW = Math.max(0, numParam("msw", 0.55));
 const msA = Math.min(1, Math.max(0.05, numParam("msa", 0.35)));
 // silver-lining forward spike on thin sun-facing edges (?silver=0 disables).
 const silver = Math.max(0, numParam("silver", 0.15));
+// sunlit haze inside the box (beauty 3): a faint constant extinction lit by the
+// cached sun transmittance → crepuscular gloom under/beside the anvil and a soft
+// backlit atmosphere. km^-1; ?rays=0 disables (restores the empty-air skip).
+// NOTE: the plan's 0.0035 blew out — the box is ~52 km (2x display), so its long
+// haze-path integral makes any value that reads "faint" over a few km a milky
+// slab across the whole box. Empirical sane range 0.0004-0.0008 (temp/step3
+// captures); 0.0008 default shows the under-storm gloom head-on without washing
+// out the backlit view. Owner tunes via ?rays=; see the A/B sweep.
+const rays = Math.max(0, numParam("rays", 0.0008));
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -340,6 +349,7 @@ async function start() {
   gl.uniform1f(loc(progVol, "uMsW"), msW);
   gl.uniform1f(loc(progVol, "uMsA"), msA);
   gl.uniform1f(loc(progVol, "uSilver"), silver);
+  gl.uniform1f(loc(progVol, "uRays"), rays);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as

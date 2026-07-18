@@ -235,6 +235,7 @@ uniform float uErosion;       // 0..1 edge erosion strength (?er=)
 uniform float uMsW;           // multi-scatter octave weight (?msw=0 → single scatter)
 uniform float uMsA;           // per-octave optical-depth attenuation (?msa=)
 uniform float uSilver;        // silver-lining forward-spike weight (?silver=0 off)
+uniform float uRays;          // sunlit-haze extinction, km^-1 (?rays=0 off)
 uniform float uCoreNorm;      // sigma → "coreness"; scales with sx so the same
                               // cloud erodes identically at any display scale
 uniform vec4  uWeightsCld;    // uWeights with the rain plane zeroed
@@ -418,11 +419,14 @@ void main() {
     // thin high-transmittance edges bloom while self-shadowed cores (Tsun→0)
     // stay dark and cannot blow out.
     float silverPh = hg(cosSun, 0.92) * 4.0 * PI * uSilver;
+    // sunlit-haze phase: strongly forward — a forward lobe is what makes the
+    // shafts read as directional beams rather than a uniform glow.
+    float phHaze = hg(cosSun, 0.6) * 4.0 * PI;
     for (int i = 0; i < 512; i++) {
       if (float(i) >= N || t >= t1) break;
       vec3 p = ro + rd * t;
       vec2 s2 = sigma2At(p);
-      float sig = s2.x + s2.y;
+      float sig = s2.x + s2.y + uRays;   // uRays: constant sunlit-haze extinction
       if (sig > 1e-4) {
         float Tsun = sunTrans(p);
         float hfrac = clamp((p.z - uBoxMin.z) / (uBoxMax.z - uBoxMin.z), 0.0, 1.0);
@@ -439,7 +443,12 @@ void main() {
         Sc += CLOUD_ALB * SUN_COL * (silverPh * Tsun);
         // rain: dimmer sun response, mostly ambient — a gray translucent veil
         vec3 Sr = RAIN_ALB * (SUN_COL * (ms * 0.55) + amb);
-        vec3 S = (Sc * s2.x + Sr * s2.y) / sig;
+        // sunlit haze: a faint constant extinction filling the box, lit only by
+        // the cached sun transmittance → bright where sun reaches the air, dark
+        // under the anvil's shadow (crepuscular shafts + under-storm gloom).
+        // Not gutted by powder (thin-air term), so it survives where step 2 warned.
+        vec3 Sh = SUN_COL * (phHaze * Tsun) + AMB_HIGH * 0.3;
+        vec3 S = (Sc * s2.x + Sr * s2.y + Sh * uRays) / sig;
         float a = 1.0 - exp(-sig * dt);
         acc += T * a * S;
         T *= 1.0 - a;
