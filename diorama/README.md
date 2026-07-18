@@ -50,13 +50,27 @@ deg/km), `?seed=1337` (staging), `?ts=0` (disable tilt-shift), `?sx=2`
 only, clamped 1–3; default 2 — the HUD states it, staging stays 1×),
 `?precip=0` (disable the rain/hail particles), `?er=0.45` (cloud detail
 noise strength: domain warp + edge wisps, 0 = raw voxel look), `?veil=0.12`
-(rain-veil extinction weight, 0 disables the volumetric rain curtain),
-`?acc=0` (disable idle temporal accumulation: default on, it averages successive
-jittered renders into a grain-free still whenever the view and storm frame hold
-still — and freezes the animation clock while doing so, so pausing freezes the
-whole miniature; `?acc=0` keeps the always-live look). The other beauty knobs
-(`lc`, `msw`, `msa`, `silver`, `rays`, `rayh`) get a full table at the beauty
-wrap-up.
+(rain-veil extinction weight, 0 disables the volumetric rain curtain).
+The presentation-only beauty knobs (light cache, multi-scatter, silver lining,
+sunlit haze, accumulation, FXAA, tonemap, split-tone) have their own table.
+
+### Beauty knobs (2026-07-18 beauty pass, steps 0–6)
+
+Every visual-beauty effect is presentation-only (never physics) and each is
+disableable from the URL for A/B comparison. Defaults are what ship.
+
+| Param     | Default | Effect |
+|-----------|---------|--------|
+| `?lc=`    | `0`     | Baked sun-transmittance light cache (28-step sun march → 1 fetch). Correct but no measured fps win on this GPU; **off by default** because half-res trilinear softened the shadow terminator (`lc=1` re-enables the cache). |
+| `?msw=`   | `0.55`  | Multi-scatter octave weight — lifts shadowed cloud cores from black to luminous grey (`msw=0` = single scatter). |
+| `?msa=`   | `0.35`  | Per-octave optical-depth attenuation for the multi-scatter octaves. |
+| `?silver=`| `0.15`  | Silver-lining forward spike on thin sun-facing edges (`silver=0` off). |
+| `?rays=`  | `0.004` | Sunlit-haze **surface** extinction (km⁻¹) inside the box → crepuscular gloom under/beside the anvil + backlit atmosphere. Height-graded `exp(-alt/rayh)` (`rays=0` off). |
+| `?rayh=`  | `1.5`   | Haze scale height (storm-km) — how deep the low haze deck feels. |
+| `?acc=`   | `1`     | Idle temporal accumulation: averages successive jittered renders into a grain-free still whenever the view and storm frame hold still (freezes the animation clock while doing so — pausing freezes the whole miniature). `acc=0` keeps the always-live look. |
+| `?fxaa=`  | `1`     | FXAA final pass — de-jaggies the staging silhouettes (mountains, towns, forest cones). `fxaa=0` off. |
+| `?tm=`    | `agx`   | Tonemap: `agx` (holds white on the bright cauliflower, softer rolloff) or `aces` (the older ACES fit that skews orange near clipping). |
+| `?split=` | `1`     | Warm/cool split-tone in the grade pass (warm highlights, cool shadows; mid-grey stays neutral). `split=0` off. Only active with tilt-shift on. |
 
 ## Status
 

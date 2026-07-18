@@ -124,6 +124,21 @@ Fullscreen raymarch pass, GLSL, structured like Black Hole Lab's scene shader:
   by fractional storm time (§2).
 - Tone map + soft bloom reused conceptually from Black Hole Lab's HDR pipeline.
 
+**Beauty pass (2026-07-18, steps 0–6 — all presentation-only, every effect a
+URL param).** The per-sample secondary sun march above can be replaced by a baked
+per-frame sun-transmittance cache (`?lc=1`; correct but no measured fps win on the
+5090, and half-res softens the terminator, so it ships off — the live march is the
+default). The single-scatter lighting model gained (1) three multi-scatter octaves
+that lift shadowed cores from black to luminous grey (`?msw`/`?msa`), (2) a
+silver-lining forward lobe on thin sun-facing edges (`?silver`), and (3) a
+height-graded sunlit haze inside the box for crepuscular gloom + backlit atmosphere
+(`?rays`/`?rayh`). The output chain gained idle temporal accumulation (grain-free
+stills when the view holds — `?acc`), an FXAA final pass for the staging silhouettes
+(`?fxaa`), and a grade upgrade: **AgX tonemap** (default; holds white where the ACES
+fit skewed orange, `?tm=aces` reverts) plus a warm/cool split-tone (`?split`). AgX
+and split defaults are owner-gated taste calls, presented as A/B captures. Full plan:
+docs/plan-diorama-beauty-2026-07-17.md; param table in diorama/README.md.
+
 ### 5.2 The diorama staging
 
 - **Island:** procedural low-poly heightfield → flat-shaded mesh (computed once on
