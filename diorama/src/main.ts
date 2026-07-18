@@ -91,8 +91,16 @@ const numParam = (name: string, def: number) => {
 const erosion = Math.min(1, Math.max(0, numParam("er", 0.45)));
 // rain-veil extinction weight (?veil=0 disables the veil entirely)
 const veilW = Math.max(0, numParam("veil", 0.12));
-// sun-transmittance light cache (?lc=0: live per-sample sun march — the A/B ref)
-const lightCache = params.get("lc") !== "0";
+// sun-transmittance light cache — OFF by default (opt in with ?lc=1). The baked
+// R8 half-res cache (beauty step 0) stair-steps the deeply self-shadowed cloud
+// core into hard cube facets (the coarse texels crush exp(-tau) and clamp dark);
+// the live per-sample sun march is smooth and reads as a realistic soft-gray Cb
+// base, at no measured cost on this GPU (rs=4 GPU-bound: 208 vs 215 ms — cache is
+// marginally SLOWER here, "shadow march is not the bottleneck"). Kept as opt-in
+// insurance for weak GPUs, but note it does not currently serve them — it ships a
+// broken image; a real weak-GPU fix means storing tau (or R16F), not just more
+// texels (8-bit quantization is a co-cause resolution alone won't touch).
+const lightCache = params.get("lc") === "1";
 // multi-scatter octaves (beauty 1): octave weight (?msw=0 → single scatter) and
 // per-octave optical-depth attenuation (?msa=). msw lifts shadowed cores from
 // black to luminous grey; msNorm keeps the sunlit side at the same level.
