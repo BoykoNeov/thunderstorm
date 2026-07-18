@@ -49,6 +49,28 @@ All work is in `diorama/` (TS + WebGL2, no engine). No pipeline or UE changes.
   (`main.ts`: `const SUN = direction(100°, 40°)`). It never changes at
   runtime. This is what makes step 0 legal.
 
+### Corrections found while executing (2026-07-18, step 2)
+
+Three errors in this plan surfaced during step 2 — later steps reuse the same
+recipe/view, so heed these:
+
+1. **The headless capture recipe below never waits for volume streaming.**
+   `--virtual-time-budget` fires the screenshot before the async brick
+   fetch/decode/upload settles, so it always caught the "buffering…" screen.
+   Use `diorama/tools/shot.mjs` instead: it drives real headless Chrome over
+   CDP and polls the HUD until the clock reads a frame and is not buffering.
+   `node tools/shot.mjs <chrome.exe> <out.png> <url>` (Chrome must already be
+   running with `--remote-debugging-port=9222`).
+2. **The "sun-side" view is `az≈280`, not `az=100`.** In this camera
+   convention `az=100` places the camera on the *same* bearing as the sun,
+   looking *away* from it → `cosSun<0`, effect dead. The backlit view that
+   makes silver/rays visible is `az=280&el≈8-12` (looking toward the sun).
+3. **Step 2's `ph0 += spike` is ~6× self-suppressed** (× msNorm ≈0.54 × powder
+   ≈0.3 on thin edges) and contradicts its own "kept OUT of msNorm" comment.
+   Implemented instead as a pure additive rim on `Sc`, after both terms:
+   `Sc += CLOUD_ALB*SUN_COL*(hg(cosSun,0.92)*4π*uSilver*Tsun)`. Step 3 (rays)
+   should likewise verify its term isn't gutted by powder before judging it.
+
 ### Verification recipe (used by every step)
 
 1. Dev server: `node tools/find-server.mjs` prints the URL of a live server if

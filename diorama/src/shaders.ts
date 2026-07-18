@@ -234,6 +234,7 @@ uniform vec3  uSizeStorm;     // box size in storm km (display / sx) — noise c
 uniform float uErosion;       // 0..1 edge erosion strength (?er=)
 uniform float uMsW;           // multi-scatter octave weight (?msw=0 → single scatter)
 uniform float uMsA;           // per-octave optical-depth attenuation (?msa=)
+uniform float uSilver;        // silver-lining forward-spike weight (?silver=0 off)
 uniform float uCoreNorm;      // sigma → "coreness"; scales with sx so the same
                               // cloud erodes identically at any display scale
 uniform vec4  uWeightsCld;    // uWeights with the rain plane zeroed
@@ -410,6 +411,13 @@ void main() {
     float ph2 = mix(hg(cosSun, -0.2 * MS_B * MS_B), hg(cosSun, 0.45 * MS_B * MS_B), 0.65) * 4.0 * PI;
     // renormalize so uMsW does not change overall brightness, only shadow lift
     float msNorm = 1.0 / (1.0 + uMsW + uMsW * uMsW);
+    // silver lining: a narrow forward spike, added to the cloud source as a
+    // pure additive rim AFTER msNorm and powder (see the loop) — those two
+    // terms exist to balance/darken the diffuse body and would gut exactly the
+    // thin sun-facing edges this accent targets (~6x). Gated by Tsun below, so
+    // thin high-transmittance edges bloom while self-shadowed cores (Tsun→0)
+    // stay dark and cannot blow out.
+    float silverPh = hg(cosSun, 0.92) * 4.0 * PI * uSilver;
     for (int i = 0; i < 512; i++) {
       if (float(i) >= N || t >= t1) break;
       vec3 p = ro + rd * t;
@@ -427,6 +435,8 @@ void main() {
                   + uMsW * ph1 * pow(Tsun, uMsA)
                   + uMsW * uMsW * ph2 * pow(Tsun, uMsA * uMsA)) * msNorm;
         vec3 Sc = CLOUD_ALB * (SUN_COL * (ms * powder) + amb);
+        // silver rim: unattenuated by msNorm/powder, gated by sun transmittance
+        Sc += CLOUD_ALB * SUN_COL * (silverPh * Tsun);
         // rain: dimmer sun response, mostly ambient — a gray translucent veil
         vec3 Sr = RAIN_ALB * (SUN_COL * (ms * 0.55) + amb);
         vec3 S = (Sc * s2.x + Sr * s2.y) / sig;

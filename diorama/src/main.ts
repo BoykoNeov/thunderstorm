@@ -98,6 +98,8 @@ const lightCache = params.get("lc") !== "0";
 // black to luminous grey; msNorm keeps the sunlit side at the same level.
 const msW = Math.max(0, numParam("msw", 0.55));
 const msA = Math.min(1, Math.max(0.05, numParam("msa", 0.35)));
+// silver-lining forward spike on thin sun-facing edges (?silver=0 disables).
+const silver = Math.max(0, numParam("silver", 0.15));
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -337,6 +339,7 @@ async function start() {
   gl.uniform1f(loc(progVol, "uCoreNorm"), 1.25 * stormScale);
   gl.uniform1f(loc(progVol, "uMsW"), msW);
   gl.uniform1f(loc(progVol, "uMsA"), msA);
+  gl.uniform1f(loc(progVol, "uSilver"), silver);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as
