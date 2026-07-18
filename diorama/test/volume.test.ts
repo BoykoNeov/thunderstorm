@@ -4,7 +4,7 @@
 // file is the tripwire.
 
 import { describe, expect, it } from "vitest";
-import { decodeConstants, decodeLogU8, encodeLogU8 } from "../src/volume";
+import { decodeConstants, decodeLinearU8, decodeLogU8, encodeLinearU8, encodeLogU8 } from "../src/volume";
 
 const THR = 1e-4; // config.THRESHOLDS for every mixing-ratio channel
 const QMAX = 0.01245; // measured graupelhail max over the real sequence
@@ -47,6 +47,51 @@ describe("log-uint8 quantization round trip", () => {
   it("degenerate channel (qmax <= threshold) is all-zero both ways", () => {
     expect(encodeLogU8(0.5, THR, THR)).toBe(0);
     expect(decodeLogU8(200, THR, THR)).toBe(0);
+  });
+});
+
+// dBZ (slice 5b): a LINEAR uint8 map over (threshold, vmax]. Separate contract
+// from the log channels — the shipped manifest's real numbers below.
+const DBZ_THR = 5.0;
+const DBZ_MAX = 72.21371459960938;
+
+describe("linear-uint8 dBZ quantization round trip", () => {
+  it("zero and below-threshold values encode to code 0 and decode to 0", () => {
+    expect(encodeLinearU8(0, DBZ_THR, DBZ_MAX)).toBe(0);
+    expect(encodeLinearU8(DBZ_THR, DBZ_THR, DBZ_MAX)).toBe(0); // q <= thr culled
+    expect(encodeLinearU8(DBZ_THR * 0.999, DBZ_THR, DBZ_MAX)).toBe(0);
+    // decode of code 0 is EMPTY air, never the palette floor (5 dBZ)
+    expect(decodeLinearU8(0, DBZ_THR, DBZ_MAX)).toBe(0);
+  });
+
+  it("endpoints map to the endpoint codes", () => {
+    expect(encodeLinearU8(DBZ_THR * 1.0001, DBZ_THR, DBZ_MAX)).toBe(1);
+    expect(decodeLinearU8(1, DBZ_THR, DBZ_MAX)).toBeCloseTo(DBZ_THR, 10);
+    expect(encodeLinearU8(DBZ_MAX, DBZ_THR, DBZ_MAX)).toBe(255);
+    expect(decodeLinearU8(255, DBZ_THR, DBZ_MAX)).toBeCloseTo(DBZ_MAX, 10);
+  });
+
+  it("round-trip absolute error is bounded by half a linear step", () => {
+    const halfStep = (DBZ_MAX - DBZ_THR) * (0.5 / 254);
+    for (let i = 0; i < 2000; i++) {
+      const q = DBZ_THR + (DBZ_MAX - DBZ_THR) * ((i + 1) / 2000);
+      const rt = decodeLinearU8(encodeLinearU8(q, DBZ_THR, DBZ_MAX), DBZ_THR, DBZ_MAX);
+      expect(Math.abs(rt - q)).toBeLessThanOrEqual(halfStep * 1.0001);
+    }
+  });
+
+  it("decode is monotone in the code value", () => {
+    let prev = 0;
+    for (let v = 1; v <= 255; v++) {
+      const q = decodeLinearU8(v, DBZ_THR, DBZ_MAX);
+      expect(q).toBeGreaterThan(prev);
+      prev = q;
+    }
+  });
+
+  it("degenerate plane (vmax <= threshold) is all-zero both ways", () => {
+    expect(encodeLinearU8(50, DBZ_THR, DBZ_THR)).toBe(0);
+    expect(decodeLinearU8(200, DBZ_THR, DBZ_THR)).toBe(0);
   });
 });
 

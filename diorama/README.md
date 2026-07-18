@@ -39,8 +39,9 @@ then copied out of WSL. The bricks are gzipped uint8 log-quantized volumes;
 ## Controls
 
 Drag = orbit · wheel = zoom · space = play/pause · `[` / `]` = step frame ·
-bottom bar: play/pause, speed (15×–300×, a pure UI multiplier over storm
-time), scrubber, storm-time clock.
+`\` cross-section axis · `,` / `.` slide the cut plane · `d` toggle the dBZ
+radar layer · bottom bar: play/pause, speed (15×–300×, a pure UI multiplier
+over storm time), scrubber, storm-time clock.
 
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
 the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
@@ -64,7 +65,24 @@ cycles the axis (off→x→y→z) and `,` / `.` slide the plane. The camera-side
 is clipped away so you see *into* the storm, and the exposed cut face is painted
 with the **raw** decoded field — no erosion/veil beautification — on a
 perceptually-uniform viridis map, with a DOM legend (honest g/kg units; the
-field is prognostic, not a diagnostic). The dBZ radar layer is a later step (5b).
+field is prognostic, not a diagnostic).
+
+### dBZ radar layer (slice 5b — labeled diagnostic)
+
+`?layer=dbz` (or press `d`) swaps the storm to **radar reflectivity** — a
+diagnostic (CM1/NSSL microphysics reflectivity, passed through the pipeline) and
+shipped as the `.dbz.gz` plane, streamed here alongside each hydrometeor brick
+only when the layer is active (the hydrometeor default fetches/uploads nothing
+extra). The volume renders as a **max-intensity projection** — the peak dBZ
+along each **view ray** (view-dependent; it equals the classic column-max
+*composite reflectivity* product only looking straight down) — using a
+recognizable NWS-style rainbow palette (green → yellow → red → magenta),
+deliberately **not** the perceptually-uniform viridis: matching what a viewer
+already reads as "a storm on radar" is the teaching goal. It is labeled
+**DIAGNOSTIC** in the HUD and legend (dBZ units, charter rule). With a
+cross-section active, the cut face paints dBZ too (same palette), pairing the
+plan-view MIP silhouette with the
+storm's vertical echo structure. Off by default → the shipped look is unchanged.
 
 ### Beauty knobs (2026-07-18 beauty pass, steps 0–6)
 
@@ -122,5 +140,10 @@ on the worst frame (85→71 fps full-res; `?er=0&veil=0` reclaims it).
 Slice 5a (cross-section) done (2026-07-18): a movable clip plane + false-color
 cut-face sheet of the raw hydrometeor field, with a DOM legend (see the
 Cross-section section above). Off by default, so the shipped look is unchanged.
-Next in slice 5: dBZ diagnostic layer (5b, streams the shipped .dbz.gz channel),
-then scale chip + clock/scrubber polish (5c). Slice 6 = lightning event list.
+Slice 5b (dBZ radar diagnostic) done (2026-07-18): streams the shipped `.dbz.gz`
+plane (R8 ring parallel to the rgba bricks, allocated + fetched only when the
+layer is active) and renders a max-intensity-projection (peak dBZ along the view
+ray) + rainbow palette, labeled diagnostic; the cut face reads dBZ too (see the dBZ radar section
+above). One `?layer=`/`d` toggle drives both. Off by default → shipped look
+unchanged. Next: scale chip + clock/scrubber polish (5c). Slice 6 = lightning
+event list (blocked on the Phase 4 pipeline exporter).

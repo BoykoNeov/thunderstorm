@@ -57,4 +57,16 @@ describe("SlotPool", () => {
   it("rejects capacity < 2", () => {
     expect(() => new SlotPool(1)).toThrow();
   });
+
+  it("clear() forgets all residency and re-uses slots from scratch", () => {
+    const p = new SlotPool(2);
+    p.assign(5, NONE);
+    p.assign(6, NONE);
+    expect(p.resident().sort()).toEqual([5, 6]);
+    p.clear();
+    expect(p.resident()).toEqual([]);
+    expect(p.slotOf(5)).toBeNull();
+    // free slots are available again, filled from slot 0
+    expect(p.assign(9, NONE)).toBe(0);
+  });
 });

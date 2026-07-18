@@ -373,7 +373,8 @@ is always evidence.
    default 0.45: at 0.8 the wisp modulation punches dark blotches — don't.
 5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,
    clock/scrubber polish. Decomposed into: **5a cross-section (DONE 2026-07-18)**,
-   5b dBZ diagnostic layer, 5c scale chip + clock/scrubber polish.
+   **5b dBZ diagnostic layer (DONE 2026-07-18)**, 5c scale chip + clock/scrubber
+   polish.
    **5a:** a movable axis-aligned clip plane cuts away the camera-side half
    (auto-facing, so the cut turns toward the viewer as the camera orbits) and
    the exposed cut face is painted with the RAW decoded field — total
@@ -386,6 +387,28 @@ is always evidence.
    plane under the default `acc=1` ghosts old-vs-new positions or freezes on the
    converged still. The field is PROGNOSTIC (mixing ratio), labeled in g/kg with
    no "diagnostic" tag; that tag and a rainbow radar palette belong to 5b's dBZ.
+   **5b (dBZ radar diagnostic):** `?layer=dbz` (key `d`) swaps the storm to a
+   radar-reflectivity view. The shipped `.dbz.gz` plane (linear-uint8, separate
+   from the log-mapped hydrometeor channels — a `decodeLinearU8` + test was added
+   since `volume.ts` was log-only) streams into an R8 texture ring *parallel* to
+   the rgba bricks, filled in the SAME upload block and gated by `dbzActive`, so
+   the hydrometeor default fetches/decodes/uploads zero dbz bytes and the ring is
+   allocated lazily (bit-unchanged-when-off). A stream-generation counter orphans
+   in-flight rgba-only requests across a runtime toggle so a stale frame is never
+   uploaded without its dbz plane. The volume renders as a **max-intensity
+   projection** (peak dBZ along each VIEW ray — view-dependent; equals the
+   column-max *composite reflectivity* product only looking straight down)
+   composited in LDR after the tone map — like the 5a sheet — so its **rainbow**
+   NWS-style palette (green->yellow->red->magenta, generated from one stop table
+   shared GLSL/TS so shader and DOM legend cannot drift) equals the legend
+   exactly. Deliberately NOT viridis: recognizability against real radar products
+   is the teaching goal. Labeled DIAGNOSTIC in the HUD + legend (charter). A
+   single `uLayer`/`?layer=` state drives BOTH the volume march and the
+   cross-section cut-face source (dBZ cut face reuses the same palette + linear
+   decode), pairing the plan-view MIP silhouette with the vertical echo core.
+   Verified on the real GPU: frame 150 reads as a textbook Cb echo, frame 230
+   shows the magenta/white hail core to ground; hydro baseline + 5a cut both
+   unregressed.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.

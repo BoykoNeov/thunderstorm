@@ -27,6 +27,8 @@
 //    scrolling downward — the "gray sheets of distant rain" read. The streak
 //    particles (pass 2.5) stay; the veil is what distance actually looks like.
 
+import { dbzColorGLSL } from "./colormap";
+
 export const VERT = `#version 300 es
 void main() {
   float x = float((gl_VertexID << 1) & 2);
@@ -245,13 +247,31 @@ uniform vec4  uWeightsCld;    // uWeights with the rain plane zeroed
 uniform vec4  uRainVeil;      // one-hot rain plane × veil extinction weight (?veil=)
 // cross-section (slice 5a): a movable axis-aligned cut plane. uXsec = 0 off,
 // else 1/2/3 for the x/y/z axis; uXpos = plane position 0..1 in box space;
-// uXmax = field value mapped to the top of the colormap; uXsecMode reserved for
-// the dBZ diagnostic swap (5b). All zero ⇒ the shipped look is bit-unchanged.
+// uXmax = field value mapped to the top of the colormap (hydrometeor mode).
+// All zero ⇒ the shipped look is bit-unchanged.
 uniform float uXsec;
 uniform float uXpos;
 uniform float uXmax;
-uniform float uXsecMode;
+// data layer (slice 5b): 0 = hydrometeor (the shipped look), 1 = dBZ radar
+// diagnostic. Drives BOTH the volume march (emissive radar MIP vs the cloud
+// shading) and the cross-section cut-face source. dBZ reads its own plane
+// (uDbzA) with a linear decode and a rainbow palette.
+uniform float uLayer;
+uniform sampler3D uDbzA;      // dBZ diagnostic plane, nearest bound frame
+uniform float uDbzThr;        // dBZ threshold: code 0 = below = empty air
+uniform float uDbzMax;        // dBZ at code 255 (linear map top)
 ${VOL_COMMON}
+${dbzColorGLSL()}
+
+// dBZ at p (box space), linear-decoded from the R8 plane. Code 0 → 0 (empty,
+// NOT the palette floor). Nearest bound frame — dBZ steps are 12 s apart and
+// the radar read tolerates it (slice-2 sun-march precedent).
+float dbzAt(vec3 p) {
+  vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
+  float v = texture(uDbzA, uvw).r * 255.0;
+  if (v < 0.5) return 0.0;
+  return uDbzThr + (uDbzMax - uDbzThr) * ((v - 1.0) / 254.0);
+}
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
 const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
 // NOTE: these are pre-tonemap linear values — ACES + gamma lifts them a lot,
@@ -383,9 +403,9 @@ float hash12(vec2 p) {
 // -- cross-section field + colormap (slice 5a) ---------------------------------
 // The sliced field is the RAW decoded data — NO erosion/veil noise, no phase
 // shading: a cross-section must report what the simulation holds, not the
-// beautified render. uXsecMode selects the source→scalar map; today only mode 0
-// (total hydrometeor mixing ratio, g/kg) exists — the dBZ diagnostic (5b) adds
-// a mode that reads its own texture, so this stays a pluggable data swap.
+// beautified render. Hydrometeor mode returns total condensate in g/kg; the
+// dBZ layer (5b) reads its own plane instead (handled at the sheet paint below,
+// which switches palette + units with uLayer).
 float xsecField(vec3 p) {
   vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
   vec4 q = qDecode(texture(uVolA, uvw) * 255.0);
@@ -457,9 +477,27 @@ void main() {
     }
   }
 
+  // dBZ radar diagnostic (slice 5b): a max-intensity projection through the box
+  // — the peak reflectivity along each VIEW RAY (view-dependent; it equals the
+  // classic column-max "composite reflectivity" product only looking straight
+  // down). No sun/scatter/haze: radar echo is emissive, not lit. Composited in
+  // LDR after the tone map (below) so its colour equals the DOM legend exactly,
+  // like the 5a cut-face sheet.
+  float dbzPeak = 0.0;
+  if (uLayer > 0.5 && t1 > t0) {
+    float N = uSteps;
+    float dt = (t1 - t0) / N;
+    float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
+    for (int i = 0; i < 512; i++) {
+      if (float(i) >= N || t >= t1) break;
+      dbzPeak = max(dbzPeak, dbzAt(ro + rd * t));
+      t += dt;
+    }
+  }
+
   vec3 acc = vec3(0.0);
   float T = 1.0;
-  if (t1 > t0) {
+  if (uLayer < 0.5 && t1 > t0) {
     float N = uSteps;
     float dt = (t1 - t0) / N;
     // per-pixel jitter, offset per accumulation pass so the grain averages out
@@ -572,15 +610,34 @@ void main() {
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
   col += (hash12(gl_FragCoord.xy + 0.5) - 0.5) / 255.0;
 
+  // dBZ radar volume (slice 5b): composite the max-intensity projection over the
+  // (cloudless) staging in LDR so its rainbow equals the DOM legend exactly.
+  // Empty columns (dbzPeak==0) stay clear; weak echo edges fade in near the
+  // threshold, strong cores read near-solid. Diagnostic, labeled in the HUD.
+  if (uLayer > 0.5 && dbzPeak > uDbzThr) {
+    float a = smoothstep(uDbzThr, uDbzThr + 8.0, dbzPeak) * 0.92;
+    col = mix(col, dbzColor(dbzPeak), a);
+  }
+
   // cross-section sheet: paint the false-color field on the cut face, in LDR so
-  // the on-screen color equals viridis(t) exactly (matches the DOM legend).
-  // Alpha rises with field magnitude — empty air stays clear so the exposed
-  // interior shows through, strong echo reads as a near-solid slab.
+  // the on-screen color equals the DOM legend exactly. Alpha rises with field
+  // magnitude — empty air stays clear so the exposed interior shows through,
+  // strong echo reads as a near-solid slab. Palette + units switch with uLayer:
+  // viridis/(g/kg) for hydrometeors, the radar rainbow/(dBZ) for the dBZ layer.
   if (tSheet > 0.0) {
-    float f = xsecField(ro + rd * tSheet);
-    float tn = clamp(f / max(uXmax, 1e-3), 0.0, 1.0);
-    float a = pow(tn, 0.6);   // lift thin echo without hiding the empty-air gaps
-    col = mix(col, viridis(tn), a);
+    vec3 pS = ro + rd * tSheet;
+    if (uLayer > 0.5) {
+      float dbz = dbzAt(pS);
+      if (dbz > uDbzThr) {
+        float a = smoothstep(uDbzThr, uDbzThr + 8.0, dbz) * 0.95;
+        col = mix(col, dbzColor(dbz), a);
+      }
+    } else {
+      float f = xsecField(pS);
+      float tn = clamp(f / max(uXmax, 1e-3), 0.0, 1.0);
+      float a = pow(tn, 0.6);   // lift thin echo without hiding the empty-air gaps
+      col = mix(col, viridis(tn), a);
+    }
   }
   fragColor = vec4(col, 1.0);
 }

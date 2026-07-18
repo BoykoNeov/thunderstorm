@@ -40,3 +40,75 @@ export function cssGradientStops(steps = 8): string {
   }
   return parts.join(", ");
 }
+
+// -- dBZ radar reflectivity palette (slice 5b) --------------------------------
+// Deliberately a RAINBOW map, not perceptually-uniform viridis: recognizability
+// against real NWS/NEXRAD radar products IS the teaching goal (the green →
+// yellow → red → magenta signature is what a viewer already reads as "a storm on
+// radar"). The stops below anchor the recognizable ramp; the GLSL `dbzColor()`
+// in shaders.ts interpolates the SAME table so on-screen colour == this legend.
+// Units are dBZ; the domain runs from the manifest threshold to vmax.
+const DBZ_STOPS: { dbz: number; rgb: [number, number, number] }[] = [
+  { dbz: 5, rgb: [0.0, 0.93, 0.93] }, // cyan — lightest detectable echo
+  { dbz: 15, rgb: [0.0, 0.0, 0.96] }, // blue
+  { dbz: 20, rgb: [0.0, 0.9, 0.0] }, // green — light rain
+  { dbz: 35, rgb: [1.0, 1.0, 0.0] }, // yellow — moderate
+  { dbz: 45, rgb: [1.0, 0.55, 0.0] }, // orange
+  { dbz: 50, rgb: [0.95, 0.0, 0.0] }, // red — heavy core
+  { dbz: 60, rgb: [0.7, 0.0, 0.0] }, // dark red
+  { dbz: 65, rgb: [1.0, 0.0, 1.0] }, // magenta — hail-sized echo
+  { dbz: 72, rgb: [1.0, 1.0, 1.0] }, // white — extreme
+];
+
+/** dbzColor(dBZ) → [r,g,b] each in [0,1]. Piecewise-linear over DBZ_STOPS;
+ *  clamps below the first / above the last stop. Matches the GLSL mirror. */
+export function dbzColor(dbz: number): [number, number, number] {
+  if (dbz <= DBZ_STOPS[0].dbz) return DBZ_STOPS[0].rgb;
+  const last = DBZ_STOPS[DBZ_STOPS.length - 1];
+  if (dbz >= last.dbz) return last.rgb;
+  for (let i = 1; i < DBZ_STOPS.length; i++) {
+    const b = DBZ_STOPS[i];
+    if (dbz <= b.dbz) {
+      const a = DBZ_STOPS[i - 1];
+      const f = (dbz - a.dbz) / (b.dbz - a.dbz);
+      return [
+        a.rgb[0] + f * (b.rgb[0] - a.rgb[0]),
+        a.rgb[1] + f * (b.rgb[1] - a.rgb[1]),
+        a.rgb[2] + f * (b.rgb[2] - a.rgb[2]),
+      ];
+    }
+  }
+  return last.rgb;
+}
+
+/** GLSL source for the dbzColor ramp — literally the DBZ_STOPS table unrolled
+ *  as a running (prev colour, prev dBZ) chain, so the shader and this module's
+ *  piecewise-linear interpolation cannot drift. Emitted into shaders.ts. */
+export function dbzColorGLSL(): string {
+  const c = (rgb: [number, number, number]) => `vec3(${rgb.map((v) => v.toFixed(4)).join(", ")})`;
+  const body: string[] = [];
+  DBZ_STOPS.forEach((s, i) => {
+    if (i === 0) {
+      body.push(`  if (d <= ${s.dbz.toFixed(1)}) return ${c(s.rgb)};`);
+      body.push(`  vec3 prev = ${c(s.rgb)}; float pd = ${s.dbz.toFixed(1)};`);
+    } else {
+      const gap = (s.dbz - DBZ_STOPS[i - 1].dbz).toFixed(1);
+      body.push(`  if (d <= ${s.dbz.toFixed(1)}) return mix(prev, ${c(s.rgb)}, (d - pd) / ${gap});`);
+      body.push(`  prev = ${c(s.rgb)}; pd = ${s.dbz.toFixed(1)};`);
+    }
+  });
+  body.push(`  return prev;`);
+  return `vec3 dbzColor(float d) {\n${body.join("\n")}\n}`;
+}
+
+/** A CSS gradient stop list for the dBZ legend bar, sampled over [lo, hi] dBZ. */
+export function dbzCssGradientStops(lo: number, hi: number, steps = 16): string {
+  const parts: string[] = [];
+  for (let i = 0; i < steps; i++) {
+    const f = i / (steps - 1);
+    const [r, g, b] = dbzColor(lo + f * (hi - lo));
+    const to255 = (v: number) => Math.round(v * 255);
+    parts.push(`rgb(${to255(r)},${to255(g)},${to255(b)}) ${Math.round(f * 100)}%`);
+  }
+  return parts.join(", ");
+}

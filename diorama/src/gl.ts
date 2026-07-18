@@ -63,6 +63,40 @@ export function createShadowCacheTexture(
   return tex;
 }
 
+/** R8 3D dBZ diagnostic plane at full grid resolution (slice 5b). Trilinear +
+ *  clamp, like the volume brick — one per ring slot, streamed only when the dBZ
+ *  layer is active (allocated lazily so the hydrometeor default pays nothing). */
+export function createDbzTexture(
+  gl: WebGL2RenderingContext,
+  nx: number,
+  ny: number,
+  nz: number,
+): WebGLTexture {
+  const tex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8, nx, ny, nz);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  return tex;
+}
+
+/** Upload one decoded R8 dBZ brick into its ring-slot texture. */
+export function uploadDbz(
+  gl: WebGL2RenderingContext,
+  tex: WebGLTexture,
+  nx: number,
+  ny: number,
+  nz: number,
+  data: Uint8Array,
+): void {
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, gl.RED, gl.UNSIGNED_BYTE, data);
+}
+
 /** Small tileable RG8 3D value-noise texture (REPEAT, trilinear) — detail
  *  erosion + rain-veil modulation in the volume march (noise3d.ts bakes it). */
 export function createNoiseTexture(

@@ -27,7 +27,7 @@ export interface WebManifest {
   web_format_version: string;
   grid: { nx: number; ny: number; nz: number; voxel_m: number; origin_m: [number, number, number] };
   volume: { layout: string; channels: ChannelSpec[] };
-  dbz: { encoding: string; threshold: number; vmax: number; diagnostic: boolean };
+  dbz: DbzSpec;
   frames: FrameRecord[];
 }
 
@@ -79,5 +79,34 @@ export function decodeLogU8(v: number, threshold: number, qmax: number): number 
 export function encodeLogU8(q: number, threshold: number, qmax: number): number {
   if (qmax <= threshold || q <= threshold) return 0;
   const t = Math.log(q / threshold) / Math.log(qmax / threshold);
+  return Math.min(255, Math.max(1, Math.round(1 + 254 * t)));
+}
+
+// -- dBZ diagnostic plane (slice 5b) ------------------------------------------
+// dBZ is a SEPARATE manifest field (not in `volume.channels`) with a LINEAR
+// uint8 map — it is already a log-scale quantity, so a second log would crush
+// its dynamic range. Contract lives in pipeline/cm1post/webvol.py
+// (encode_linear_u8): code 0 = below threshold (transparent), codes 1..255 span
+// (threshold, vmax] linearly. The GLSL mirrors decodeLinearU8 in the march.
+
+export interface DbzSpec {
+  encoding: string;
+  threshold: number;
+  vmax: number;
+  units: string;
+  diagnostic: boolean;
+}
+
+/** CPU reference decode of one dBZ code (mirrors the GLSL; unit-tested). */
+export function decodeLinearU8(v: number, threshold: number, vmax: number): number {
+  if (v <= 0) return 0; // below threshold -> empty (NOT the palette floor)
+  if (vmax <= threshold) return 0;
+  return threshold + (vmax - threshold) * ((v - 1) / 254);
+}
+
+/** CPU reference encode (ports webvol.encode_linear_u8; used only by tests). */
+export function encodeLinearU8(q: number, threshold: number, vmax: number): number {
+  if (vmax <= threshold || q <= threshold) return 0;
+  const t = (q - threshold) / (vmax - threshold);
   return Math.min(255, Math.max(1, Math.round(1 + 254 * t)));
 }

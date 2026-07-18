@@ -3,7 +3,7 @@ import { ACC_CAP, jitterSeq, nextCount, sameView, type ViewKey } from "../src/ac
 
 const key = (over: Partial<ViewKey> = {}): ViewKey => ({
   az: 1, el: 2, dist: 3, fovY: 4, targetZ: 5, fa: 6, fb: 7, mix: 0.5,
-  xsec: 0, xpos: 0.5, ...over,
+  xsec: 0, xpos: 0.5, layer: 0, ...over,
 });
 
 describe("nextCount", () => {
@@ -51,7 +51,7 @@ describe("sameView", () => {
   });
 
   it("is false when any single field differs", () => {
-    const fields: (keyof ViewKey)[] = ["az", "el", "dist", "fovY", "targetZ", "fa", "fb", "mix", "xsec", "xpos"];
+    const fields: (keyof ViewKey)[] = ["az", "el", "dist", "fovY", "targetZ", "fa", "fb", "mix", "xsec", "xpos", "layer"];
     for (const f of fields) {
       expect(sameView(key(), key({ [f]: 999 }))).toBe(false);
     }

@@ -28,6 +28,9 @@ export interface ViewKey {
   // skips the march entirely and freezes on the old cut).
   xsec: number;
   xpos: number;
+  // data layer (slice 5b): toggling hydrometeor↔dBZ repaints the whole frame
+  // while the camera holds still, so it must reset accumulation too.
+  layer: number;
 }
 
 export const ACC_CAP = 64; // converged after this many averaged frames
@@ -37,7 +40,7 @@ export function sameView(a: ViewKey | null, b: ViewKey): boolean {
   return (
     a.az === b.az && a.el === b.el && a.dist === b.dist && a.fovY === b.fovY &&
     a.targetZ === b.targetZ && a.fa === b.fa && a.fb === b.fb && a.mix === b.mix &&
-    a.xsec === b.xsec && a.xpos === b.xpos
+    a.xsec === b.xsec && a.xpos === b.xpos && a.layer === b.layer
   );
 }
 

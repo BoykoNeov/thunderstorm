@@ -66,4 +66,17 @@ export class SlotPool {
   resident(): number[] {
     return [...this.frameSlot.keys()];
   }
+
+  /**
+   * Forget every residency (the textures themselves are untouched, but no frame
+   * is considered loaded). Used when a layer switch (slice 5b dBZ) needs the
+   * sequence to re-stream so the parallel dbz plane arrives alongside each rgba
+   * brick — a brief re-buffer on a diagnostic-layer toggle is acceptable.
+   */
+  clear(): void {
+    this.slotFrame.fill(null);
+    this.frameSlot.clear();
+    this.stamp.fill(0);
+    this.tick = 0;
+  }
 }

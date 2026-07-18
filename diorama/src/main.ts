@@ -10,11 +10,12 @@
 
 import { ACC_CAP, jitterSeq, nextCount, sameView, type ViewKey } from "./accum";
 import { basis, clampOrbit, direction, type OrbitState } from "./camera";
-import { cssGradientStops } from "./colormap";
+import { cssGradientStops, dbzCssGradientStops } from "./colormap";
 import { BrickDecoder } from "./decoder";
 import {
   compileProgram,
   createColorTarget,
+  createDbzTexture,
   createGBuffer,
   createInstancedVAO,
   createMeshVAO,
@@ -23,6 +24,7 @@ import {
   createVolumeTexture,
   drawFullscreen,
   getGL,
+  uploadDbz,
   uploadVolume,
   type ColorTarget,
   type GBuffer,
@@ -163,6 +165,14 @@ let xsecAxis = axisFromParam(params.get("xsec"));
 let xsecPos = Math.min(1, Math.max(0, numParam("xpos", 0.5)));
 const xsecMax = Math.max(0.1, numParam("xmax", 10)); // g/kg at the colormap top
 
+// data layer (slice 5b): ?layer=dbz swaps the storm to a dBZ radar-reflectivity
+// diagnostic — an emissive max-intensity projection (peak dBZ along the view
+// ray) with a rainbow palette, plus the cut-face sheet reading dBZ. Off by default
+// (?layer=hydro, the shipped hydrometeor look): when hydro NO dbz plane is
+// fetched/decoded/uploaded and the march is bit-unchanged. `d` toggles at
+// runtime. Labeled diagnostic in the HUD + legend (charter: diagnostics labeled).
+let layer: "hydro" | "dbz" = params.get("layer") === "dbz" ? "dbz" : "hydro";
+
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
 // frame above the platter — elevation must stay below ~fov/2 to see it at all.
@@ -197,6 +207,8 @@ async function start() {
   const man: WebManifest = await loadManifest("/data/web_manifest.json");
   const { nx, ny, nz } = man.grid;
   const frameBytes = nx * ny * nz * 4;
+  const dbzBytes = nx * ny * nz; // R8, one byte/voxel (slice 5b)
+  let dbzActive = layer === "dbz"; // gates all dbz fetch/decode/upload
   const times = man.frames.map((f) => f.time_s);
   const nFrames = man.frames.length;
   const tEnd = times[nFrames - 1];
@@ -241,19 +253,62 @@ async function start() {
   // one sun-transmittance cache per ring slot, baked when the slot is filled
   const shadowTex: WebGLTexture[] = [];
   for (let i = 0; i < RING_CAPACITY; i++) shadowTex.push(createShadowCacheTexture(gl, cacheX, cacheY, cacheZ));
+  // dBZ plane ring (slice 5b): parallel to `textures`, one R8 volume per slot,
+  // filled in the SAME upload block as its rgba brick so the bound pair always
+  // has dbz resident. Allocated lazily on first dBZ activation — the hydrometeor
+  // default pays zero bytes for it (bit-unchanged-when-off discipline).
+  let dbzTex: WebGLTexture[] | null = null;
+  function ensureDbzTex() {
+    if (dbzTex) return;
+    dbzTex = [];
+    for (let i = 0; i < RING_CAPACITY; i++) dbzTex.push(createDbzTexture(gl, nx, ny, nz));
+  }
+  if (dbzActive) ensureDbzTex();
   const bakeFBO = gl.createFramebuffer()!;
   const decoder = new BrickDecoder();
   const inflight = new Set<number>();
-  const ready = new Map<number, Uint8Array>(); // decoded, awaiting upload
+  // a decoded frame: the rgba brick always, the dbz plane only when dbzActive
+  const ready = new Map<number, { rgba: Uint8Array; dbz: Uint8Array | null }>();
   let lastGood: { fa: number; fb: number; mix: number } | null = null;
+  // stream generation: bumped on a layer toggle so in-flight requests from the
+  // previous layer (which may lack the dbz plane) are discarded on arrival
+  // rather than uploaded as a stale rgba-only frame.
+  let streamGen = 0;
 
   function requestFrame(f: number) {
+    const gen = streamGen;
     inflight.add(f);
-    decoder
-      .request(`/data/${man.frames[f].rgba}`, frameBytes)
-      .then((data) => ready.set(f, data))
+    const rgbaP = decoder.request(`/data/${man.frames[f].rgba}`, frameBytes);
+    const dbzP = dbzActive
+      ? decoder.request(`/data/${man.frames[f].dbz}`, dbzBytes)
+      : Promise.resolve<Uint8Array | null>(null);
+    Promise.all([rgbaP, dbzP])
+      .then(([rgba, dbz]) => {
+        if (gen === streamGen) ready.set(f, { rgba, dbz });
+      })
       .catch((e: unknown) => console.error(`frame ${f}:`, e))
-      .finally(() => inflight.delete(f));
+      .finally(() => {
+        if (gen === streamGen) inflight.delete(f);
+      });
+  }
+
+  // Layer switch: reset streaming so the sequence re-streams under the new layer
+  // (dbz mode adds the dbz plane to each brick). A brief re-buffer on a
+  // diagnostic-layer toggle is acceptable (advisor). bumping streamGen orphans
+  // the old requests; clearing the pool forgets residency so wanted frames
+  // re-fetch. dbz textures are allocated on demand the first time we go dbz.
+  function switchLayer(next: "hydro" | "dbz") {
+    if (next === layer) return;
+    layer = next;
+    dbzActive = layer === "dbz";
+    if (dbzActive) ensureDbzTex();
+    streamGen++;
+    inflight.clear();
+    ready.clear();
+    pool.clear();
+    lastGood = null;
+    buffering = true;
+    updateLayerUI();
   }
 
   // ---- controls -------------------------------------------------------------
@@ -304,6 +359,8 @@ async function start() {
     if (e.key === ",") { xsecPos = Math.max(0, xsecPos - 0.02); updateXsecUI(); }
     if (e.key === ".") { xsecPos = Math.min(1, xsecPos + 0.02); updateXsecUI(); }
     if (e.key === "\\") { xsecAxis = (xsecAxis + 1) % 4; updateXsecUI(); }
+    // toggle the dBZ radar diagnostic layer (slice 5b)
+    if (e.key === "d" || e.key === "D") switchLayer(layer === "dbz" ? "hydro" : "dbz");
   });
 
   // orbit: drag + wheel
@@ -326,28 +383,54 @@ async function start() {
     orbit = clampOrbit({ ...orbit, distance: orbit.distance * Math.exp(e.deltaY * 0.001) });
   }, { passive: false });
 
-  hud.textContent =
-    `drag orbit · wheel zoom · space play/pause · [ ] frame step · \\ cross-section\n` +
-    `this storm is 52 km wide, 18 km tall` +
-    (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
-    `land, towns & forests are decorative staging, not simulation data` +
-    (precipOn ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "");
-
-  // ---- cross-section legend (slice 5a) --------------------------------------
+  // ---- data-layer legend + HUD (slice 5a cross-section, 5b dBZ) -------------
   // A DOM legend (undistorted under ?sx, unlike anything drawn in the volume):
-  // the viridis ramp painted from the SAME polynomial the shader uses, honest
-  // units, and the live cut axis/position. Shown only while a cut is active.
+  // the ramp is painted from the SAME curve the shader uses, with honest units.
+  // Shown for the dBZ layer always (the whole volume is the diagnostic) and, in
+  // hydrometeor mode, only while a cross-section cut is active (5a behaviour).
   const xlegend = document.getElementById("xlegend") as HTMLDivElement;
+  const xlTitle = document.getElementById("xlTitle") as HTMLDivElement;
   const xlBar = document.getElementById("xlBar") as HTMLDivElement;
+  const xlMin = document.getElementById("xlMin") as HTMLSpanElement;
   const xlMax = document.getElementById("xlMax") as HTMLSpanElement;
   const xlAxis = document.getElementById("xlAxis") as HTMLDivElement;
-  xlBar.style.background = `linear-gradient(to right, ${cssGradientStops(12)})`;
-  xlMax.textContent = `${xsecMax} g/kg`;
-  function updateXsecUI() {
-    xlegend.style.display = xsecAxis > 0 ? "block" : "none";
-    xlAxis.textContent = `cut plane: ${AXIS_NAME[xsecAxis]} · ${Math.round(xsecPos * 100)}%  ( , / . move )`;
+  const dbzThr = man.dbz.threshold;
+  const dbzMax = man.dbz.vmax;
+
+  function updateLayerUI() {
+    const isDbz = layer === "dbz";
+    // HUD: controls + honest scale + staging disclaimer + a diagnostic banner
+    // when the dBZ layer is active (charter: diagnostics are labeled).
+    hud.textContent =
+      `drag orbit · wheel zoom · space play/pause · [ ] frame step · \\ cross-section · d dBZ layer\n` +
+      `this storm is 52 km wide, 18 km tall` +
+      (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
+      `land, towns & forests are decorative staging, not simulation data` +
+      (precipOn && !isDbz ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "") +
+      (isDbz ? `\n⚠ DIAGNOSTIC: radar reflectivity (dBZ), computed from the simulated fields — max-intensity projection (peak dBZ along the line of sight)` : "");
+
+    // legend palette + units follow the layer
+    if (isDbz) {
+      xlTitle.textContent = "dBZ reflectivity (diagnostic)";
+      xlBar.style.background = `linear-gradient(to right, ${dbzCssGradientStops(dbzThr, dbzMax)})`;
+      xlMin.textContent = `${Math.round(dbzThr)} dBZ`;
+      xlMax.textContent = `${Math.round(dbzMax)} dBZ`;
+    } else {
+      xlTitle.textContent = "total hydrometeors";
+      xlBar.style.background = `linear-gradient(to right, ${cssGradientStops(12)})`;
+      xlMin.textContent = "0";
+      xlMax.textContent = `${xsecMax} g/kg`;
+    }
+    xlegend.style.display = isDbz || xsecAxis > 0 ? "block" : "none";
+    xlAxis.textContent =
+      xsecAxis > 0
+        ? `cut plane: ${AXIS_NAME[xsecAxis]} · ${Math.round(xsecPos * 100)}%  ( , / . move )`
+        : isDbz
+        ? "peak reflectivity along each view ray"
+        : "";
   }
-  updateXsecUI();
+  const updateXsecUI = updateLayerUI; // xsec key handlers refresh the same UI
+  updateLayerUI();
 
   // ---- render targets (recreated on resize) ----------------------------------
   // These MUST be declared before resize() runs — resize() writes accT/accN.
@@ -450,7 +533,11 @@ async function start() {
   gl.uniform1f(loc(progVol, "uHazeH"), rayh);
   gl.uniform1f(loc(progVol, "uTonemap"), tonemap);
   gl.uniform1f(loc(progVol, "uXmax"), xsecMax);
-  gl.uniform1f(loc(progVol, "uXsecMode"), 0); // hydrometeor total; 5b adds dBZ
+  // dBZ diagnostic layer (slice 5b): the plane on unit 8 + its linear-decode
+  // constants. uLayer is set per-frame (it toggles at runtime).
+  gl.uniform1i(loc(progVol, "uDbzA"), 8);
+  gl.uniform1f(loc(progVol, "uDbzThr"), man.dbz.threshold);
+  gl.uniform1f(loc(progVol, "uDbzMax"), man.dbz.vmax);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as
@@ -585,7 +672,11 @@ async function start() {
       const slot = pool.assign(f, keep);
       if (slot !== null) {
         const u0 = performance.now();
-        uploadVolume(gl, textures[slot], nx, ny, nz, data);
+        uploadVolume(gl, textures[slot], nx, ny, nz, data.rgba);
+        // dbz plane into the SAME slot, so the bound pair always has dbz
+        // resident when the layer is active (streamGen guarantees data.dbz is
+        // present here whenever dbzActive — stale rgba-only frames were orphaned)
+        if (dbzActive && data.dbz && dbzTex) uploadDbz(gl, dbzTex[slot], nx, ny, nz, data.dbz);
         if (lightCache) bakeShadow(slot); // fill the slot's cache in the same rAF
         if (collectStats && stats.uploadMs.length < 2000) stats.uploadMs.push(performance.now() - u0);
         ready.delete(f);
@@ -634,7 +725,7 @@ async function start() {
       az: orbit.azimuth, el: orbit.elevation, dist: orbit.distance,
       fovY: orbit.fovY, targetZ: orbit.target.z,
       fa: bind?.fa ?? -1, fb: bind?.fb ?? -1, mix: bind?.mix ?? -1,
-      xsec: xsecAxis, xpos: xsecPos,
+      xsec: xsecAxis, xpos: xsecPos, layer: layer === "dbz" ? 1 : 0,
     };
     const same = accEnabled && !dragging && !scrubbing && sameView(prevKey, key);
     prevKey = key;
@@ -687,6 +778,7 @@ async function start() {
         gl.uniform1f(loc(progVol, "uMix"), bind.mix);
         gl.uniform1f(loc(progVol, "uXsec"), xsecAxis);
         gl.uniform1f(loc(progVol, "uXpos"), xsecPos);
+        gl.uniform1f(loc(progVol, "uLayer"), layer === "dbz" ? 1 : 0);
         gl.uniform1f(loc(progVol, "uTime"), tAnim);
         // fresh jitter per accumulation pass while holding still; 0 during motion
         // and with ?acc=0 ⇒ bit-for-bit today's image.
@@ -708,12 +800,18 @@ async function start() {
         gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fa)!]);
         gl.activeTexture(gl.TEXTURE7);
         gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fb)!]);
+        // dBZ plane (unit 8): nearest bound frame (fa). Its slot is guaranteed
+        // filled — in dbz mode every resident brick was uploaded with its dbz.
+        if (dbzActive && dbzTex) {
+          gl.activeTexture(gl.TEXTURE8);
+          gl.bindTexture(gl.TEXTURE_3D, dbzTex[pool.slotOf(bind.fa)!]);
+        }
         drawFullscreen(gl);
 
         // -- pass 2.5: precipitation particles (same target, before tilt-shift so
         //    the DOF treats rain like everything else; volume + depth textures are
         //    still bound on units 0/1/4) ---------------------------------------
-        if (precipOn) {
+        if (precipOn && layer !== "dbz") {
           gl.enable(gl.BLEND);
           gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
           gl.useProgram(progPrecip);
