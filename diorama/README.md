@@ -54,6 +54,18 @@ noise strength: domain warp + edge wisps, 0 = raw voxel look), `?veil=0.12`
 The presentation-only beauty knobs (light cache, multi-scatter, silver lining,
 sunlit haze, accumulation, FXAA, tonemap, split-tone) have their own table.
 
+### Cross-section (slice 5a — education layer)
+
+A movable false-color cut plane through the storm's interior. **Off by default**
+(an inspection tool, not part of the shipped look). `?xsec=x|y|z` (or `1|2|3`)
+picks the cut axis, `?xpos=0..1` the plane position, `?xmax=10` the total-
+hydrometeor value (g/kg) mapped to the top of the colormap. At runtime, `\`
+cycles the axis (off→x→y→z) and `,` / `.` slide the plane. The camera-side half
+is clipped away so you see *into* the storm, and the exposed cut face is painted
+with the **raw** decoded field — no erosion/veil beautification — on a
+perceptually-uniform viridis map, with a DOM legend (honest g/kg units; the
+field is prognostic, not a diagnostic). The dBZ radar layer is a later step (5b).
+
 ### Beauty knobs (2026-07-18 beauty pass, steps 0–6)
 
 Every visual-beauty effect is presentation-only (never physics) and each is
@@ -107,4 +119,8 @@ a darker gray curtain modulated by vertically-stretched sheets scrolling down
 on wall time. Rain streaks became many/fine/faint (60k × α 0.35) so they fuse
 into that curtain at distance but stay individual lines up close. Costs ~16 %
 on the worst frame (85→71 fps full-res; `?er=0&veil=0` reclaims it).
-Next: layers/cross-sections (5), lightning event list (6).
+Slice 5a (cross-section) done (2026-07-18): a movable clip plane + false-color
+cut-face sheet of the raw hydrometeor field, with a DOM legend (see the
+Cross-section section above). Off by default, so the shipped look is unchanged.
+Next in slice 5: dBZ diagnostic layer (5b, streams the shipped .dbz.gz channel),
+then scale chip + clock/scrubber polish (5c). Slice 6 = lightning event list.

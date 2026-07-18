@@ -10,6 +10,7 @@
 
 import { ACC_CAP, jitterSeq, nextCount, sameView, type ViewKey } from "./accum";
 import { basis, clampOrbit, direction, type OrbitState } from "./camera";
+import { cssGradientStops } from "./colormap";
 import { BrickDecoder } from "./decoder";
 import {
   compileProgram,
@@ -146,6 +147,21 @@ const tonemap = (params.get("tm") ?? "agx") === "agx" ? 1 : 0;
 // warm/cool split-tone in the grade pass (beauty 6): highlights warm, shadows
 // cool — the warm/cool tension of storm-light photography. ?split=0 disables.
 const split = Math.max(0, numParam("split", 1));
+// cross-section (slice 5a): a movable false-color cut plane through the storm's
+// interior. OFF by default (an inspection tool, not a beauty default → shipped
+// look unchanged): ?xsec=x|y|z (or 1|2|3) picks the axis, ?xpos=0..1 the plane
+// position, ?xmax= the g/kg mapped to the top of the colormap. Keys ,/. nudge
+// the plane and \ cycles the axis at runtime. The sliced field is the RAW data
+// (no erosion/veil), so it reports the simulation honestly, not the beauty pass.
+const AXIS_NAME = ["off", "east–west (x)", "north–south (y)", "vertical (z)"];
+const axisFromParam = (s: string | null): number => {
+  if (s === null) return 0;
+  const m: Record<string, number> = { x: 1, y: 2, z: 3, "1": 1, "2": 2, "3": 3, "0": 0 };
+  return m[s.toLowerCase()] ?? 0;
+};
+let xsecAxis = axisFromParam(params.get("xsec"));
+let xsecPos = Math.min(1, Math.max(0, numParam("xpos", 0.5)));
+const xsecMax = Math.max(0.1, numParam("xmax", 10)); // g/kg at the colormap top
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -284,6 +300,10 @@ async function start() {
     }
     if (e.key === "[") stepFrame(-1);
     if (e.key === "]") stepFrame(+1);
+    // cross-section: , / . slide the cut plane, \ cycles the axis (off→x→y→z)
+    if (e.key === ",") { xsecPos = Math.max(0, xsecPos - 0.02); updateXsecUI(); }
+    if (e.key === ".") { xsecPos = Math.min(1, xsecPos + 0.02); updateXsecUI(); }
+    if (e.key === "\\") { xsecAxis = (xsecAxis + 1) % 4; updateXsecUI(); }
   });
 
   // orbit: drag + wheel
@@ -307,11 +327,27 @@ async function start() {
   }, { passive: false });
 
   hud.textContent =
-    `drag orbit · wheel zoom · space play/pause · [ ] frame step\n` +
+    `drag orbit · wheel zoom · space play/pause · [ ] frame step · \\ cross-section\n` +
     `this storm is 52 km wide, 18 km tall` +
     (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
     `land, towns & forests are decorative staging, not simulation data` +
     (precipOn ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "");
+
+  // ---- cross-section legend (slice 5a) --------------------------------------
+  // A DOM legend (undistorted under ?sx, unlike anything drawn in the volume):
+  // the viridis ramp painted from the SAME polynomial the shader uses, honest
+  // units, and the live cut axis/position. Shown only while a cut is active.
+  const xlegend = document.getElementById("xlegend") as HTMLDivElement;
+  const xlBar = document.getElementById("xlBar") as HTMLDivElement;
+  const xlMax = document.getElementById("xlMax") as HTMLSpanElement;
+  const xlAxis = document.getElementById("xlAxis") as HTMLDivElement;
+  xlBar.style.background = `linear-gradient(to right, ${cssGradientStops(12)})`;
+  xlMax.textContent = `${xsecMax} g/kg`;
+  function updateXsecUI() {
+    xlegend.style.display = xsecAxis > 0 ? "block" : "none";
+    xlAxis.textContent = `cut plane: ${AXIS_NAME[xsecAxis]} · ${Math.round(xsecPos * 100)}%  ( , / . move )`;
+  }
+  updateXsecUI();
 
   // ---- render targets (recreated on resize) ----------------------------------
   // These MUST be declared before resize() runs — resize() writes accT/accN.
@@ -413,6 +449,8 @@ async function start() {
   gl.uniform1f(loc(progVol, "uRays"), rays);
   gl.uniform1f(loc(progVol, "uHazeH"), rayh);
   gl.uniform1f(loc(progVol, "uTonemap"), tonemap);
+  gl.uniform1f(loc(progVol, "uXmax"), xsecMax);
+  gl.uniform1f(loc(progVol, "uXsecMode"), 0); // hydrometeor total; 5b adds dBZ
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as
@@ -596,6 +634,7 @@ async function start() {
       az: orbit.azimuth, el: orbit.elevation, dist: orbit.distance,
       fovY: orbit.fovY, targetZ: orbit.target.z,
       fa: bind?.fa ?? -1, fb: bind?.fb ?? -1, mix: bind?.mix ?? -1,
+      xsec: xsecAxis, xpos: xsecPos,
     };
     const same = accEnabled && !dragging && !scrubbing && sameView(prevKey, key);
     prevKey = key;
@@ -646,6 +685,8 @@ async function start() {
         gl.uniform3f(loc(progVol, "uCamFwd"), cam.forward.x, cam.forward.y, cam.forward.z);
         gl.uniform1f(loc(progVol, "uFovTan"), Math.tan(orbit.fovY / 2));
         gl.uniform1f(loc(progVol, "uMix"), bind.mix);
+        gl.uniform1f(loc(progVol, "uXsec"), xsecAxis);
+        gl.uniform1f(loc(progVol, "uXpos"), xsecPos);
         gl.uniform1f(loc(progVol, "uTime"), tAnim);
         // fresh jitter per accumulation pass while holding still; 0 during motion
         // and with ?acc=0 ⇒ bit-for-bit today's image.

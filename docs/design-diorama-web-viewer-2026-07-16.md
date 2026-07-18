@@ -372,7 +372,20 @@ is always evidence.
    ?er= / ?veil= expose strength (0 = off, reclaiming the cost). Erosion
    default 0.45: at 0.8 the wisp modulation punches dark blotches — don't.
 5. **Layers + education** — dBZ mode, cross-section slice planes, scale chip,
-   clock/scrubber polish.
+   clock/scrubber polish. Decomposed into: **5a cross-section (DONE 2026-07-18)**,
+   5b dBZ diagnostic layer, 5c scale chip + clock/scrubber polish.
+   **5a:** a movable axis-aligned clip plane cuts away the camera-side half
+   (auto-facing, so the cut turns toward the viewer as the camera orbits) and
+   the exposed cut face is painted with the RAW decoded field — total
+   hydrometeors, g/kg — on a perceptually-uniform viridis map, composited in LDR
+   so the on-screen color equals the DOM legend exactly. Off by default
+   (`?xsec=x|y|z`, `?xpos=`, `?xmax=`; keys `\` cycle axis, `,`/`.` slide),
+   so the shipped look is bit-unchanged. Clip + sheet are ~one shader block in
+   the composite FRAG (the resident volume needs no new streaming). Load-bearing
+   fix: the accumulation `ViewKey` gained `xsec`/`xpos` — without it, moving the
+   plane under the default `acc=1` ghosts old-vs-new positions or freezes on the
+   converged still. The field is PROGNOSTIC (mixing ratio), labeled in g/kg with
+   no "diagnostic" tag; that tag and a rainbow radar palette belong to 5b's dBZ.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.

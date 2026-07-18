@@ -243,6 +243,14 @@ uniform float uCoreNorm;      // sigma → "coreness"; scales with sx so the sam
                               // cloud erodes identically at any display scale
 uniform vec4  uWeightsCld;    // uWeights with the rain plane zeroed
 uniform vec4  uRainVeil;      // one-hot rain plane × veil extinction weight (?veil=)
+// cross-section (slice 5a): a movable axis-aligned cut plane. uXsec = 0 off,
+// else 1/2/3 for the x/y/z axis; uXpos = plane position 0..1 in box space;
+// uXmax = field value mapped to the top of the colormap; uXsecMode reserved for
+// the dBZ diagnostic swap (5b). All zero ⇒ the shipped look is bit-unchanged.
+uniform float uXsec;
+uniform float uXpos;
+uniform float uXmax;
+uniform float uXsecMode;
 ${VOL_COMMON}
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
 const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
@@ -372,6 +380,34 @@ float hash12(vec2 p) {
   return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+// -- cross-section field + colormap (slice 5a) ---------------------------------
+// The sliced field is the RAW decoded data — NO erosion/veil noise, no phase
+// shading: a cross-section must report what the simulation holds, not the
+// beautified render. uXsecMode selects the source→scalar map; today only mode 0
+// (total hydrometeor mixing ratio, g/kg) exists — the dBZ diagnostic (5b) adds
+// a mode that reads its own texture, so this stays a pluggable data swap.
+float xsecField(vec3 p) {
+  vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
+  vec4 q = qDecode(texture(uVolA, uvw) * 255.0);
+  if (uMix > 0.0001) q = mix(q, qDecode(texture(uVolB, uvw) * 255.0), uMix);
+  return (q.x + q.y + q.z + q.w) * 1000.0; // total condensate, g/kg
+}
+
+// viridis — perceptually uniform (Smith/van der Walt), Matt Zucker's polynomial
+// fit; the SAME coefficients back the DOM legend in colormap.ts. Uniformity is
+// deliberate: a rainbow map would paint bands the data does not contain.
+vec3 viridis(float t) {
+  t = clamp(t, 0.0, 1.0);
+  const vec3 c0 = vec3(0.2777273272234177, 0.005407344544966578, 0.3340998053353061);
+  const vec3 c1 = vec3(0.1050930431085774, 1.404613529898575, 1.384590162594685);
+  const vec3 c2 = vec3(-0.3308618287255563, 0.214847559468213, 0.09509516302823659);
+  const vec3 c3 = vec3(-4.634230498983486, -5.799100973351585, -19.33244095627987);
+  const vec3 c4 = vec3(6.228269936347081, 14.17993336680509, 56.69055260068105);
+  const vec3 c5 = vec3(4.776384997670288, -13.74514537774601, -65.35303263337234);
+  const vec3 c6 = vec3(-5.435455855934631, 4.645852612178535, 26.3124352495832);
+  return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
+}
+
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   vec2 ndc = uv * 2.0 - 1.0;
@@ -397,6 +433,29 @@ void main() {
   vec2 tb = rayBox(ro, rd, uBoxMin, uBoxMax);
   float t0 = max(tb.x, 0.0);
   float t1 = min(tb.y, tSurf);
+
+  // cross-section clip plane (slice 5a): cut away the camera-side half so the
+  // storm's interior is exposed; the cut face itself is painted below in LDR.
+  float t0o = t0, t1o = t1;   // storm span BEFORE clipping (for the sheet test)
+  float tSheet = -1.0;
+  if (uXsec > 0.5) {
+    int a = int(uXsec + 0.5) - 1;             // 0=x 1=y 2=z
+    float planeW = mix(uBoxMin[a], uBoxMax[a], uXpos);
+    float roA = ro[a], rdA = rd[a];
+    // keep the half on the FAR side of the plane from the camera (auto-facing:
+    // the cut always turns toward the viewer as the camera orbits)
+    float side = roA > planeW ? -1.0 : 1.0;   // keep side*(p[a]-planeW) >= 0
+    if (abs(rdA) < 1e-6) {
+      if (side * (roA - planeW) < 0.0) t1 = t0 - 1.0; // whole ray on the cut side
+    } else {
+      float tPlane = (planeW - roA) / rdA;
+      if (side * rdA > 0.0) t0 = max(t0, tPlane);      // kept beyond the plane
+      else                  t1 = min(t1, tPlane);      // kept before the plane
+      // draw the sheet only where the plane truly cuts the storm and is not
+      // hidden behind the staging surface
+      if (tPlane > t0o && tPlane < t1o && tPlane < tSurf) tSheet = tPlane;
+    }
+  }
 
   vec3 acc = vec3(0.0);
   float T = 1.0;
@@ -512,6 +571,17 @@ void main() {
   }
   col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
   col += (hash12(gl_FragCoord.xy + 0.5) - 0.5) / 255.0;
+
+  // cross-section sheet: paint the false-color field on the cut face, in LDR so
+  // the on-screen color equals viridis(t) exactly (matches the DOM legend).
+  // Alpha rises with field magnitude — empty air stays clear so the exposed
+  // interior shows through, strong echo reads as a near-solid slab.
+  if (tSheet > 0.0) {
+    float f = xsecField(ro + rd * tSheet);
+    float tn = clamp(f / max(uXmax, 1e-3), 0.0, 1.0);
+    float a = pow(tn, 0.6);   // lift thin echo without hiding the empty-air gaps
+    col = mix(col, viridis(tn), a);
+  }
   fragColor = vec4(col, 1.0);
 }
 `;

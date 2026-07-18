@@ -22,6 +22,12 @@ export interface ViewKey {
   fa: number;
   fb: number;
   mix: number;
+  // cross-section state (slice 5a): moving the clip plane changes the image
+  // while the camera holds still, so it MUST reset accumulation — otherwise the
+  // running average ghosts old vs. new plane positions (or, once converged,
+  // skips the march entirely and freezes on the old cut).
+  xsec: number;
+  xpos: number;
 }
 
 export const ACC_CAP = 64; // converged after this many averaged frames
@@ -30,7 +36,8 @@ export function sameView(a: ViewKey | null, b: ViewKey): boolean {
   if (a === null) return false;
   return (
     a.az === b.az && a.el === b.el && a.dist === b.dist && a.fovY === b.fovY &&
-    a.targetZ === b.targetZ && a.fa === b.fa && a.fb === b.fb && a.mix === b.mix
+    a.targetZ === b.targetZ && a.fa === b.fa && a.fb === b.fb && a.mix === b.mix &&
+    a.xsec === b.xsec && a.xpos === b.xpos
   );
 }
 
