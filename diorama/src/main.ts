@@ -17,6 +17,7 @@ import {
   createInstancedVAO,
   createMeshVAO,
   createNoiseTexture,
+  createShadowCacheTexture,
   createVolumeTexture,
   drawFullscreen,
   getGL,
@@ -32,7 +33,7 @@ import { buildPrecipInstances, HAIL, RAIN, type PrecipSpec } from "./precip";
 import { SlotPool } from "./ring";
 import { volumeBox } from "./scene";
 import { decodeConstants, loadManifest, type WebManifest } from "./volume";
-import { FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, PRECIP_FRAG, PRECIP_VERT, VERT } from "./shaders";
+import { BAKE_FRAG, FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, PRECIP_FRAG, PRECIP_VERT, VERT } from "./shaders";
 
 // Extinction weights per species — the numbers proven in the UE material
 // (docs/phase1-svt-custom-material-2026-07-16.md), so both axes read alike.
@@ -89,6 +90,8 @@ const numParam = (name: string, def: number) => {
 const erosion = Math.min(1, Math.max(0, numParam("er", 0.45)));
 // rain-veil extinction weight (?veil=0 disables the veil entirely)
 const veilW = Math.max(0, numParam("veil", 0.12));
+// sun-transmittance light cache (?lc=0: live per-sample sun march — the A/B ref)
+const lightCache = params.get("lc") !== "0";
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -111,6 +114,7 @@ async function start() {
   const progVol = compileProgram(gl, VERT, FRAG);
   const progPost = compileProgram(gl, VERT, POST_FRAG);
   const progPrecip = compileProgram(gl, PRECIP_VERT, PRECIP_FRAG);
+  const progBake = compileProgram(gl, VERT, BAKE_FRAG);
   const loc = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
 
   const man: WebManifest = await loadManifest("/data/web_manifest.json");
@@ -121,6 +125,13 @@ async function start() {
   const tEnd = times[nFrames - 1];
   const box = volumeBox(man, stormScale);
   const dec = decodeConstants(man.volume.channels);
+
+  // Sun-transmittance cache resolution: half the volume grid on each axis.
+  // 24 × 104×104×36 × 1 B ≈ 9.3 MB total — negligible next to the ~300 MB ring.
+  const CACHE_DIV = 2;
+  const cacheX = Math.ceil(nx / CACHE_DIV);
+  const cacheY = Math.ceil(ny / CACHE_DIV);
+  const cacheZ = Math.ceil(nz / CACHE_DIV);
 
   // ---- staging (decorative, never sim terrain — design doc §5.2) ------------
   const staging = createMeshVAO(gl, buildStaging(stagingSeed).data);
@@ -150,6 +161,10 @@ async function start() {
   const pool = new SlotPool(RING_CAPACITY);
   const textures: WebGLTexture[] = [];
   for (let i = 0; i < RING_CAPACITY; i++) textures.push(createVolumeTexture(gl, nx, ny, nz));
+  // one sun-transmittance cache per ring slot, baked when the slot is filled
+  const shadowTex: WebGLTexture[] = [];
+  for (let i = 0; i < RING_CAPACITY; i++) shadowTex.push(createShadowCacheTexture(gl, cacheX, cacheY, cacheZ));
+  const bakeFBO = gl.createFramebuffer()!;
   const decoder = new BrickDecoder();
   const inflight = new Set<number>();
   const ready = new Map<number, Uint8Array>(); // decoded, awaiting upload
@@ -294,6 +309,9 @@ async function start() {
   gl.uniform1f(loc(progVol, "uExposure"), 0.75);
   gl.uniform1f(loc(progVol, "uShadowKm"), 15 * stormScale);
   gl.uniform1i(loc(progVol, "uNoise"), 5);
+  gl.uniform1i(loc(progVol, "uShadowA"), 6);
+  gl.uniform1i(loc(progVol, "uShadowB"), 7);
+  gl.uniform1f(loc(progVol, "uUseCache"), lightCache ? 1 : 0);
   gl.uniform3f(loc(progVol, "uSizeStorm"), sizeStorm.x, sizeStorm.y, sizeStorm.z);
   gl.uniform1f(loc(progVol, "uErosion"), erosion);
   // sigC is per DISPLAY km (÷sx), so "coreness" renormalizes by sx: the same
@@ -316,6 +334,11 @@ async function start() {
   gl.uniform4f(loc(progPrecip, "uWeights"), wShadow[0], wShadow[1], wShadow[2], wShadow[3]);
   gl.uniform1f(loc(progPrecip, "uExtScale"), EXT_SCALE / stormScale);
   gl.uniform1f(loc(progPrecip, "uShadowKm"), 15 * stormScale);
+  // Same three cache bindings as progVol — an unset sampler defaults to unit 0
+  // and would read the volume brick as a shadow cache.
+  gl.uniform1i(loc(progPrecip, "uShadowA"), 6);
+  gl.uniform1i(loc(progPrecip, "uShadowB"), 7);
+  gl.uniform1f(loc(progPrecip, "uUseCache"), lightCache ? 1 : 0);
   gl.uniform2f(loc(progPrecip, "uTilt"), 0.1, 0.04); // slight wind-shear lean
   gl.uniform1f(loc(progPrecip, "uGateZ"), 2.5 / nz); // ~625 m: the near-surface layers
   gl.uniform1f(loc(progPrecip, "uMaxR"), GROUND_HALF - 1); // rain stays on the diorama slab
@@ -337,6 +360,41 @@ async function start() {
     gl.bindVertexArray(vao);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
     gl.bindVertexArray(null);
+  }
+
+  // ---- sun-transmittance bake (pass 0) --------------------------------------
+  // Static uniforms: the bake MUST see exactly what the shadow march sees today
+  // — wShadow weights, the scale-corrected extinction, the same uShadowKm cap —
+  // so cache shadows match the live march (uMix defaults to 0: sigmaShadowAt
+  // reads only uVolA, the brick on unit 0).
+  gl.useProgram(progBake);
+  gl.uniform3f(loc(progBake, "uSunDir"), SUN.x, SUN.y, SUN.z);
+  gl.uniform3f(loc(progBake, "uBoxMin"), box.min.x, box.min.y, box.min.z);
+  gl.uniform3f(loc(progBake, "uBoxMax"), box.max.x, box.max.y, box.max.z);
+  gl.uniform1i(loc(progBake, "uVolA"), 0);
+  gl.uniform1i(loc(progBake, "uVolB"), 0); // unused (uMix=0), pointed somewhere valid
+  gl.uniform4fv(loc(progBake, "uThr"), thr);
+  gl.uniform4fv(loc(progBake, "uK"), k);
+  gl.uniform4f(loc(progBake, "uWeights"), wShadow[0], wShadow[1], wShadow[2], wShadow[3]);
+  gl.uniform1f(loc(progBake, "uExtScale"), EXT_SCALE / stormScale);
+  gl.uniform1f(loc(progBake, "uShadowKm"), 15 * stormScale);
+  gl.uniform2f(loc(progBake, "uCacheXY"), cacheX, cacheY);
+
+  // Bake one ring slot's sun-transmittance cache: a fullscreen draw per z-slice
+  // (framebufferTextureLayer selects the layer). Called from the upload block,
+  // so the cache is filled in the same rAF as the brick, before any bind.
+  function bakeShadow(slot: number) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, bakeFBO);
+    gl.viewport(0, 0, cacheX, cacheY);
+    gl.useProgram(progBake);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_3D, textures[slot]);
+    for (let z = 0; z < cacheZ; z++) {
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, shadowTex[slot], 0, z);
+      gl.uniform1f(loc(progBake, "uSliceZ"), (z + 0.5) / cacheZ);
+      drawFullscreen(gl);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
   // ---- pacing stats (?stats — read by the headless verification driver) -----
@@ -383,6 +441,7 @@ async function start() {
       if (slot !== null) {
         const u0 = performance.now();
         uploadVolume(gl, textures[slot], nx, ny, nz, data);
+        if (lightCache) bakeShadow(slot); // fill the slot's cache in the same rAF
         if (collectStats && stats.uploadMs.length < 2000) stats.uploadMs.push(performance.now() - u0);
         ready.delete(f);
         stats.uploads++;
@@ -461,6 +520,13 @@ async function start() {
       gl.bindTexture(gl.TEXTURE_2D, gbuf.normal);
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, gbuf.depth);
+      // sun-transmittance caches for the bound pair (units 6/7); the slots were
+      // baked in the same rAF they were filled, so no stale cache is possible.
+      // Left bound for the precip pass, which reads them too.
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fa)!]);
+      gl.activeTexture(gl.TEXTURE7);
+      gl.bindTexture(gl.TEXTURE_3D, shadowTex[pool.slotOf(bind.fb)!]);
       drawFullscreen(gl);
 
       // -- pass 2.5: precipitation particles (same target, before tilt-shift so

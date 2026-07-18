@@ -166,6 +166,43 @@ float tauDir(vec3 p, vec3 dir, float maxKm, int steps) {
   }
   return tau;
 }
+
+uniform sampler3D uShadowA;   // baked sun transmittance, frame i0 (unit 6)
+uniform sampler3D uShadowB;   // frame i1 (unit 7)
+uniform float uUseCache;      // ?lc=0 falls back to the live march
+
+// Sun transmittance at p — one fetch from the baked cache, nearest frame
+// (exactly the sigmaShadowAt policy: crossfading shadows is imperceptible).
+// Points OUTSIDE the box advance to the sun ray's box entry: the cache voxel
+// there already integrates the remaining path to the sun. Rays that miss the
+// box are unshadowed.
+float sunTrans(vec3 p) {
+  if (uUseCache < 0.5) return exp(-sunTau(p));
+  vec2 tb = rayBox(p, uSunDir, uBoxMin, uBoxMax);
+  if (tb.y <= max(tb.x, 0.0)) return 1.0;
+  vec3 q = p + uSunDir * max(tb.x, 0.0);
+  vec3 uvw = clamp((q - uBoxMin) / (uBoxMax - uBoxMin), 0.0, 1.0);
+  return uMix < 0.5 ? texture(uShadowA, uvw).r : texture(uShadowB, uvw).r;
+}
+`;
+
+// -- pass 0 (upload-time): sun-transmittance bake ------------------------------
+// One fullscreen draw per z-slice of the cache; framebufferTextureLayer selects
+// the slice. Runs once per brick upload — never per rendered frame. Reuses
+// VOL_COMMON; uMix defaults to 0 so sunTau's sigmaShadowAt reads only uVolA
+// (the brick being baked).
+export const BAKE_FRAG = `#version 300 es
+precision highp float;
+precision highp sampler3D;
+out vec4 fragColor;
+uniform vec2  uCacheXY;  // cache slice resolution, texels
+uniform float uSliceZ;   // normalized z of this slice's texel centers
+${VOL_COMMON}
+void main() {
+  vec3 uvw = vec3(gl_FragCoord.xy / uCacheXY, uSliceZ);
+  vec3 p = mix(uBoxMin, uBoxMax, uvw);
+  fragColor = vec4(exp(-sunTau(p)), 0.0, 0.0, 1.0);
+}
 `;
 
 // -- pass 2: volume raymarch + surface shading + background --------------------
@@ -303,7 +340,7 @@ vec3 shadeSurface(vec2 uv, vec3 p, vec3 rd) {
   vec3 n = normalize(texture(uNormalTex, uv).xyz * 2.0 - 1.0);
   // the storm's shadow sweeping the toy landscape — the miniature illusion's
   // highest-value effect (design doc §5.2)
-  float shadow = exp(-sunTau(p));
+  float shadow = sunTrans(p);
   if (galb.a > 0.5) {
     // water: rippled normal, fresnel reflection of the backdrop, sun glint;
     // ripples fade with camera distance so they never moiré at long range
@@ -370,7 +407,7 @@ void main() {
       vec2 s2 = sigma2At(p);
       float sig = s2.x + s2.y;
       if (sig > 1e-4) {
-        float shadow = exp(-sunTau(p));
+        float shadow = sunTrans(p);
         float hfrac = clamp((p.z - uBoxMin.z) / (uBoxMax.z - uBoxMin.z), 0.0, 1.0);
         vec3 amb = mix(AMB_LOW, AMB_HIGH, hfrac) * (0.25 + 0.45 * hfrac);
         float powder = 1.0 - 0.7 * exp(-s2.x * 1.2);
@@ -528,7 +565,7 @@ void main() {
   // base; measured at the head, a streak emerging from the base gets the
   // inside-the-cloud optical depth and the whole curtain vanishes.
   vec3 pLow = head + axis * (0.7 * uLen);
-  float light = mix(0.35, 1.0, exp(-tauDir(pLow, uSunDir, uShadowKm, 10)));
+  float light = mix(0.35, 1.0, sunTrans(pLow));
   float tView = exp(-tauDir(pLow, toCam, 3.0 * uShadowKm, 12));
 
   vUV = vec2(cx, corner.y);

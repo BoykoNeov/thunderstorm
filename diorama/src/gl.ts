@@ -45,6 +45,24 @@ export function createVolumeTexture(
   return tex;
 }
 
+/** R8 3D sun-transmittance cache (linear, clamp). One per ring slot. */
+export function createShadowCacheTexture(
+  gl: WebGL2RenderingContext,
+  sx: number,
+  sy: number,
+  sz: number,
+): WebGLTexture {
+  const tex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8, sx, sy, sz);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  return tex;
+}
+
 /** Small tileable RG8 3D value-noise texture (REPEAT, trilinear) — detail
  *  erosion + rain-veil modulation in the volume march (noise3d.ts bakes it). */
 export function createNoiseTexture(
