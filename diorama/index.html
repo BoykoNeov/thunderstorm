@@ -37,7 +37,13 @@
         border: none; border-radius: 5px; background: rgba(43, 58, 61, 0.12);
         padding: 4px 6px; cursor: pointer;
       }
-      #scrub { width: min(46vw, 520px); accent-color: #46707c; }
+      #fpsWrap { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+      #bar input[type="number"] {
+        font: 12px system-ui, sans-serif; color: #2b3a3d; width: 3.2em;
+        border: none; border-radius: 5px; background: rgba(43, 58, 61, 0.12);
+        padding: 4px 4px 4px 6px;
+      }
+      #scrub { width: min(40vw, 460px); accent-color: #46707c; }
       #clock { min-width: 11em; text-align: left; font-variant-numeric: tabular-nums; }
       #err {
         position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
@@ -59,6 +65,9 @@
         <option value="120">120×</option>
         <option value="300">300×</option>
       </select>
+      <label id="fpsWrap" title="frame-rate cap — limits rendered fps to save GPU/power (max 240)">
+        <input id="fps" type="number" min="15" max="240" step="5" value="60" />fps
+      </label>
       <input id="scrub" type="range" min="0" max="3600" step="1" value="0" />
       <span id="clock"></span>
     </div>

@@ -67,6 +67,7 @@ const errBox = document.getElementById("err") as HTMLDivElement;
 const bar = document.getElementById("bar") as HTMLDivElement;
 const playBtn = document.getElementById("play") as HTMLButtonElement;
 const speedSel = document.getElementById("speed") as HTMLSelectElement;
+const fpsInput = document.getElementById("fps") as HTMLInputElement;
 const scrub = document.getElementById("scrub") as HTMLInputElement;
 const clockEl = document.getElementById("clock") as HTMLSpanElement;
 
@@ -197,6 +198,18 @@ async function start() {
 
   playBtn.addEventListener("click", () => setPlaying(!playing));
   speedSel.addEventListener("change", () => (speed = Number(speedSel.value)));
+
+  // frame-rate cap (default 60, max 240): rAF still fires at display refresh,
+  // but we render only once the target interval has elapsed. This throttles the
+  // whole loop (streaming pump included) — fine, since even the fastest 300×
+  // playback needs only ~25 uploads/s, well under the 60 fps default.
+  const clampFps = (v: number) => Math.min(240, Math.max(15, Math.round(v) || 60));
+  let fpsCap = clampFps(numParam("fps", 60));
+  fpsInput.value = String(fpsCap);
+  fpsInput.addEventListener("change", () => {
+    fpsCap = clampFps(Number(fpsInput.value));
+    fpsInput.value = String(fpsCap);
+  });
   let scrubbing = false;
   scrub.addEventListener("input", () => {
     scrubbing = true;
@@ -417,7 +430,18 @@ async function start() {
 
   // ---- frame loop -----------------------------------------------------------
   let lastNow = performance.now();
+  let lastRender = lastNow;
   function frame(now: number) {
+    requestAnimationFrame(frame); // schedule next heartbeat before any early-out
+
+    // frame-rate cap: skip this heartbeat if the target interval hasn't elapsed.
+    // The 1 ms slack absorbs rAF quantization so a 60 cap on a 60 Hz display
+    // holds 60 (not 30). lastNow (which drives dtWall) advances only on rendered
+    // frames, so playback speed stays correct regardless of the cap.
+    const minInterval = 1000 / fpsCap;
+    if (now - lastRender < minInterval - 1) return;
+    lastRender = now;
+
     const rawDtMs = now - lastNow;
     const dtWall = Math.min(rawDtMs / 1000, 0.1); // clamp tab-away gaps
     lastNow = now;
@@ -595,7 +619,6 @@ async function start() {
       stats.deltas.push(rawDtMs); // raw rAF spacing, ms
       if (stats.deltas.length > 4000) stats.deltas.shift();
     }
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 }
