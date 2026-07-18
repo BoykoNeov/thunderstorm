@@ -650,3 +650,48 @@ void main() {
   fragColor = vec4(vTint.rgb, a);
 }
 `;
+
+// -- pass 4: FXAA (Lottes console variant) -------------------------------------
+// The G-pass has no MSAA (getGL requests antialias:false, and the G-buffer is
+// NEAREST-sampled), so staging silhouettes (mountains, towns, forest cones)
+// alias. This runs LAST, after tilt-shift, on the final LDR image so it also
+// smooths precip streak edges. Luma-directed 4-tap edge blur with a local-
+// contrast gate: the composite's static 1/255 dither sits below the gate and is
+// untouched (no crawling worms), and clouds are low-frequency so the gate leaves
+// them alone — only geometric edges get smoothed.
+export const FXAA_FRAG = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform sampler2D uTex;
+uniform vec2 uRes;
+
+float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+void main() {
+  vec2 px = 1.0 / uRes;
+  vec2 uv = gl_FragCoord.xy * px;
+  vec3 cM = texture(uTex, uv).rgb;
+  float lM = luma(cM);
+  float lN = luma(texture(uTex, uv + vec2(0.0,  px.y)).rgb);
+  float lS = luma(texture(uTex, uv - vec2(0.0,  px.y)).rgb);
+  float lE = luma(texture(uTex, uv + vec2(px.x, 0.0)).rgb);
+  float lW = luma(texture(uTex, uv - vec2(px.x, 0.0)).rgb);
+  float lMin = min(lM, min(min(lN, lS), min(lE, lW)));
+  float lMax = max(lM, max(max(lN, lS), max(lE, lW)));
+  if (lMax - lMin < max(0.0312, lMax * 0.125)) { fragColor = vec4(cM, 1.0); return; }
+  float lNW = luma(texture(uTex, uv + vec2(-px.x,  px.y)).rgb);
+  float lNE = luma(texture(uTex, uv + vec2( px.x,  px.y)).rgb);
+  float lSW = luma(texture(uTex, uv + vec2(-px.x, -px.y)).rgb);
+  float lSE = luma(texture(uTex, uv + vec2( px.x, -px.y)).rgb);
+  vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+  float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
+  float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+  dir = clamp(dir * rcp, vec2(-8.0), vec2(8.0)) * px;
+  vec3 a = 0.5 * (texture(uTex, uv + dir * (1.0 / 3.0 - 0.5)).rgb
+                + texture(uTex, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
+  vec3 b = a * 0.5 + 0.25 * (texture(uTex, uv + dir * -0.5).rgb
+                           + texture(uTex, uv + dir *  0.5).rgb);
+  float lB = luma(b);
+  fragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
+}
+`;

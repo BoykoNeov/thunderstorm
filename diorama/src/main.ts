@@ -34,7 +34,7 @@ import { buildPrecipInstances, HAIL, RAIN, type PrecipSpec } from "./precip";
 import { SlotPool } from "./ring";
 import { volumeBox } from "./scene";
 import { decodeConstants, loadManifest, type WebManifest } from "./volume";
-import { BAKE_FRAG, FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, PRECIP_FRAG, PRECIP_VERT, VERT } from "./shaders";
+import { BAKE_FRAG, FRAG, FXAA_FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, PRECIP_FRAG, PRECIP_VERT, VERT } from "./shaders";
 
 // Extinction weights per species — the numbers proven in the UE material
 // (docs/phase1-svt-custom-material-2026-07-16.md), so both axes read alike.
@@ -77,6 +77,11 @@ const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
 const stagingSeed = Number(params.get("seed") ?? "1337") || 1337;
 const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
+// FXAA on the final LDR image (beauty step 5): de-jaggies the aliased staging
+// silhouettes (the G-buffer has no MSAA). ON by default; ?fxaa=0 disables. Runs
+// as the LAST pass, so it forces sceneT to exist even when tilt-shift/accum are
+// off (composite can no longer draw straight to screen — FXAA needs a texture).
+const fxaaOn = params.get("fxaa") !== "0";
 // idle temporal accumulation (beauty step 4): when the view AND the bound storm
 // frame hold still, average successive jittered renders into a float buffer for
 // a grain-free "beauty still". ON by default; ?acc=0 restores the always-live
@@ -161,7 +166,10 @@ async function start() {
   const progPost = compileProgram(gl, VERT, POST_FRAG);
   const progPrecip = compileProgram(gl, PRECIP_VERT, PRECIP_FRAG);
   const progBake = compileProgram(gl, VERT, BAKE_FRAG);
+  const progFxaa = compileProgram(gl, VERT, FXAA_FRAG);
   const loc = (p: WebGLProgram, n: string) => gl.getUniformLocation(p, n);
+  gl.useProgram(progFxaa);
+  gl.uniform1i(loc(progFxaa, "uTex"), 0); // always samples unit 0
 
   const man: WebManifest = await loadManifest("/data/web_manifest.json");
   const { nx, ny, nz } = man.grid;
@@ -317,9 +325,9 @@ async function start() {
     gbuf?.dispose();
     gbuf = createGBuffer(gl, canvas.width, canvas.height);
     // sceneT exists whenever we do NOT draw the composite straight to screen
-    // (tilt-shift and/or accumulation on); blurT only for tilt-shift; accT only
-    // for accumulation. All-off keeps the direct-to-screen fast path.
-    if (tiltShift || accEnabled) {
+    // (tilt-shift, accumulation, and/or FXAA on); blurT only for tilt-shift;
+    // accT only for accumulation. All-off keeps the direct-to-screen fast path.
+    if (tiltShift || accEnabled || fxaaOn) {
       sceneT?.dispose();
       sceneT = createColorTarget(gl, canvas.width, canvas.height);
     }
@@ -595,9 +603,11 @@ async function start() {
       const aspect = canvas.width / canvas.height;
       const viewProj = multiply(perspective(orbit.fovY, aspect, NEAR, FAR), view(cam));
 
-      // Composite straight to screen only when BOTH tilt-shift and accumulation
-      // are off (today's fast path); otherwise into sceneT for the post chain.
-      const directToScreen = !tiltShift && !accEnabled;
+      // Composite straight to screen only when tilt-shift, accumulation AND FXAA
+      // are all off (today's fast path); otherwise into sceneT for the post
+      // chain. FXAA must flip this to false on its own — miss it and the
+      // composite draws straight past FXAA, which then silently never runs.
+      const directToScreen = !tiltShift && !accEnabled && !fxaaOn;
       const compositeFbo = directToScreen ? null : sceneT!.fbo;
 
       // The heavy passes (staging, 280-step raymarch, precip, accumulate) are
@@ -698,9 +708,14 @@ async function start() {
       //    default framebuffer is never left undefined) -----------------------
       if (!directToScreen) {
         const postSrc = accEnabled && accT ? accT.tex : sceneT!.tex;
+        // FXAA (when on) is the final pass and owns the present-to-screen, so
+        // the tilt-shift/blit chain writes into sceneT instead of screen; FXAA
+        // reads it back out below. With FXAA off, that chain presents to screen
+        // exactly as before (preFxaaFbo === null).
+        const preFxaaFbo = fxaaOn ? sceneT!.fbo : null;
         gl.viewport(0, 0, canvas.width, canvas.height);
         if (tiltShift && sceneT && blurT) {
-          // tilt-shift H (postSrc → blurT), then V + grade (blurT → screen).
+          // tilt-shift H (postSrc → blurT), then V + grade (blurT → preFxaaFbo).
           // Keep the sharp band pinned to the platter: project the diorama
           // centre at ground level and focus there.
           const c = project(viewProj, { x: orbit.target.x, y: orbit.target.y, z: 0 });
@@ -722,13 +737,19 @@ async function start() {
           gl.bindTexture(gl.TEXTURE_2D, postSrc);
           drawFullscreen(gl);
 
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          // V + grade writes into sceneT (fxaa on) or screen (fxaa off). Legal
+          // even when preFxaaFbo === sceneT: this pass samples only blurT, and
+          // sceneT's composite content was already consumed by the H pass above.
+          gl.bindFramebuffer(gl.FRAMEBUFFER, preFxaaFbo);
           gl.uniform2f(loc(progPost, "uDir"), 0, 1);
           gl.uniform1f(loc(progPost, "uGrade"), 1);
           gl.bindTexture(gl.TEXTURE_2D, blurT.tex);
           drawFullscreen(gl);
-        } else {
-          // accumulation on, tilt-shift off: blit postSrc → screen (plain copy)
+        } else if (!fxaaOn) {
+          // accumulation on, tilt-shift & FXAA off: blit postSrc → screen. When
+          // FXAA is on with tilt-shift off we skip this blit and let FXAA read
+          // postSrc directly — a blit here would be an illegal sceneT→sceneT
+          // read-write when postSrc is sceneT (acc off).
           gl.bindFramebuffer(gl.FRAMEBUFFER, null);
           gl.useProgram(progPost);
           gl.uniform1i(loc(progPost, "uTex"), 0);
@@ -738,6 +759,20 @@ async function start() {
           gl.uniform2f(loc(progPost, "uDir"), 0, 0);
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, postSrc);
+          drawFullscreen(gl);
+        }
+
+        // -- pass 4: FXAA — the final present. Reads sceneT when tilt-shift ran
+        //    (V+grade wrote it there), else postSrc directly (sceneT or accT).
+        //    FXAA writes the screen, never its own source, so no feedback.
+        if (fxaaOn) {
+          const fxaaSrc = tiltShift ? sceneT!.tex : postSrc;
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.viewport(0, 0, canvas.width, canvas.height);
+          gl.useProgram(progFxaa);
+          gl.uniform2f(loc(progFxaa, "uRes"), canvas.width, canvas.height);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, fxaaSrc);
           drawFullscreen(gl);
         }
       }
