@@ -671,6 +671,8 @@ uniform float uQFull;      // kg/kg of full population
 uniform float uMaxR;       // spawn radius cap, km — rain stays on the diorama
 uniform vec3  uColor;
 uniform float uAlphaMax;
+uniform float uXsec;       // cross-section axis (slice 5a): 0 off, else 1/2/3
+uniform float uXpos;       // plane position 0..1 in box space
 ${VOL_COMMON}
 out vec2 vUV;              // x: -1..1 across the streak, y: 0..1 along it
 flat out vec4 vTint;       // rgb tint, a peak alpha
@@ -699,6 +701,21 @@ void main() {
   float speed = uFallSpeed * (0.85 + 0.3 * jit);
   float f = fract(uTimeWall * speed / uZTop + phase);
   vec3 head = vec3(xy, uZTop - f * uZTop);
+
+  // cross-section (slice 5a): a particle in the clipped-away camera-side half
+  // would otherwise draw in front of the cut face — cull it with the SAME
+  // auto-facing half-space the composite raymarch uses.
+  if (uXsec > 0.5) {
+    int xa = int(uXsec + 0.5) - 1;
+    float planeW = mix(uBoxMin[xa], uBoxMax[xa], uXpos);
+    float side = uCamPos[xa] > planeW ? -1.0 : 1.0;
+    if (side * (head[xa] - planeW) < 0.0) {
+      gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+      vUV = vec2(0.0);
+      vTint = vec4(0.0);
+      return;
+    }
+  }
 
   // ends-of-cycle fade (mirrors precip.ts cycleFade)
   float fade = smoothstep(0.0, 0.1, f) * (1.0 - smoothstep(0.85, 1.0, f));

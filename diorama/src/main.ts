@@ -721,6 +721,8 @@ async function start() {
           gl.uniform3f(loc(progPrecip, "uCamPos"), cam.pos.x, cam.pos.y, cam.pos.z);
           gl.uniform1f(loc(progPrecip, "uMix"), bind.mix);
           gl.uniform1f(loc(progPrecip, "uTimeWall"), tAnim);
+          gl.uniform1f(loc(progPrecip, "uXsec"), xsecAxis);
+          gl.uniform1f(loc(progPrecip, "uXpos"), xsecPos);
           gl.uniform2f(loc(progPrecip, "uRes"), canvas.width, canvas.height);
           drawPrecip(RAIN, rainVAO.vao, RAIN.count);
           drawPrecip(HAIL, hailVAO.vao, HAIL.count);
