@@ -495,8 +495,31 @@ Do not start a phase without explicit go from the owner.
   `require_measured_box` guard refuses export on a placeholder box but lets bbox/deck-gen
   through (no new-scenario deadlock). `test_scenario_t6.py` **11/11**, all suites green; the
   new package tracks **only manifest.json** in git (payload out of history, verified).
-  Remaining: T7 (diorama scenario selection), T8 (`w` layer panel), T9 (`cref` radar plan
-  view) — both packages now ship `w` + `cref` at web 1.2.
+  **T7 DONE — diorama scenario selection (docs/phase2-plan-2026-07-20.md §17).** The dev
+  server serves every `scenarios/<name>/web/` at `/data/<name>/` and lists packages at
+  `/scenarios.json` (enumerated per request — a fresh export appears without a restart);
+  the viewer picks one via a control-bar picker (shown only when ≥2 served) or
+  `?scenario=<name>`, default `single_cell_500m`. **A switch RELOADS the page, it does not
+  rebuild GL state** — the key call, and it turns on the fact that the viewer is ALREADY
+  grid-agnostic within a load (nx/ny/nz, `volumeBox`, decode constants, cache dims, the
+  24-slot ring all derive from the loaded `web_manifest.json`); the only things pinning it
+  to one package were the hard-coded `DATA_DIR` + single manifest URL, both startup values.
+  The two packages differ in GRID (208×208×72 @ 250 m vs 126×126×54 @ 333 m), so every GL
+  resource is sized to a grid captured in the `start()` closure; a reload re-derives all of
+  it cleanly (zero half-updated GL state) vs a large refactor of a 1000-line file to rebuild
+  in place for no user-visible gain. Reload PRESERVES every other URL param (`scenarioSwitchUrl`
+  sets only `scenario`), so the view/tuning survive. Beyond routing the data path through
+  `root = dataRoot(scenario)`, the viewer needed NO change to render a different grid. Pure
+  logic in `src/scenario.ts` (resolve precedence / switch-URL / label), `test/scenario.test.ts`
+  **11/11**, full suite **117/117**. **Real-GPU verified** (headless Chrome, HUD polled to a
+  streamed non-buffering frame — the standing no-`nullrhi` rule): both grids AND dbz-on-the-
+  switched-scenario render end to end; the 333 m cell reads visibly more compact (the finer-grid
+  signal). Security: scenario segment sanitized (`[A-Za-z0-9_.-]`, no `.`/`..`) + `startsWith`
+  guard; the encoded-traversal 200 is vite's own dev module serving on `next()`, NOT the handler
+  (body is the transformed module, not raw fs bytes) — universal vite-dev, dev-only. **No version
+  moves** (viewer + dev-server only; the web manifest already carries `grid`).
+  Remaining: T8 (`w` layer panel), T9 (`cref` radar plan view) — both packages ship `w` +
+  `cref` at web 1.2.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 

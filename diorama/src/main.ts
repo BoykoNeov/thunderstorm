@@ -44,6 +44,13 @@ import { advance, locate, wantedFrames } from "./playback";
 import { buildPrecipInstances, HAIL, RAIN, type PrecipSpec } from "./precip";
 import { niceScaleBar } from "./scalebar";
 import { SlotPool } from "./ring";
+import {
+  dataRoot,
+  resolveScenario,
+  scenarioLabel,
+  scenarioSwitchUrl,
+  type ScenarioSummary,
+} from "./scenario";
 import { volumeBox } from "./scene";
 import { decodeConstants, loadManifest, type WebManifest } from "./volume";
 import { BAKE_FRAG, FRAG, FXAA_FRAG, GEO_FRAG, GEO_VERT, POST_FRAG, PRECIP_FRAG, PRECIP_VERT, VERT } from "./shaders";
@@ -83,6 +90,7 @@ const speedSel = document.getElementById("speed") as HTMLSelectElement;
 const fpsInput = document.getElementById("fps") as HTMLInputElement;
 const scrub = document.getElementById("scrub") as HTMLInputElement;
 const clockEl = document.getElementById("clock") as HTMLSpanElement;
+const scenarioSel = document.getElementById("scenario") as HTMLSelectElement;
 const sbBox = document.getElementById("scalebar") as HTMLDivElement;
 const sbRule = document.getElementById("sbRule") as HTMLDivElement;
 const sbLabel = document.getElementById("sbLabel") as HTMLDivElement;
@@ -222,7 +230,38 @@ async function start() {
   gl.useProgram(progFxaa);
   gl.uniform1i(loc(progFxaa, "uTex"), 0); // always samples unit 0
 
-  const man: WebManifest = await loadManifest("/data/web_manifest.json");
+  // ---- scenario selection (T7) ----------------------------------------------
+  // Discover the served packages (best-effort — a production build without the
+  // dev middleware just gets an empty list and the default still loads), decide
+  // which to play, and populate the picker. A switch RELOADS the page with a new
+  // ?scenario= (see scenario.ts): the grid differs between packages, so every
+  // GL resource is re-derived from scratch rather than rebuilt in place.
+  let scenarios: ScenarioSummary[] = [];
+  try {
+    const r = await fetch("/scenarios.json");
+    if (r.ok) scenarios = (await r.json()) as ScenarioSummary[];
+  } catch {
+    // discovery is optional; resolveScenario falls back to the default below
+  }
+  const scenario = resolveScenario(params.get("scenario"), scenarios.map((s) => s.name));
+  const root = dataRoot(scenario);
+  // Show the picker only when there is a genuine choice (≥2 packages served).
+  if (scenarios.length > 1) {
+    scenarioSel.replaceChildren();
+    for (const s of scenarios) {
+      const o = document.createElement("option");
+      o.value = s.name;
+      o.textContent = scenarioLabel(s);
+      o.selected = s.name === scenario;
+      scenarioSel.appendChild(o);
+    }
+    scenarioSel.style.display = "";
+    scenarioSel.addEventListener("change", () => {
+      location.search = scenarioSwitchUrl(location.search, scenarioSel.value);
+    });
+  }
+
+  const man: WebManifest = await loadManifest(`${root}/web_manifest.json`);
   const { nx, ny, nz } = man.grid;
   const frameBytes = nx * ny * nz * 4;
   const dbzBytes = nx * ny * nz; // R8, one byte/voxel (slice 5b)
@@ -296,9 +335,9 @@ async function start() {
   function requestFrame(f: number) {
     const gen = streamGen;
     inflight.add(f);
-    const rgbaP = decoder.request(`/data/${man.frames[f].rgba}`, frameBytes);
+    const rgbaP = decoder.request(`${root}/${man.frames[f].rgba}`, frameBytes);
     const dbzP = dbzActive
-      ? decoder.request(`/data/${man.frames[f].dbz}`, dbzBytes)
+      ? decoder.request(`${root}/${man.frames[f].dbz}`, dbzBytes)
       : Promise.resolve<Uint8Array | null>(null);
     Promise.all([rgbaP, dbzP])
       .then(([rgba, dbz]) => {
@@ -1043,6 +1082,7 @@ start().catch((e: unknown) => {
   errBox.style.display = "block";
   errBox.textContent =
     `Storm Diorama failed to start:\n${e instanceof Error ? e.message : String(e)}\n\n` +
-    `Is the scenario web export present at scenarios/single_cell_500m/web/?\n` +
+    `Is a scenario web export present under scenarios/<name>/web/? The dev server\n` +
+    `lists packages at /scenarios.json and serves them at /data/<name>/.\n` +
     `(pipeline: export_scenario.py export-web — see docs/design-diorama-web-viewer-2026-07-16.md)`;
 });

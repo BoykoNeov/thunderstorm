@@ -487,6 +487,18 @@ is always evidence.
    before concluding anything about a black frame.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
 
+Slices 1–6 are the Phase-1 viewer. **Phase 2 adds three diorama tasks** (T7–T9,
+detailed in `docs/phase2-plan-2026-07-20.md`), which turn the viewer from a
+one-package player into a scenario system:
+- **T7 scenario selection — DONE 2026-07-20** (§17 of the phase-2 plan). The dev
+  server serves every `scenarios/<name>/web/` at `/data/<name>/` and lists them
+  at `/scenarios.json`; the viewer picks one via a picker or `?scenario=`.
+  Because packages differ in **grid** and every GL resource is sized to it, a
+  switch **reloads the page** rather than rebuilding GPU state in place — the
+  viewer is already grid-agnostic within a load, so a reload re-derives
+  everything cleanly. Verified on a real GPU across both grids.
+- **T8** updraft-`w` layer panel · **T9** `cref` radar plan view — pending.
+
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
 **Slices 1–3 complete (2026-07-16) — beauty gate PASSED (owner GO, 2026-07-17):**
 reviewed via six captures (frames 150/255, three orbits, plus ?sx=1 true-scale)

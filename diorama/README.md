@@ -26,15 +26,23 @@ npm test        # CPU mirrors: quantization decode, camera math, placement
 npm run build   # typecheck + production build
 ```
 
-Data is served from `../scenarios/single_cell_500m/web/` (see `vite.config.ts`),
-produced by:
+Data is served from `../scenarios/<name>/web/` (see `vite.config.ts`): every
+scenario package that carries a `web/web_manifest.json` is served at
+`/data/<name>/` and listed at `/scenarios.json`. A package is produced by:
 
 ```
-python3 pipeline/export_scenario.py export-web --run <cm1 run> --out <...>/web
+python3 pipeline/export_scenario.py export-web --scenario <name> --out <...>/web
 ```
 
 then copied out of WSL. The bricks are gzipped uint8 log-quantized volumes;
 `web_manifest.json` is the whole format contract (`pipeline/cm1post/webvol.py`).
+
+**Scenario selection (T7).** The viewer plays one package at a time; the picker
+(bottom-left of the control bar, shown only when ≥2 packages are served) or
+`?scenario=<name>` chooses it, defaulting to `single_cell_500m`. Packages differ
+in grid (`single_cell_500m` is 208×208×72 @ 250 m, `single_cell_333m` is
+126×126×54 @ 333 m), so a switch **reloads the page** (every GL resource is
+sized to the grid) — preserving all other URL params (`az`, `layer`, `sx`, …).
 
 ## Controls
 
