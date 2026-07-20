@@ -412,6 +412,13 @@ async function start() {
   canvas.addEventListener("pointercancel", endDrag);
   // without this the right-drag pops the browser context menu on release
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  // …and without this a middle-press can arm Chrome's autoscroll puck, which
+  // would hijack the altitude drag. Must be on the compat MOUSE event: calling
+  // preventDefault on pointerdown does not reliably suppress it. (The page has
+  // no scrollable region, so this may be belt-and-braces — it costs nothing.)
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
   canvas.addEventListener("pointermove", (e) => {
     if (!dragging) return;
     if (dragMode === "ground") {

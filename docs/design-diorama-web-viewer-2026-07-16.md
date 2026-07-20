@@ -472,6 +472,15 @@ is always evidence.
    screen height (camera altitude untouched) while the countryside slid toward
    the viewer; a middle-drag shifted the whole scene down-frame at unchanged
    apparent slab size. The two axes are cleanly separated.
+   **OWNER-OWED (live only, same class as 5a's and 5b's):** the pan gestures were
+   driven with *synthetic* `PointerEvent`s, which bypass native button handling —
+   so (i) confirm a real middle-drag does not arm Chrome's autoscroll puck (a
+   `mousedown` guard for button 1 is in place pre-emptively; `preventDefault` on
+   `pointerdown` would NOT have suppressed it), (ii) exercise the shift+left /
+   alt+left fallbacks, which no test touches, and (iii) judge the feel of both
+   pans and the scale bar in real interactive use. If "shift altitude" meant the
+   Shift key specifically rather than the verb, swapping the two modifiers is a
+   one-line change.
    Verification note: a Chrome tab that is not foregrounded halts `rAF`
    entirely, so the canvas captures black and the clock/scale-bar readout never
    runs. That is the harness, not the app — give the tab real foreground time
