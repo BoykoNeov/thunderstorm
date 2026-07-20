@@ -520,8 +520,10 @@ one-package player into a scenario system:
   `?el=` pinning a capture angle. Labeled DIAGNOSTIC and view-independent in HUD +
   legend + panel ("Composite reflectivity" vs "Radar (dBZ)"). Feature-detected on
   `plan_fields.cref`; viewer-only, no version move. Real-GPU verified on both grids
-  (echo aligned with the dBZ MIP → orientation correct; per-package vmax 72/78 read
-  correctly).
+  (per-package vmax 72/78 read correctly). Orientation is earned from the shared
+  x-fastest write convention (`resample_dbz_2d` `reshape(ny,nx)` matches the dbz
+  brick's `reshape(nz,ny,nx)`), not the symmetric-cell capture which can't see a
+  transpose; the independent orientation test waits on the Phase 3 asymmetric asset.
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
 **Slices 1–3 complete (2026-07-16) — beauty gate PASSED (owner GO, 2026-07-17):**

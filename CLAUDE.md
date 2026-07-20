@@ -538,9 +538,13 @@ Do not start a phase without explicit go from the owner.
   painted cref as viridis hydrometeors) — fixed with `< 2.5` bounds + `else if (uLayer < 0.5)`;
   hydro untouched by construction. Feature-detected on `plan_fields.cref`; panel names it
   "Composite reflectivity" vs "Radar (dBZ)"; DIAGNOSTIC + view-independence in HUD/legend.
-  Viewer-only, no version move. **Real-GPU verified both grids** (echo aligns with the dbz MIP
-  → orientation correct; per-package vmax 72/78 read correctly; cref core fuller than the MIP
-  per §15.3's max-then-interp). 128/128 tests, build clean.
+  Viewer-only, no version move. **Real-GPU verified both grids** (per-package vmax 72/78 read
+  correctly; cref core fuller than the MIP per §15.3's max-then-interp). Orientation is earned
+  from the WRITE CONVENTION not the capture (advisor): the symmetric centered cell makes an
+  x↔y transpose pixel-identical, so what rules it out is `regrid.resample_dbz_2d`'s
+  `reshape(ny,nx)` (x-fastest) matching the dbz/rgba bricks' `reshape(nz,ny,nx)` x-fastest
+  order; the independent orientation TEST waits on the Phase 3 asymmetric asset (§2.1).
+  128/128 tests, build clean.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 
