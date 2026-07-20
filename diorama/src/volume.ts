@@ -21,6 +21,21 @@ export interface FrameRecord {
   dbz: string;
   rgba_bytes: number;
   dbz_bytes: number;
+  w?: string; // present only when the package ships the updraft field (T8)
+  w_bytes?: number;
+}
+
+// Updraft `w` extra field (T8). SIGNED (blue↔red), so a distinct encoding from
+// the log-uint8 hydrometeors and the linear dBZ: signed-linear-uint8, byte 128
+// EXACTLY 0. `scale` is FIXED across scenarios (not fitted per sequence) — the
+// colour domain is driven by it, never a per-sequence max. Feature-detected:
+// `extra_fields.w` is absent in a pre-T8 package. Contract: cm1post/webvol.py.
+export interface WSpec {
+  file_suffix: string;
+  encoding: string;
+  units: string;
+  diagnostic: boolean;
+  scale: number;
 }
 
 export interface WebManifest {
@@ -28,6 +43,7 @@ export interface WebManifest {
   grid: { nx: number; ny: number; nz: number; voxel_m: number; origin_m: [number, number, number] };
   volume: { layout: string; channels: ChannelSpec[] };
   dbz: DbzSpec;
+  extra_fields?: { w?: WSpec };
   frames: FrameRecord[];
 }
 
@@ -109,4 +125,13 @@ export function encodeLinearU8(q: number, threshold: number, vmax: number): numb
   if (vmax <= threshold || q <= threshold) return 0;
   const t = (q - threshold) / (vmax - threshold);
   return Math.min(255, Math.max(1, Math.round(1 + 254 * t)));
+}
+
+// -- signed vertical velocity w (T8) ------------------------------------------
+// w is SIGNED, so a symmetric map about code 128: value = (byte-128)/127*scale.
+// Byte 128 is EXACTLY 0 (the updraft/downdraft boundary is exact, not rounded);
+// codes 1..255 span [-scale, +scale]. Mirrors the GLSL wAt() and the encoder
+// (webvol.encode_signed_u8). `scale` is the FIXED manifest scale.
+export function decodeSignedU8(v: number, scale: number): number {
+  return ((v - 128) / 127) * scale;
 }

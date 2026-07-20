@@ -27,7 +27,7 @@
 //    scrolling downward — the "gray sheets of distant rain" read. The streak
 //    particles (pass 2.5) stay; the veil is what distance actually looks like.
 
-import { dbzColorGLSL } from "./colormap";
+import { dbzColorGLSL, wColorGLSL } from "./colormap";
 
 export const VERT = `#version 300 es
 void main() {
@@ -252,16 +252,22 @@ uniform vec4  uRainVeil;      // one-hot rain plane × veil extinction weight (?
 uniform float uXsec;
 uniform float uXpos;
 uniform float uXmax;
-// data layer (slice 5b): 0 = hydrometeor (the shipped look), 1 = dBZ radar
-// diagnostic. Drives BOTH the volume march (emissive radar MIP vs the cloud
-// shading) and the cross-section cut-face source. dBZ reads its own plane
-// (uDbzA) with a linear decode and a rainbow palette.
+// data layer: 0 = hydrometeor (the shipped look), 1 = dBZ radar diagnostic
+// (5b), 2 = updraft w (T8). Drives BOTH the volume march (emissive radar/updraft
+// MIP vs the cloud shading) and the cross-section cut-face source. dBZ reads its
+// own plane (uDbzA); w reads uWA (signed decode, diverging palette).
 uniform float uLayer;
 uniform sampler3D uDbzA;      // dBZ diagnostic plane, nearest bound frame
 uniform float uDbzThr;        // dBZ threshold: code 0 = below = empty air
 uniform float uDbzMax;        // dBZ at code 255 (linear map top)
+uniform sampler3D uWA;        // updraft w plane, nearest bound frame (T8)
+uniform float uWScale;        // physical decode scale (m/s at code 255) = manifest scale
+uniform float uWClip;         // colour-domain clip (m/s): |w|>=uWClip saturates
+uniform float uWDead;         // deadband (m/s): |w|<uWDead is transparent
+uniform float uWRamp;         // alpha ramp width (m/s) above the deadband
 ${VOL_COMMON}
 ${dbzColorGLSL()}
+${wColorGLSL()}
 
 // dBZ at p (box space), linear-decoded from the R8 plane. Code 0 → 0 (empty,
 // NOT the palette floor). Nearest bound frame — dBZ steps are 12 s apart and
@@ -271,6 +277,14 @@ float dbzAt(vec3 p) {
   float v = texture(uDbzA, uvw).r * 255.0;
   if (v < 0.5) return 0.0;
   return uDbzThr + (uDbzMax - uDbzThr) * ((v - 1.0) / 254.0);
+}
+// Signed vertical velocity w (m/s) at p, decoded from the R8 plane: byte 128 is
+// EXACTLY 0, codes 1..255 span [-uWScale, +uWScale] (webvol signed-linear-uint8;
+// value = (byte-128)/127*scale). Nearest bound frame like dbz.
+float wAt(vec3 p) {
+  vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
+  float v = texture(uWA, uvw).r * 255.0;
+  return (v - 128.0) / 127.0 * uWScale;
 }
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
 const vec3 SUN_COL      = vec3(1.00, 0.95, 0.87) * 3.6;
@@ -484,13 +498,31 @@ void main() {
   // LDR after the tone map (below) so its colour equals the DOM legend exactly,
   // like the 5a cut-face sheet.
   float dbzPeak = 0.0;
-  if (uLayer > 0.5 && t1 > t0) {
+  if (uLayer > 0.5 && uLayer < 1.5 && t1 > t0) {
     float N = uSteps;
     float dt = (t1 - t0) / N;
     float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
     for (int i = 0; i < 512; i++) {
       if (float(i) >= N || t >= t1) break;
       dbzPeak = max(dbzPeak, dbzAt(ro + rd * t));
+      t += dt;
+    }
+  }
+
+  // updraft w (T8): a SIGNED max-|w| projection — the strongest vertical motion
+  // along each VIEW RAY, keeping its sign (view-dependent, like the dbz MIP; a
+  // ray grazing an updraft and an adjacent downdraft shows whichever core is
+  // stronger). Init 0 so a ray through still air stays at the transparent
+  // deadband. Emissive, composited in LDR below so its colour == the DOM legend.
+  float wExt = 0.0;
+  if (uLayer > 1.5 && t1 > t0) {
+    float N = uSteps;
+    float dt = (t1 - t0) / N;
+    float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
+    for (int i = 0; i < 512; i++) {
+      if (float(i) >= N || t >= t1) break;
+      float w = wAt(ro + rd * t);
+      if (abs(w) > abs(wExt)) wExt = w;
       t += dt;
     }
   }
@@ -614,9 +646,19 @@ void main() {
   // (cloudless) staging in LDR so its rainbow equals the DOM legend exactly.
   // Empty columns (dbzPeak==0) stay clear; weak echo edges fade in near the
   // threshold, strong cores read near-solid. Diagnostic, labeled in the HUD.
-  if (uLayer > 0.5 && dbzPeak > uDbzThr) {
+  if (uLayer > 0.5 && uLayer < 1.5 && dbzPeak > uDbzThr) {
     float a = smoothstep(uDbzThr, uDbzThr + 8.0, dbzPeak) * 0.92;
     col = mix(col, dbzColor(dbzPeak), a);
+  }
+
+  // updraft w volume (T8): composite the signed max-|w| projection in LDR so its
+  // diverging colour equals the DOM legend. |w| below the deadband stays clear
+  // (still air shows the diorama through it); alpha rises over uWRamp so weak
+  // motion is faint and the storm core reads near-solid. Colour normalizes by
+  // the FIXED clip (uWClip), so red = the same m/s in every scenario.
+  if (uLayer > 1.5 && abs(wExt) > uWDead) {
+    float a = smoothstep(uWDead, uWDead + uWRamp, abs(wExt)) * 0.92;
+    col = mix(col, wColor(clamp(wExt / uWClip, -1.0, 1.0)), a);
   }
 
   // cross-section sheet: paint the false-color field on the cut face, in LDR so
@@ -626,11 +668,17 @@ void main() {
   // viridis/(g/kg) for hydrometeors, the radar rainbow/(dBZ) for the dBZ layer.
   if (tSheet > 0.0) {
     vec3 pS = ro + rd * tSheet;
-    if (uLayer > 0.5) {
+    if (uLayer > 0.5 && uLayer < 1.5) {
       float dbz = dbzAt(pS);
       if (dbz > uDbzThr) {
         float a = smoothstep(uDbzThr, uDbzThr + 8.0, dbz) * 0.95;
         col = mix(col, dbzColor(dbz), a);
+      }
+    } else if (uLayer > 1.5) {
+      float w = wAt(pS);
+      if (abs(w) > uWDead) {
+        float a = smoothstep(uWDead, uWDead + uWRamp, abs(w)) * 0.95;
+        col = mix(col, wColor(clamp(w / uWClip, -1.0, 1.0)), a);
       }
     } else {
       float f = xsecField(pS);

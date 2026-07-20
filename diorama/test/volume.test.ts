@@ -4,7 +4,14 @@
 // file is the tripwire.
 
 import { describe, expect, it } from "vitest";
-import { decodeConstants, decodeLinearU8, decodeLogU8, encodeLinearU8, encodeLogU8 } from "../src/volume";
+import {
+  decodeConstants,
+  decodeLinearU8,
+  decodeLogU8,
+  decodeSignedU8,
+  encodeLinearU8,
+  encodeLogU8,
+} from "../src/volume";
 
 const THR = 1e-4; // config.THRESHOLDS for every mixing-ratio channel
 const QMAX = 0.01245; // measured graupelhail max over the real sequence
@@ -92,6 +99,49 @@ describe("linear-uint8 dBZ quantization round trip", () => {
   it("degenerate plane (vmax <= threshold) is all-zero both ways", () => {
     expect(encodeLinearU8(50, DBZ_THR, DBZ_THR)).toBe(0);
     expect(decodeLinearU8(200, DBZ_THR, DBZ_THR)).toBe(0);
+  });
+});
+
+// Updraft w (T8): SIGNED, symmetric about code 128. The one property that
+// makes the updraft/downdraft boundary honest is that code 128 is EXACTLY 0 —
+// not a fractional value that would paint false vertical motion along the zero
+// line. `scale` is the FIXED manifest value (80 m/s), constant across scenarios.
+const W_SCALE = 80.0;
+
+// A line-for-line port of the encoder (webvol.encode_signed_u8) for round-trip
+// checks: v = clip(round(128 + 127*clip(w,-s,s)/s), 0, 255).
+function encodeSignedU8(w: number, scale: number): number {
+  const ww = Math.max(-scale, Math.min(scale, w));
+  return Math.max(0, Math.min(255, Math.round(128 + (127 * ww) / scale)));
+}
+
+describe("signed-uint8 w quantization", () => {
+  it("code 128 decodes to EXACTLY zero (no false motion at the boundary)", () => {
+    expect(decodeSignedU8(128, W_SCALE)).toBe(0);
+    expect(encodeSignedU8(0, W_SCALE)).toBe(128);
+  });
+
+  it("the code ends span the full ±scale", () => {
+    expect(decodeSignedU8(255, W_SCALE)).toBeCloseTo(W_SCALE, 12); // (255-128)/127 = 1
+    expect(decodeSignedU8(1, W_SCALE)).toBeCloseTo(-W_SCALE, 12); // (1-128)/127 = -1
+    // the encoder saturates beyond ±scale rather than wrapping
+    expect(encodeSignedU8(200, W_SCALE)).toBe(255);
+    expect(encodeSignedU8(-200, W_SCALE)).toBe(1);
+  });
+
+  it("is antisymmetric about zero: decode(128+n) == -decode(128-n)", () => {
+    for (let n = 1; n <= 127; n++) {
+      expect(decodeSignedU8(128 + n, W_SCALE)).toBeCloseTo(-decodeSignedU8(128 - n, W_SCALE), 12);
+    }
+  });
+
+  it("round-trip error is within half a quantum (scale/127)", () => {
+    const halfStep = W_SCALE / 127 / 2;
+    for (let i = 0; i <= 400; i++) {
+      const w = -W_SCALE + (2 * W_SCALE * i) / 400;
+      const rt = decodeSignedU8(encodeSignedU8(w, W_SCALE), W_SCALE);
+      expect(Math.abs(rt - w)).toBeLessThanOrEqual(halfStep * 1.0001);
+    }
   });
 });
 

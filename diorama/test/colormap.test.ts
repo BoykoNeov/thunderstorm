@@ -5,7 +5,7 @@
 // checks the emitted GLSL is a faithful running-chain mirror of it.
 
 import { describe, expect, it } from "vitest";
-import { dbzColor, dbzColorGLSL } from "../src/colormap";
+import { dbzColor, dbzColorGLSL, wColor, wColorGLSL } from "../src/colormap";
 
 describe("dbzColor rainbow palette", () => {
   it("clamps below the first stop and above the last", () => {
@@ -91,6 +91,77 @@ describe("dbzColorGLSL mirrors dbzColor", () => {
     for (let d = 0; d <= 80; d += 0.37) {
       const a = dbzColor(d);
       const b = evalGLSL(src, d);
+      for (let c = 0; c < 3; c++) expect(b[c]).toBeCloseTo(a[c], 6);
+    }
+  });
+});
+
+// The updraft-w diverging palette (T8) is the same shared contract: the DOM
+// legend (wColor) and the shader (wColorGLSL) must paint one curve. It is SIGNED
+// (input t ∈ [-1,1]) and coolwarm — blue for sinking, red for rising, through a
+// neutral, and never green (so it survives red-green colour-vision deficiency).
+describe("wColor diverging palette", () => {
+  it("is blue at max downdraft, red at max updraft, neutral at zero", () => {
+    const down = wColor(-1); // deep blue: blue channel dominates
+    expect(down[2]).toBeGreaterThan(down[0]);
+    const up = wColor(1); // deep red: red channel dominates
+    expect(up[0]).toBeGreaterThan(up[2]);
+    const zero = wColor(0); // light neutral grey: all channels high and close
+    expect(Math.max(...zero) - Math.min(...zero)).toBeLessThan(0.05);
+    for (const c of zero) expect(c).toBeGreaterThan(0.9);
+  });
+
+  it("never uses a green-dominant colour (red-green CVD safe)", () => {
+    for (let t = -1; t <= 1; t += 0.02) {
+      const [r, g, b] = wColor(t);
+      expect(g).toBeLessThanOrEqual(Math.max(r, b) + 1e-9); // green never the sole peak
+    }
+  });
+
+  it("clamps outside [-1,1] and stays within [0,1]", () => {
+    expect(wColor(-5)).toEqual(wColor(-1));
+    expect(wColor(5)).toEqual(wColor(1));
+    for (let t = -1.5; t <= 1.5; t += 0.05) {
+      for (const c of wColor(t)) {
+        expect(c).toBeGreaterThanOrEqual(0);
+        expect(c).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("GLSL mirror agrees with wColor at fine resolution", () => {
+    // Same running-chain structure as dbz, but guards are on `t` and can be
+    // NEGATIVE (t <= -1.0000), so the regex must allow a leading minus.
+    const src = wColorGLSL();
+    const cols: [number, number, number][] = [];
+    const re = /vec3\(([-\d.]+), ([-\d.]+), ([-\d.]+)\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src)) !== null) cols.push([parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3])]);
+    const seen = new Set<string>();
+    const uniq: [number, number, number][] = [];
+    for (const cvec of cols) {
+      const key = cvec.join(",");
+      if (!seen.has(key)) { seen.add(key); uniq.push(cvec); }
+    }
+    const guards = [...src.matchAll(/t <= (-?[\d.]+)/g)].map((g) => parseFloat(g[1]));
+    const stops = guards.map((t, i) => ({ t, rgb: uniq[i] }));
+    const evalGLSL = (t: number): [number, number, number] => {
+      if (t <= stops[0].t) return stops[0].rgb;
+      const last = stops[stops.length - 1];
+      if (t >= last.t) return last.rgb;
+      for (let i = 1; i < stops.length; i++) {
+        if (t <= stops[i].t) {
+          const a = stops[i - 1];
+          const b = stops[i];
+          const f = (t - a.t) / (b.t - a.t);
+          return [a.rgb[0] + f * (b.rgb[0] - a.rgb[0]), a.rgb[1] + f * (b.rgb[1] - a.rgb[1]), a.rgb[2] + f * (b.rgb[2] - a.rgb[2])];
+        }
+      }
+      return last.rgb;
+    };
+    for (let t = -1; t <= 1; t += 0.017) {
+      const a = wColor(t);
+      const b = evalGLSL(t);
       for (let c = 0; c < 3; c++) expect(b[c]).toBeCloseTo(a[c], 6);
     }
   });

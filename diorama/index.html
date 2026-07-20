@@ -51,13 +51,39 @@
         background: rgba(255, 255, 255, 0.9); border-radius: 8px; padding: 14px 18px;
         display: none; white-space: pre-wrap;
       }
+      /* right-side column: the data-layer panel (T8) stacked above the legend.
+         A flex column so the legend sits directly under the panel and a hidden
+         legend (display:none) leaves no gap. */
+      #rightcol {
+        position: absolute; right: 12px; top: 10px;
+        display: flex; flex-direction: column; align-items: stretch;
+        gap: 8px; width: 190px;
+      }
+      /* data-layer panel (T8): the teaching-grade selector — radio rows with
+         per-layer units + a DIAGNOSTIC badge, replacing keystroke-only control. */
+      #layers {
+        font: 12px system-ui, sans-serif; color: #2b3a3d;
+        background: rgba(255, 255, 255, 0.6); border-radius: 6px;
+        padding: 7px 10px; backdrop-filter: blur(4px);
+      }
+      #layersTitle { font-weight: 600; margin-bottom: 5px; }
+      #layers label {
+        display: flex; align-items: baseline; gap: 6px;
+        padding: 2px 0; cursor: pointer;
+      }
+      #layers label input { margin: 0; accent-color: #46707c; cursor: pointer; }
+      #layers .lname { flex: 1; }
+      #layers .ldiag {
+        font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
+        color: #8a5a12; background: rgba(212, 148, 30, 0.18);
+        border-radius: 3px; padding: 1px 4px; align-self: center;
+      }
       /* cross-section legend (slice 5a) — DOM, so it stays undistorted under ?sx */
       #xlegend {
-        position: absolute; right: 12px; top: 10px;
         font: 12px system-ui, sans-serif; color: #2b3a3d;
         background: rgba(255, 255, 255, 0.6); border-radius: 6px;
         padding: 7px 10px; pointer-events: none; display: none;
-        backdrop-filter: blur(4px); width: 190px;
+        backdrop-filter: blur(4px);
       }
       #xlTitle { font-weight: 600; margin-bottom: 5px; }
       #xlBar {
@@ -115,11 +141,17 @@
       <div id="sbNote">across the storm, at centre depth</div>
     </div>
     <div id="err"></div>
-    <div id="xlegend">
-      <div id="xlTitle">total hydrometeors</div>
-      <div id="xlBar"></div>
-      <div id="xlScale"><span id="xlMin">0</span><span id="xlMax">10 g/kg</span></div>
-      <div id="xlAxis"></div>
+    <div id="rightcol">
+      <div id="layers" style="display: none">
+        <div id="layersTitle">Data layer</div>
+        <!-- radio rows injected by main.ts (the w row is feature-detected) -->
+      </div>
+      <div id="xlegend">
+        <div id="xlTitle">total hydrometeors</div>
+        <div id="xlBar"></div>
+        <div id="xlScale"><span id="xlMin">0</span><span id="xlMax">10 g/kg</span></div>
+        <div id="xlAxis"></div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

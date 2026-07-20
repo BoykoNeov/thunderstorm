@@ -49,8 +49,9 @@ sized to the grid) — preserving all other URL params (`az`, `layer`, `sx`, …
 Left-drag = orbit · **right-drag = pan across the ground** · **middle-drag =
 height** · wheel = zoom · space = play/pause · `[` / `]` = step frame ·
 `\` cross-section axis · `,` / `.` slide the cut plane · `d` toggle the dBZ
-radar layer · `b` toggle the scale bar · bottom bar: play/pause, speed
-(15×–300×, a pure UI multiplier over storm time), scrubber, storm-time clock.
+radar layer · `b` toggle the scale bar · **data-layer panel (top-right)** picks
+the field · bottom bar: play/pause, speed (15×–300×, a pure UI multiplier over
+storm time), scrubber, storm-time clock.
 
 The two pans are separate axes of one gesture, and neither touches the orbit
 angles or zoom:
@@ -111,6 +112,30 @@ already reads as "a storm on radar" is the teaching goal. It is labeled
 cross-section active, the cut face paints dBZ too (same palette), pairing the
 plan-view MIP silhouette with the
 storm's vertical echo structure. Off by default → the shipped look is unchanged.
+
+### Data-layer panel + updraft w (T8)
+
+The **top-right panel** is the teaching-grade layer selector — one radio row per
+shipped field (Hydrometeors / Radar (dBZ) / Updraft (w)), each carrying a
+**DIAGNOSTIC** badge iff the manifest flags that field a diagnostic (the badge is
+*read* from the contract — `dbz.diagnostic`, `extra_fields.w.diagnostic` — never
+hardcoded, so it cannot drift). It replaces keystroke-only discovery; `?layer=`
+and `d` remain as accelerators. The updraft row is **feature-detected** on
+`extra_fields.w` — a pre-T8 package simply doesn't offer it.
+
+`?layer=w` (or the panel) swaps the storm to **updraft `w`** — the simulated
+vertical wind (m/s), a *prognostic* field (no DIAGNOSTIC badge), shipped as the
+`.w.gz` plane and streamed only when active (hydrometeor default unchanged, like
+dbz). It renders as a **signed max-|w| projection** — the strongest vertical
+motion along each **view ray**, keeping its sign — on a colorblind-safe
+**coolwarm** diverging map (blue sinking ↔ red rising, no green). The colour
+domain is **fixed at ±`scale`** (the constant `extra_fields.w.scale` = 80 m/s,
+*not* a per-sequence max), so the same red means the same m/s in every package —
+which is what makes the 500 m and 333 m cells comparable side by side. `?wclip=60`
+sets a tighter *fixed* clip (more colour resolution, saturates above it);
+`?wdead=2`/`?wramp=8` (m/s) tune the transparent deadband + alpha ramp so weak
+environmental motion stays clear and the storm core reads solid. Cut face paints
+`w` too.
 
 ### Scale bar + storm-time clock (slice 5c — honest scale chip)
 

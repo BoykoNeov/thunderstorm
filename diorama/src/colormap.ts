@@ -112,3 +112,78 @@ export function dbzCssGradientStops(lo: number, hi: number, steps = 16): string 
   }
   return parts.join(", ");
 }
+
+// -- updraft w diverging palette (T8) -----------------------------------------
+// Vertical velocity `w` is SIGNED: downdraft (blue) ↔ updraft (red) through a
+// light neutral. A colorblind-safe COOLWARM diverging map (blue vs red, no
+// green channel to confuse red-green CVD), which is also the meteorological
+// convention (warm = rising). The input `t` is the value normalized to the
+// FIXED colour domain, `t = w / clip` in [-1, 1] — clip comes from the
+// manifest's constant `extra_fields.w.scale` (or a tighter fixed ?wclip), NEVER
+// a per-sequence max, so the same red means the same m/s in every package
+// (charter T4: "same colour = same m/s", which cross-scenario comparison rests
+// on). The GLSL `wColor()` in shaders.ts interpolates the SAME table, so the
+// on-screen colour == this legend. Symmetric about 0 by construction.
+const W_STOPS: { t: number; rgb: [number, number, number] }[] = [
+  { t: -1.0, rgb: [0.13, 0.2, 0.6] }, // strong downdraft — deep blue
+  { t: -0.5, rgb: [0.26, 0.52, 0.86] }, // downdraft — blue
+  { t: -0.15, rgb: [0.62, 0.78, 0.96] }, // weak downdraft — light blue
+  { t: 0.0, rgb: [0.96, 0.96, 0.96] }, // near-zero — neutral light grey
+  { t: 0.15, rgb: [0.99, 0.8, 0.62] }, // weak updraft — light orange
+  { t: 0.5, rgb: [0.94, 0.44, 0.26] }, // updraft — orange-red
+  { t: 1.0, rgb: [0.7, 0.02, 0.15] }, // strong updraft — deep red
+];
+
+/** wColor(t) → [r,g,b], t = w/clip in [-1,1]. Piecewise-linear over W_STOPS;
+ *  clamps outside. Matches the GLSL mirror. */
+export function wColor(t: number): [number, number, number] {
+  if (t <= W_STOPS[0].t) return W_STOPS[0].rgb;
+  const last = W_STOPS[W_STOPS.length - 1];
+  if (t >= last.t) return last.rgb;
+  for (let i = 1; i < W_STOPS.length; i++) {
+    const b = W_STOPS[i];
+    if (t <= b.t) {
+      const a = W_STOPS[i - 1];
+      const f = (t - a.t) / (b.t - a.t);
+      return [
+        a.rgb[0] + f * (b.rgb[0] - a.rgb[0]),
+        a.rgb[1] + f * (b.rgb[1] - a.rgb[1]),
+        a.rgb[2] + f * (b.rgb[2] - a.rgb[2]),
+      ];
+    }
+  }
+  return last.rgb;
+}
+
+/** GLSL source for the wColor ramp — the W_STOPS table unrolled as a running
+ *  (prev colour, prev t) chain, the same shape as dbzColorGLSL, so the shader
+ *  and this module's interpolation cannot drift. Emitted into shaders.ts. */
+export function wColorGLSL(): string {
+  const c = (rgb: [number, number, number]) => `vec3(${rgb.map((v) => v.toFixed(4)).join(", ")})`;
+  const body: string[] = [];
+  W_STOPS.forEach((s, i) => {
+    if (i === 0) {
+      body.push(`  if (t <= ${s.t.toFixed(4)}) return ${c(s.rgb)};`);
+      body.push(`  vec3 prev = ${c(s.rgb)}; float pt = ${s.t.toFixed(4)};`);
+    } else {
+      const gap = (s.t - W_STOPS[i - 1].t).toFixed(4);
+      body.push(`  if (t <= ${s.t.toFixed(4)}) return mix(prev, ${c(s.rgb)}, (t - pt) / ${gap});`);
+      body.push(`  prev = ${c(s.rgb)}; pt = ${s.t.toFixed(4)};`);
+    }
+  });
+  body.push(`  return prev;`);
+  return `vec3 wColor(float t) {\n${body.join("\n")}\n}`;
+}
+
+/** A CSS gradient stop list for the w legend bar, sampled over the full signed
+ *  domain t ∈ [-1, 1] (downdraft → zero → updraft). */
+export function wCssGradientStops(steps = 16): string {
+  const parts: string[] = [];
+  for (let i = 0; i < steps; i++) {
+    const f = i / (steps - 1);
+    const [r, g, b] = wColor(-1 + 2 * f);
+    const to255 = (v: number) => Math.round(v * 255);
+    parts.push(`rgb(${to255(r)},${to255(g)},${to255(b)}) ${Math.round(f * 100)}%`);
+  }
+  return parts.join(", ");
+}

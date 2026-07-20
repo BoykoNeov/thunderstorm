@@ -497,7 +497,18 @@ one-package player into a scenario system:
   switch **reloads the page** rather than rebuilding GPU state in place — the
   viewer is already grid-agnostic within a load, so a reload re-derives
   everything cleanly. Verified on a real GPU across both grids.
-- **T8** updraft-`w` layer panel · **T9** `cref` radar plan view — pending.
+- **T8 (DONE 2026-07-20)** data-layer panel + updraft `w`. A top-right radio
+  panel (Hydrometeors / Radar (dBZ) / Updraft (w)) with a manifest-driven
+  DIAGNOSTIC badge replaces keystroke-only discovery; `?layer=`/`d` stay as
+  accelerators. `w` streams the `.w.gz` plane (parallel to the dbz ring, gated +
+  lazy so hydro is byte-untouched) and renders as a **signed max-|w| view-ray
+  projection** on a colorblind-safe coolwarm map, colour domain **fixed at
+  ±`extra_fields.w.scale`** (never per-sequence — same colour = same m/s across
+  packages, so the 500 m and 333 m cells compare directly). Feature-detected on
+  `extra_fields.w`; viewer-only, no version move. Real-GPU verified on both
+  grids; hydro render bit-identical with `w` off (stash diff, render pixels ≤2 =
+  the wall-clock ripple floor).
+- **T9** `cref` radar plan view — pending.
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
 **Slices 1–3 complete (2026-07-16) — beauty gate PASSED (owner GO, 2026-07-17):**
