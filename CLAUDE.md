@@ -436,7 +436,67 @@ Do not start a phase without explicit go from the owner.
   version number** — which broke `gate_web_block_present` (it asserted shipped == contract
   and has no revert mechanism); resolved by treating the skew as a named expected diff.
   `test_manifest.py` now **17/17**.
-  Remaining: T5–T9 (the batched T3–T5 re-export still pending).
+  **T5 DONE — composite reflectivity `cref` as a 2D web-only plan product
+  (docs/phase2-plan-2026-07-20.md §15).** The whole design rests on one measurement taken
+  BEFORE any code: CM1's `cref` is **BITWISE identical to `dbz.max(axis=0)`** in every one
+  of 301 frames (worst |Δ| 0.000e+00, both maxima 72.213715 dBZ) — so `vmax` is borrowed
+  from the dbz channel as an **identity**, one NWS colormap serves both views exactly, and
+  the max-then-interp ordering invariant (`cref ≥ colmax`, never reverse; 0 violations on
+  real frames) is licensed. **Rejected** computing cref as colmax of the *exported* dbz
+  (biases −3.01 dB, silently redefines a standard radar product to "the part we
+  exported"); took CM1's, per the charter. A **separate** `plan_fields`/`WEB_PLAN_FIELDS`
+  block (not a `dims` key in T4's `extra_fields`) because RANK is the one thing a consumer
+  can't discover from a raw brick — a 2D plane uploaded into a 3D texture is a silent
+  garbage render. Caveat MEASURED (truncation above the 18 km box costs cref **0.000000
+  dBZ** — no echo up there), then rewritten twice: the first fix committed **the T2 error
+  one level over** — it asserted run-specific numbers ("~2 dB", "301 frames") inside the
+  GENERIC per-scenario builder, where they'd ship into *every* scenario's manifest (T6
+  would emit single_cell's figures into scenario #2's contract). Prose now keeps only
+  STRUCTURAL claims; per-scenario numbers are computed into `observed_min/max`. A new
+  `gate_no_run_specific_numbers_in_prose` fired against the pre-fix draft. Exporter carries
+  a STANDING version of the identity check (fails export if a plan field's observed max
+  exceeds the channel max it borrows). `test_regrid_cref.py` **13/13** (two gates rewritten
+  after first passing: a tautology that encoded the same values twice, and an "applied
+  twice" arm that overflowed to inf so the inequality held trivially). **`WEB_FORMAT_VERSION`
+  1.1 → 1.2; package `format_version` stays 1.1.** Same rule as T4: adds a per-frame file +
+  block → FORMAT → MINOR; MAJOR (tempting because the file has a different RANK) would lock
+  out `volume.ts` (`SUPPORTED_MAJOR=1`) — the viewer T9 extends. **T9 feature-detects on
+  `plan_fields.cref`, never the version.**
+  **T6 DONE — second scenario `single_cell_333m` + generic runner + the batched T3–T5
+  re-export (docs/phase2-plan-2026-07-20.md §16).** Three things landed together (owner
+  folded §9's re-export into T6). (1) **The variant is a pure resolution change** and the
+  deck PROVES it: `single_cell_333m` is the same zero-shear pulse cell at 333 m, and it is
+  the first config the deck generator was NOT reverse-engineered from, so T6's gate is
+  **differential** — its generated deck vs scenario 1's generated deck differs in **exactly
+  9 of 344 keys** (5 declared: nx/ny/dx/dy/dtl + 4 derived), the VERTICAL grid byte-identical
+  (dz/nz/ztop/stretch_z are not scenario keys). Run health = same storm family, shifted the
+  way a finer grid should shift it: peak w **67.5** (vs 53), max dbz **78.0** (vs 71), max
+  qhl **9.09 g/kg** (vs 4.7) — that shift IS the pedagogical signal, not noise. (2) **The box
+  is condensate-driven horizontally, `w`-driven vertically** — the non-obvious T6 result,
+  and it only surfaced because the box was MEASURED not matched. Condensate union (half
+  20.48 km, top 16.25 km) is *narrower* than the 500 m cell (finer grid → more compact
+  core), so tight-horizontal is right; but a condensate-tight z-top **clipped a 19 m/s
+  updraft core** — the stronger 333 m updraft OVERSHOOTS the cloud top (significant |w| to
+  17.25 km at ≥10, 18.75 km at ≥5). `w` is the only shipped field `active_mask` doesn't
+  contain (signed, web-only). Final box **126×126×54 @ 333 m NATIVE voxel** (matching the
+  500 m package's 250 m would UPSAMPLE 1.33×, the anti-pattern its own config apologises
+  for), crop 20979/17982; symmetry measured **0.0 m** (centred storm); bbox PASS against the
+  FINAL box. w-clip MEASURED at that box: |w|≥10 **0.0000%**, ≥5 0.0128% (peak clipped 6.98
+  m/s) — same character as 500 m's caveat, weak motion in the 17.8–18 km damping layer.
+  Package: VDB 0.19 GB peak 1.43 MB/frame, web 0.042 GB, w observed −48.15..+67.48 (inside
+  ±80). (3) **Batched re-export**: `single_cell_500m` regenerated as linear-Z + w + cref
+  (web 1.2); the bbox held (T3/T4/T5 did not move it). `test_manifest.py`'s staleness
+  scaffolding TORN DOWN — `manifest.build()` now reproduces the shipped manifest
+  byte-for-byte (36220 chars), so `gate_byte_identical` collapsed to a plain `==` and
+  `gate_web_block_present` asserts shipped==contract (1.2); one negative control had gone
+  no-op (it set the caveat to the now-current text) and was repaired to inject a wrong-dB
+  string. Generic **`sim/run_scenario.sh`** (+ `scenario_info.py`, reads config through the
+  real loader not grep) closes §10.6; `sim/single_cell/run.sh` deleted; a
+  `require_measured_box` guard refuses export on a placeholder box but lets bbox/deck-gen
+  through (no new-scenario deadlock). `test_scenario_t6.py` **11/11**, all suites green; the
+  new package tracks **only manifest.json** in git (payload out of history, verified).
+  Remaining: T7 (diorama scenario selection), T8 (`w` layer panel), T9 (`cref` radar plan
+  view) — both packages now ship `w` + `cref` at web 1.2.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 

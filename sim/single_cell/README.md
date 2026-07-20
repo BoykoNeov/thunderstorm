@@ -88,15 +88,29 @@ with ~40 km to every boundary — the outflow stays interior for the full hour.
 
 ```bash
 # from Windows:
-wsl -d Ubuntu -- bash /mnt/m/claud_projects/thunderstorm/sim/single_cell/run.sh
+wsl -d Ubuntu -- bash /mnt/m/claud_projects/thunderstorm/sim/run_scenario.sh single_cell_500m
 ```
 
-`run.sh` copies the validated `cm1r21.1` binary and this namelist into
-`/home/boiko/thunderstorm/runs/singlecell/` (WSL **ext4** — raw output never
-goes through `/mnt/*`), writes `run_meta.txt` (binary sha256, rank count,
-decomposition — charter reproducibility contract), and runs `mpirun -np 8`
-(locked by the Phase 0 benchmark gate). Estimated compute: well under an hour
-(500 m / 80 km / NSSL is far cheaper than the 120 km production benchmark).
+**`run.sh` was removed in Phase 2 T6**, superseded by the generic
+`sim/run_scenario.sh` (see `sim/README.md`). It hardcoded its run dir, rank count,
+grid line and provenance strings, so it was a second place a scenario's identity was
+written down — exactly the drift the scenario system exists to kill. The generic
+runner reads all of it from `sim/scenarios/single_cell_500m.json` and **generates**
+the deck rather than copying it; `gen_deck.py --verify` asserts that the generated
+deck reproduces `namelist.input` below, all 344 keys by parsed value.
+
+The runner copies the validated `cm1r21.1` binary and the generated namelist into
+`/home/boiko/thunderstorm/runs/singlecell/` (WSL **ext4** — raw output never goes
+through `/mnt/*`), writes `run_meta.txt` (binary sha256, rank count, decomposition —
+charter reproducibility contract), and runs `mpirun -np 8` (locked by the Phase 0
+benchmark gate). Measured compute: well under an hour.
+
+## `namelist.input` — kept as a reference, not as an input
+
+This deck is no longer copied into any run. It survives as the **regression reference
+for the deck generator**: it is the one hand-written deck in existence, so it is the
+only thing the generator's output can be checked against independently. Deleting it
+would delete the gate.
 
 Raw `cm1out_*.nc` is **disposable** and never committed (charter data policy);
 only the finished scenario package (Phase 1 task 5) is durable.

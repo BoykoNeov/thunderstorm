@@ -30,7 +30,7 @@ The charter's open "LFS vs out-of-repo" item is closed. **Neither, strictly:**
 - `manifest.json` **is tracked** (via the `!scenarios/**/manifest.json` negation).
   This is deliberate and load-bearing: the manifest is the versioned contract UE
   checks `format_version` against, and a contract that isn't version-controlled
-  isn't a contract. It is ~48 KB for a 301-frame package and diffs meaningfully.
+  isn't a contract. It is ~36 KB for a 301-frame package and diffs meaningfully.
   Second dividend, since T2: `pipeline/tests/test_manifest.py` can rebuild the shipped
   manifest and compare it byte-for-byte from **committed files alone** — no CM1, no
   WSL, no netCDF — because `manifest.build()` is a pure function of (Scenario, frames,
@@ -43,10 +43,23 @@ ever becomes expensive to regenerate, that assumption needs revisiting.
 
 ## What ships today
 
-`single_cell_500m/` — Phase 1 spike package, 525 MB: `manifest.json` (tracked) +
-`vdb/` 301 frames, 437 MB (ignored) + `web/` 603 files, 86 MB (ignored). Source run
-`/home/boiko/thunderstorm/runs/singlecell` in WSL. Provenance, channel contract and
-the UE placement rule are all inside `manifest.json`; see
-`docs/phase1-task5-pipeline.md` for how it was built.
+Both packages are the **same zero-shear pulse cell** at two resolutions — the Phase 2 T6
+comparison (`docs/phase2-plan-2026-07-20.md §16`). Each ships linear-Z dBZ (T3), an
+updraft-`w` field (T4) and a 2D composite-reflectivity `cref` plane (T5) in its web
+rendition, at `web_format_version` 1.2; package `format_version` 1.1. `web/` now carries
+**four files per frame** (`.rgba .dbz .w .cref`), hence ~1205 files.
+
+`single_cell_500m/` — Phase 1 spike, re-exported in T6: **558 MB** — `manifest.json`
+(tracked, 36 KB) + `vdb/` 301 frames, 443 MB (ignored) + `web/` 115 MB (ignored). Grid
+208×208×72 @ 250 m. Source run `/home/boiko/thunderstorm/runs/singlecell`.
+
+`single_cell_333m/` — Phase 2 T6, the same cell at **finer 333 m** resolution:
+**224 MB** — `manifest.json` (tracked, 36 KB) + `vdb/` 181 MB + `web/` 44 MB (both
+ignored). Grid **126×126×54 @ 333 m native voxel**. The finer grid resolves a stronger,
+more compact storm (peak `w` 67.5 vs 53 m/s, hail 9.1 vs 4.7 g/kg), so its condensate box
+is *narrower* horizontally but *taller* (the updraft overshoots the cloud top) — the box
+is measured from this run's own active-voxel union, never borrowed. Source run
+`/home/boiko/thunderstorm/runs/singlecell333`. See `docs/phase1-task5-pipeline.md` for how
+a package is built and §16 of the Phase 2 plan for this one's box derivation.
 
 _Do not start a phase without explicit go from the owner._

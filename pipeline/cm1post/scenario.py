@@ -39,6 +39,15 @@ class Scenario:
     namelist: dict = field(default_factory=dict)
     source_path: str = ""
 
+    # True while `export` still holds placeholder numbers. The crop box is an
+    # OUTPUT of the run, not an input: it is measured from that run's own
+    # active-voxel union (Phase 1 learned this the expensive way -- a box copied
+    # from elsewhere CLIPPED the real cold-pool outflow, and the export succeeded
+    # anyway). A new scenario therefore needs a loadable config BEFORE its box can
+    # exist, so the placeholder is legal -- but `require_measured_box` must gate
+    # every consumer that would bake it into a package.
+    provisional_box: bool = False
+
     # --- derived export grid ------------------------------------------------
     # These were module constants in the Phase 1 config.py; they are derived here
     # so a scenario cannot declare a grid inconsistent with its own crop box.
@@ -121,9 +130,27 @@ def load(name_or_path, run_dir_override=None):
         provenance=sim.get("provenance", {}),
         namelist=sim.get("namelist", {}),
         source_path=path,
+        provisional_box=bool(exp.get("_provisional", False)),
     )
     _validate(sc, path)
     return sc
+
+
+def require_measured_box(sc):
+    """Refuse to proceed while the crop box is still a placeholder.
+
+    Called by anything that BAKES the box into a durable artifact (the exporter).
+    Deck generation deliberately does NOT call this: generating the deck is what
+    produces the run the box gets measured from, so demanding a measured box there
+    would be a chicken-and-egg deadlock for every new scenario.
+    """
+    if sc.provisional_box:
+        raise ValueError(
+            f"{sc.source_path}: export box is still marked \"_provisional\": true. "
+            "Run the scenario, measure its own active-voxel union with the bbox "
+            "sweep, write the result back into `export`, and drop the flag. "
+            "Exporting now would ship a box measured from a DIFFERENT storm -- "
+            "which succeeds silently and clips whatever falls outside it.")
 
 
 def _validate(sc, path):

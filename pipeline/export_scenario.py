@@ -80,6 +80,7 @@ def cmd_bbox(args):
 
 def cmd_export(args):
     sc = load_scenario(args)
+    scenario.require_measured_box(sc)   # never bake a placeholder box into a package
     files = fields.frame_files(sc.run_dir)
     idx = parse_range(args.frames, len(files))
     os.makedirs(args.out, exist_ok=True)
@@ -142,6 +143,7 @@ def cmd_export_web(args):
     bbox invariant holds by construction). See cm1post/webvol.py for the format.
     """
     sc = load_scenario(args)
+    scenario.require_measured_box(sc)   # never bake a placeholder box into a package
     files = fields.frame_files(sc.run_dir)
     idx = parse_range(args.frames, len(files))
     os.makedirs(args.out, exist_ok=True)
@@ -319,7 +321,14 @@ def main():
     w.set_defaults(func=cmd_export_web)
 
     args = ap.parse_args()
-    sys.exit(args.func(args))
+    try:
+        sys.exit(args.func(args))
+    except (ValueError, FileNotFoundError) as e:
+        # A refused scenario (provisional box, inconsistent geometry, missing run)
+        # is a USER error, not a crash -- report it the way gen_deck.py does rather
+        # than burying the message under a traceback.
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":
