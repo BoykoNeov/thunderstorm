@@ -335,9 +335,20 @@ Do not start a phase without explicit go from the owner.
   *validation* deck, so all 17 keys genuinely differ. **12/12 negative controls fire**
   (wrong-reference, substring clobber, missing/typo'd key, `imove` contradictions,
   output flags off, derived-geometry propagation) — a gate that has only ever passed is
-  not yet known to work. Faithfulness only; cross-scenario generalization rides on T6.
-  A **generic `run_scenario.sh`** is deliberately left to T6 (`sim/single_cell/run.sh`
-  still hardcodes run dir/ranks/provenance). Remaining: T2–T9.
+  not yet known to work. **The claim earned is "reproduces the RUN", not just the deck:**
+  the 3 residual text diffs are insignificant in Fortran free-format (both sides parse to
+  the identical REAL), and with `isnd=5` the WK sounding is computed internally, so the
+  namelist is CM1's *sole* scenario input — same binary + ranks ⇒ bitwise-identical run,
+  inheriting the Phase 0 reproducibility verification. That is what makes the data
+  policy's "regeneration from `sim/` + `pipeline/`" recovery path real. Faithfulness
+  only, and *structurally* so: with one hand-written reference deck in existence T1c
+  cannot prove more, since every future scenario's deck **is** the generator's output —
+  cross-scenario generalization rides on T6. **T6 scoping note:** the unknown-key guard
+  means a variant may differ only in the 22 `REQUIRED_KEYS` + `umove`/`vmove`, so
+  "cheap" = a **grid/domain change**; a seed variant needs a new required key, and bubble
+  geometry (`init3d.F`) or sounding thermodynamics need actual code. A **generic
+  `run_scenario.sh`** is also deliberately left to T6 (`sim/single_cell/run.sh` still
+  hardcodes run dir/ranks/provenance). Remaining: T2–T9.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 
