@@ -1,5 +1,18 @@
 # sim/single_cell/ — Phase 1 single-cell scenario
 
+> **Superseded as a source of truth (Phase 2 T1c, 2026-07-20).** This deck is now
+> **generated** from `sim/scenarios/single_cell_500m.json`:
+>
+> ```bash
+> python3 pipeline/gen_deck.py --scenario single_cell_500m -o namelist.input
+> ```
+>
+> `namelist.input` stays committed as the provenance record of the Phase 1 run that
+> already happened, and as the **reference for the T1c reproduction gate**
+> (`--verify sim/single_cell/namelist.input` — 344/344 keys match). Edit the scenario
+> JSON, not this file; a hand-edit here would silently diverge from what the pipeline
+> exports. See `sim/templates/README.md`.
+
 The CM1 deck that produces the **real** single-cell dataset for the Phase 1
 pipeline de-risking spike (netCDF → pipeline → VDB sequence → UE SVT). This is
 the physics counterpart to the synthetic fixture in

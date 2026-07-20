@@ -311,8 +311,33 @@ Do not start a phase without explicit go from the owner.
   cannot happen (owner-gated editor; `-nullrhi` structurally can't validate render).
   Tex B keeps 3 spare channels for a deliberate later promotion.
   **Re-export is batched** after T3 (linear-Z dBZ) + T4 (`w`) + T5 (`cref`); T3 is where
-  byte-identity is *supposed* to break. Remaining: T1c deck generator (blocks T6),
-  T2–T9.
+  byte-identity is *supposed* to break.
+  **T1c deck generator DONE** — the scenario system now drives *both* halves:
+  `pipeline/gen_deck.py` + `cm1post/deck.py` render `sim/scenarios/<name>.json` over
+  `sim/templates/base.namelist.input`, so a scenario cannot be simulated with one
+  geometry and exported with another. **Template + overrides, never full generation**
+  (~8 KB of Phase 0 numerics must not drift): 17 of 413 lines are touched, 396 stay
+  byte-identical to the template and 410 to the committed hand-written deck.
+  Substitution is **line-anchored text replacement** (`^\s*KEY\s*=`) — unanchored, `dz`
+  also hits `dz_bot`/`dz_top` and `dx` hits `dx_inner`/`dx_outer`, and the corrupted deck
+  still *runs*, just not the simulation asked for. The 17 keys are **four categories**,
+  only the first in the JSON: scenario identity (required, never template-defaulted),
+  geometry-derived (`tot_x_len` etc.), motion-coupled (`umove`/`vmove` forced 0 at
+  `imove=0`, required at `imove=1`), and the `&param9` output block (template DNA).
+  **The output block is ASSERTED, never generated** — deriving it from
+  `contract.SOURCE_FIELDS` would shrink the deck (the validated deck writes `tke`, `uh`,
+  `vort`, `lcl`/`lfc`/`pwat` that the analysis scripts use) and break the gate; instead
+  `deck.check_output_flags` refuses unless `output_q`/`output_dbz`/`output_winterp` are
+  on, which catches a run that burns hours and then turns out to have written no `dbz`.
+  Gate: **344/344 keys reproduce** the hand-written `sim/single_cell/namelist.input` by
+  parsed value (**not text** — the hand decks are not column-consistent, ` ptype =  5,`
+  vs ` ptype =  27,`), and it is **non-circular** because the template is the Phase 0
+  *validation* deck, so all 17 keys genuinely differ. **12/12 negative controls fire**
+  (wrong-reference, substring clobber, missing/typo'd key, `imove` contradictions,
+  output flags off, derived-geometry propagation) — a gate that has only ever passed is
+  not yet known to work. Faithfulness only; cross-scenario generalization rides on T6.
+  A **generic `run_scenario.sh`** is deliberately left to T6 (`sim/single_cell/run.sh`
+  still hardcodes run dir/ranks/provenance). Remaining: T2–T9.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 
