@@ -286,7 +286,33 @@ Do not start a phase without explicit go from the owner.
   Simulate), but the owner has never formally signed it off; and the **diorama 5c pan
   gestures**, driven only by synthetic PointerEvents (see the design doc's OWNER-OWED
   note). Neither blocks Phase 2.
-- **Phase 2:** scenario system + selectable UI layers + radar view.
+- **Phase 2 (STARTED 2026-07-20, owner go):** scenario system + selectable UI layers +
+  radar view. Plan + task breakdown: `docs/phase2-plan-2026-07-20.md`.
+  **Scope pinned by the owner:** diorama-first (**no UE app this phase** — `unreal/`
+  stays empty, everything Claude-verifiable without an owner-gated editor); radar view =
+  **2D composite-reflectivity plan view** (`cref`, view-independent — NOT the existing
+  3D dBZ layer, which is a view-ray MIP); layers = **new physical fields** (updraft `w`)
+  not just toggles; second scenario = **cheap single-cell variant** (advisor:
+  a sheared storm is Phase 3 content, and the Y-flip motivation for it died with the UE
+  deferral — **carried item #1 is deferred with the UE app, not discharged**).
+  **T1 scenario system DONE (commits 89f0cf4, 6495960).** `cm1post/config.py` split into
+  **`contract.py`** (frozen per `format_version`: channel names/order, SOURCE_FIELDS,
+  thresholds, SVT texture map) and **`scenario.py`** (per-scenario: run dir, export
+  voxel, crop box; NX/NY/NZ/ORIGIN_M now derived, so a scenario cannot declare a grid
+  inconsistent with its own crop). Scenario configs live in `sim/scenarios/<name>.json`;
+  `export_scenario.py` takes `--scenario`. Built as a **pure refactor with zero output
+  change**, so all four regression gates are exact byte-identity: VDB manifest (34810
+  chars) + `.densevol` (62300266 B) + web manifest (45381 chars) + web bricks, the array
+  gates A/B'd against pre-refactor code extracted with `git archive` (no worktree).
+  **Gate the data, never the container** — `.vdb` is not byte-reproducible and `.gz`
+  carries an mtime in its header, so both would false-fail a naive `cmp`.
+  **DECISION: `w` and `cref` are web-export-only this phase** — `contract.CHANNELS` and
+  the SVT map stay frozen, because changing them forces an SVT import re-test that
+  cannot happen (owner-gated editor; `-nullrhi` structurally can't validate render).
+  Tex B keeps 3 spare channels for a deliberate later promotion.
+  **Re-export is batched** after T3 (linear-Z dBZ) + T4 (`w`) + T5 (`cref`); T3 is where
+  byte-identity is *supposed* to break. Remaining: T1c deck generator (blocks T6),
+  T2–T9.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 
