@@ -6,23 +6,20 @@ here. UE refuses a newer major format_version (see scenarios/README.md).
 """
 import json
 
-from . import config
+from . import contract
 
-# Which rendered channel lands in which SVT texture/component. Task 3 confirmed UE
-# 5.8's factory reproduces this assignment from grid order (docs/phase1-task3-svt-import.md).
-SVT_TEXTURE_MAP = {
-    "A": {"format": "RGBA16F", "R": "cloud", "G": "ice", "B": "rain", "A": "graupelhail"},
-    "B": {"format": "R16F", "R": "dbz"},
-}
+# Re-exported for callers that still import it from here; the definition lives in
+# contract.py because it is frozen by format_version, not chosen per scenario.
+SVT_TEXTURE_MAP = contract.SVT_TEXTURE_MAP
 
 
-def build(scenario, source_run, frames, provenance):
-    """frames: list of {index, time_s, file, bytes}."""
+def build(sc, frames, provenance):
+    """sc: Scenario. frames: list of {index, time_s, file, bytes}."""
     return {
-        "format_version": config.FORMAT_VERSION,
-        "scenario": scenario,
-        "kind": "single_cell",
-        "phase": "phase1-spike",
+        "format_version": contract.FORMAT_VERSION,
+        "scenario": sc.name,
+        "kind": sc.kind,
+        "phase": sc.phase,
 
         "units": {
             "length": "m",
@@ -33,17 +30,17 @@ def build(scenario, source_run, frames, provenance):
         },
 
         "volume": {
-            "voxel_size_m": config.EXPORT_VOXEL_M,
-            "dimensions": [config.NX, config.NY, config.NZ],
-            "origin_m": list(config.ORIGIN_M),
+            "voxel_size_m": sc.export_voxel_m,
+            "dimensions": [sc.nx, sc.ny, sc.nz],
+            "origin_m": list(sc.origin_m),
             "origin_note": ("World coords of the CENTRE of voxel (0,0,0); the VDB's "
                             "shared linear transform carries this translation."),
-            "bbox_center_m": [0.0, 0.0, config.CROP_Z_TOP_M / 2.0],
+            "bbox_center_m": [0.0, 0.0, sc.crop_z_top_m / 2.0],
             "bbox_center_static": True,
             "extent_m": {
-                "x": [-config.CROP_HALF_WIDTH_M, config.CROP_HALF_WIDTH_M],
-                "y": [-config.CROP_HALF_WIDTH_M, config.CROP_HALF_WIDTH_M],
-                "z": [0.0, config.CROP_Z_TOP_M],
+                "x": [-sc.crop_half_width_m, sc.crop_half_width_m],
+                "y": [-sc.crop_half_width_m, sc.crop_half_width_m],
+                "z": [0.0, sc.crop_z_top_m],
             },
             "ue_import_note": (
                 "These numbers describe the VDB ON DISK. UE 5.8's SVT factory does NOT "
@@ -82,15 +79,15 @@ def build(scenario, source_run, frames, provenance):
         },
 
         "channels": {
-            "order": config.CHANNELS,
-            "sources": config.SOURCE_FIELDS,
-            "thresholds": config.THRESHOLDS,
+            "order": contract.CHANNELS,
+            "sources": contract.SOURCE_FIELDS,
+            "thresholds": contract.THRESHOLDS,
             "threshold_note": ("Voxels at/below these values are inactive VDB "
                                "background. The padded bbox was sized to the active "
                                "region AT THESE VALUES -- lowering one without "
                                "re-sweeping the bbox can push condensate outside the "
                                "box and silently clip it."),
-            "svt_texture_map": SVT_TEXTURE_MAP,
+            "svt_texture_map": contract.SVT_TEXTURE_MAP,
         },
 
         "diagnostics": {
@@ -108,7 +105,7 @@ def build(scenario, source_run, frames, provenance):
         },
 
         "provenance": provenance,
-        "source_run": source_run,
+        "source_run": sc.run_dir,
         "frame_count": len(frames),
         "frames": frames,
     }

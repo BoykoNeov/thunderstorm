@@ -13,19 +13,17 @@ we clamp at 0 anyway as a belt-and-braces guard.
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from . import config
 
-
-def export_axes():
+def export_axes(sc):
     """Voxel-centre coordinates (metres, CM1 world) of the export grid."""
-    ox, oy, oz = config.ORIGIN_M
-    xs = ox + np.arange(config.NX) * config.EXPORT_VOXEL_M
-    ys = oy + np.arange(config.NY) * config.EXPORT_VOXEL_M
-    zs = oz + np.arange(config.NZ) * config.EXPORT_VOXEL_M
+    ox, oy, oz = sc.origin_m
+    xs = ox + np.arange(sc.nx) * sc.export_voxel_m
+    ys = oy + np.arange(sc.ny) * sc.export_voxel_m
+    zs = oz + np.arange(sc.nz) * sc.export_voxel_m
     return xs, ys, zs
 
 
-def build_query(cm1_x, cm1_y, cm1_z):
+def build_query(sc, cm1_x, cm1_y, cm1_z):
     """Precompute the (N,3) query points once -- identical for every frame.
 
     Query z is CLAMPED to the lowest CM1 scalar level rather than left to
@@ -34,20 +32,20 @@ def build_query(cm1_x, cm1_y, cm1_z):
     Clamping extends the lowest level down to the surface, which is what a
     below-first-level sample physically is.
     """
-    xs, ys, zs = export_axes()
+    xs, ys, zs = export_axes(sc)
     zq = np.clip(zs, cm1_z[0], cm1_z[-1])
     # Index order must match the field array's (z, y, x).
     Z, Y, X = np.meshgrid(zq, ys, xs, indexing="ij")
     return np.stack([Z.ravel(), Y.ravel(), X.ravel()], axis=-1)
 
 
-def resample(field, cm1_x, cm1_y, cm1_z, query):
+def resample(sc, field, cm1_x, cm1_y, cm1_z, query):
     """Trilinear-resample one (nz,ny,nx) CM1 field onto the export box."""
     interp = RegularGridInterpolator(
         (cm1_z, cm1_y, cm1_x), field.astype("f8"),
         method="linear", bounds_error=False, fill_value=0.0,
     )
-    out = interp(query).reshape(config.NZ, config.NY, config.NX)
+    out = interp(query).reshape(sc.nz, sc.ny, sc.nx)
     # Guard: linear cannot overshoot, but a fill_value edge or a negative in the
     # source would propagate. Mixing ratios and dBZ are both >= 0 by definition.
     np.clip(out, 0.0, None, out=out)

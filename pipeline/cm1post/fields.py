@@ -10,7 +10,7 @@ import os
 import numpy as np
 from netCDF4 import Dataset
 
-from . import config
+from . import contract
 
 
 def frame_files(run_dir):
@@ -33,13 +33,16 @@ def build_channels(path):
     """dict channel -> float32 (nz, ny, nx) on the CM1 grid, plus storm time (s).
 
     Mixing-ratio channels are summed over their source fields (see
-    config.SOURCE_FIELDS); dbz is the CM1/NSSL diagnostic, passed through.
+    contract.SOURCE_FIELDS); dbz is the CM1/NSSL diagnostic, passed through.
+
+    Channel identity is FORMAT CONTRACT, not per-scenario -- this function needs no
+    Scenario, which is exactly the split docs/phase2-plan-2026-07-20.md §4 draws.
     """
     out = {}
     with Dataset(path) as nc:
         t = float(nc.variables["time"][0])
-        for ch in config.CHANNELS:
-            srcs = config.SOURCE_FIELDS[ch]
+        for ch in contract.CHANNELS:
+            srcs = contract.SOURCE_FIELDS[ch]
             acc = None
             for s in srcs:
                 v = np.asarray(nc.variables[s][0], dtype="f4")  # (z, y, x)
@@ -56,6 +59,6 @@ def active_mask(channels):
     """
     total = None
     for ch, arr in channels.items():
-        m = arr > config.THRESHOLDS[ch]
+        m = arr > contract.THRESHOLDS[ch]
         total = m if total is None else (total | m)
     return total

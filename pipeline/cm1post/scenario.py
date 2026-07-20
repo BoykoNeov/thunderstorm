@@ -1,0 +1,143 @@
+"""Per-scenario configuration, loaded from sim/scenarios/<name>.json.
+
+Everything here VARIES between scenarios. Everything frozen by the package format
+lives in `contract.py` -- see docs/phase2-plan-2026-07-20.md §4 for why that line is
+drawn where it is.
+
+The JSON file is the single source of truth: it feeds both the CM1 deck generator
+(`sim/scenarios/` -> namelist.input) and this post-processor, so a scenario cannot
+be simulated with one geometry and exported with another.
+"""
+import json
+import os
+from dataclasses import dataclass, field
+
+SCHEMA_VERSION = "1.0"
+
+# Repo-root-relative default location of scenario configs.
+SCENARIO_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "sim", "scenarios",
+)
+
+
+@dataclass(frozen=True)
+class Scenario:
+    """One scenario's identity, source run, and export geometry."""
+
+    name: str
+    kind: str                     # single_cell | multicell | supercell
+    phase: str                    # which project phase produced it
+    description: str
+    run_dir: str                  # CM1 output dir (WSL ext4 -- never /mnt/*)
+
+    export_voxel_m: float
+    crop_half_width_m: float
+    crop_z_top_m: float
+
+    provenance: dict = field(default_factory=dict)
+    namelist: dict = field(default_factory=dict)
+    source_path: str = ""
+
+    # --- derived export grid ------------------------------------------------
+    # These were module constants in the Phase 1 config.py; they are derived here
+    # so a scenario cannot declare a grid inconsistent with its own crop box.
+
+    @property
+    def nx(self):
+        return int(round(2 * self.crop_half_width_m / self.export_voxel_m))
+
+    @property
+    def ny(self):
+        return self.nx
+
+    @property
+    def nz(self):
+        return int(round(self.crop_z_top_m / self.export_voxel_m))
+
+    @property
+    def origin_m(self):
+        """World coords (CM1 SI metres) of the CENTRE of voxel (0,0,0).
+
+        OpenVDB's linear transform maps index -> world at voxel CENTRES, so the
+        origin is DERIVED (never hand-set) to make the centres symmetric about
+        x=y=0. This is what pins the bbox centre to exactly (0,0) for every frame
+        -- the SVT static-centre constraint, satisfied by construction rather than
+        by luck. dense2vdb post-translates the shared transform by this, so the VDB
+        carries true CM1 coordinates in SI metres.
+
+        The metres->centimetres and Y-flip conversion into UE space is applied at
+        ACTOR PLACEMENT, never here (single-conversion-site rule).
+        """
+        return (
+            -(self.nx - 1) / 2.0 * self.export_voxel_m,
+            -(self.ny - 1) / 2.0 * self.export_voxel_m,
+            self.export_voxel_m / 2.0,   # first cell centre above ground
+        )
+
+    def describe_grid(self):
+        ox, oy, oz = self.origin_m
+        return (f"{self.nx}x{self.ny}x{self.nz} @ {self.export_voxel_m:.0f} m"
+                f"  origin ({ox:.1f}, {oy:.1f}, {oz:.1f})")
+
+
+def _require(doc, key, path):
+    if key not in doc:
+        raise ValueError(f"{path}: missing required key '{key}'")
+    return doc[key]
+
+
+def load(name_or_path, run_dir_override=None):
+    """Load a scenario by NAME (looked up in sim/scenarios/) or by explicit path."""
+    path = name_or_path
+    if not os.path.isfile(path):
+        path = os.path.join(SCENARIO_DIR, f"{name_or_path}.json")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"no scenario config for '{name_or_path}' "
+            f"(looked for {name_or_path} and {path})")
+
+    with open(path) as f:
+        doc = json.load(f)
+
+    got = doc.get("schema_version")
+    if got != SCHEMA_VERSION:
+        raise ValueError(
+            f"{path}: schema_version {got!r} != {SCHEMA_VERSION!r} "
+            "(this loader does not migrate scenario configs)")
+
+    exp = _require(doc, "export", path)
+    sim = _require(doc, "sim", path)
+
+    sc = Scenario(
+        name=_require(doc, "name", path),
+        kind=_require(doc, "kind", path),
+        phase=doc.get("phase", ""),
+        description=doc.get("description", ""),
+        run_dir=run_dir_override or _require(sim, "run_dir", path),
+        export_voxel_m=float(_require(exp, "voxel_m", path)),
+        crop_half_width_m=float(_require(exp, "crop_half_width_m", path)),
+        crop_z_top_m=float(_require(exp, "crop_z_top_m", path)),
+        provenance=sim.get("provenance", {}),
+        namelist=sim.get("namelist", {}),
+        source_path=path,
+    )
+    _validate(sc, path)
+    return sc
+
+
+def _validate(sc, path):
+    """Catch geometry that would silently produce a wrong package."""
+    if sc.export_voxel_m <= 0:
+        raise ValueError(f"{path}: voxel_m must be > 0")
+
+    # A non-integer voxel count means the declared crop box is NOT the box that
+    # gets exported -- the rounding would move the extent without saying so.
+    for label, span in (("crop_half_width_m", 2 * sc.crop_half_width_m),
+                        ("crop_z_top_m", sc.crop_z_top_m)):
+        n = span / sc.export_voxel_m
+        if abs(n - round(n)) > 1e-9:
+            raise ValueError(
+                f"{path}: {label}={span/2 if 'half' in label else span} is not an "
+                f"integer number of {sc.export_voxel_m} m voxels (got {n}) -- the "
+                "exported box would silently differ from the declared one")

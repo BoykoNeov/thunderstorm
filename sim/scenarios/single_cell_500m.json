@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "name": "single_cell_500m",
+  "kind": "single_cell",
+  "phase": "phase1-spike",
+  "description": "Zero-shear pulse cell at 500 m, the Phase 1 pipeline de-risking dataset. Migrated onto the Phase 2 scenario system as a pure refactor: every value here reproduces the Phase 1 cm1post/config.py constants exactly, so the re-export is byte-identical to the shipped package.",
+
+  "sim": {
+    "run_dir": "/home/boiko/thunderstorm/runs/singlecell",
+
+    "namelist": {
+      "_note": "Scenario-defining overrides applied over the validated base deck. Only keys that characterise THIS scenario appear here; everything else comes from the base template and must not drift. Values verified against sim/single_cell/namelist.input.",
+
+      "nx": 160,
+      "ny": 160,
+      "nz": 40,
+      "dx": 500.0,
+      "dy": 500.0,
+      "dz": 500.0,
+
+      "timax": 3600.0,
+      "tapfrq": 12.0,
+      "dtl": 3.0,
+      "adapt_dt": 1,
+
+      "isnd": 5,
+      "iwnd": 0,
+      "iinit": 1,
+      "irandp": 0,
+      "icor": 0,
+      "imove": 0,
+      "iorigin": 2,
+
+      "ptype": 27,
+      "ihail": 1,
+
+      "terrain_flag": false,
+      "itern": 0,
+      "stretch_z": 0
+    },
+
+    "provenance": {
+      "cm1_version": "cm1r21.1",
+      "build_doc": "docs/phase0-cm1-build.md",
+      "namelist": "sim/single_cell/namelist.input",
+      "microphysics": "NSSL 2-moment, ptype=27 (true hail category)",
+      "sounding": "Weisman-Klemp analytic (isnd=5)",
+      "shear": "none (iwnd=0) -- the zero-shear pulse-cell baseline",
+      "initiation": "warm bubble (iinit=1), no random perturbations (irandp=0)",
+      "domain_motion": "stationary (imove=0)"
+    }
+  },
+
+  "export": {
+    "_note": "Horizontal: measured union half-width was 24.25 km at THRESH=1e-6 (a superset of the 1e-4 export threshold), so 26 km pads it with margin. The cell is centred and stationary (imove=0), so a symmetric box keeps the bbox CENTRE STATIC at (0,0) -- the SVT constraint holds by construction. Vertical: measured union top was 16.75 km, padded to 18 km (a 1-voxel margin was judged too tight against threshold sensitivity). Derived grid: 208 x 208 x 72.",
+
+    "voxel_m": 250.0,
+    "crop_half_width_m": 26000.0,
+    "crop_z_top_m": 18000.0,
+
+    "_voxel_caveat": "250 m isotropic while the sim ran at 500 m -- this UPSAMPLES 2x and adds no physical detail. Intended for the Phase 1 spike: it tested the writer->SVT streaming path at realistic data volume and frame count, not science-grade fine structure."
+  }
+}

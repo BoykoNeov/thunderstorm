@@ -33,7 +33,7 @@ import os
 
 import numpy as np
 
-from . import config
+from . import contract
 
 WEB_FORMAT_VERSION = "1.0"
 
@@ -94,17 +94,17 @@ def write_frame(out_dir, index, channels):
     }
 
 
-def build_manifest(frames, qmax, source_run):
+def build_manifest(sc, frames, qmax):
     """web_manifest.json contents -- the whole reader contract."""
     return {
         "web_format_version": WEB_FORMAT_VERSION,
-        "package_format_version": config.FORMAT_VERSION,
-        "source_run": source_run,
+        "package_format_version": contract.FORMAT_VERSION,
+        "source_run": sc.run_dir,
         "grid": {
-            "nx": config.NX, "ny": config.NY, "nz": config.NZ,
-            "voxel_m": config.EXPORT_VOXEL_M,
+            "nx": sc.nx, "ny": sc.ny, "nz": sc.nz,
+            "voxel_m": sc.export_voxel_m,
             # World coords (CM1 SI metres) of the CENTRE of voxel (0,0,0).
-            "origin_m": list(config.ORIGIN_M),
+            "origin_m": list(sc.origin_m),
         },
         "volume": {
             "layout": "rgba8, x fastest, then y, then z (WebGL texImage3D order)",
@@ -113,7 +113,7 @@ def build_manifest(frames, qmax, source_run):
                     "name": c,
                     "plane": i,
                     "encoding": "log-uint8",
-                    "threshold": config.THRESHOLDS[c],
+                    "threshold": contract.THRESHOLDS[c],
                     "qmax": qmax[c],
                     "units": "kg/kg",
                 }
@@ -122,7 +122,7 @@ def build_manifest(frames, qmax, source_run):
         },
         "dbz": {
             "encoding": "linear-uint8",
-            "threshold": config.THRESHOLDS["dbz"],
+            "threshold": contract.THRESHOLDS["dbz"],
             "vmax": qmax["dbz"],
             "units": "dBZ",
             "diagnostic": True,
