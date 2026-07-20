@@ -9,7 +9,11 @@ Finished scenario packages. A package is a **versioned contract**:
 - surface-layer textures (qr/qg near-surface stack driving Niagara particles)
 - skew-T / hodograph plot images (rendered in the pipeline with MetPy/matplotlib)
 - lightning event list (positions / times / polarity)
-- `manifest.json` carrying `format_version` (UE refuses newer major versions)
+- `manifest.json` carrying `format_version` (UE refuses newer major versions) and a
+  `web` block **pointing at** the rendition above — the package is self-describing.
+  The pointer deliberately copies no grid/frame/byte figures: `web/` is gitignored and
+  regenerable, so a copy would be false on a fresh clone, while `web_manifest.json`
+  stays authoritative. Nothing duplicated, nothing to drift.
 
 The last three ship from Phase 2/4; the first three exist today.
 
@@ -27,6 +31,10 @@ The charter's open "LFS vs out-of-repo" item is closed. **Neither, strictly:**
   This is deliberate and load-bearing: the manifest is the versioned contract UE
   checks `format_version` against, and a contract that isn't version-controlled
   isn't a contract. It is ~48 KB for a 301-frame package and diffs meaningfully.
+  Second dividend, since T2: `pipeline/tests/test_manifest.py` can rebuild the shipped
+  manifest and compare it byte-for-byte from **committed files alone** — no CM1, no
+  WSL, no netCDF — because `manifest.build()` is a pure function of (Scenario, frames,
+  provenance). An edit that silently perturbs the contract fails there, not in UE.
 
 **Consequence — packages are NOT backed up by git.** They are regenerable from
 `sim/` + `pipeline/` (this one: 7.5 min from CM1 netCDF), which is the intended

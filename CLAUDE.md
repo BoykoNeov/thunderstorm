@@ -348,7 +348,32 @@ Do not start a phase without explicit go from the owner.
   "cheap" = a **grid/domain change**; a seed variant needs a new required key, and bubble
   geometry (`init3d.F`) or sounding thermodynamics need actual code. A **generic
   `run_scenario.sh`** is also deliberately left to T6 (`sim/single_cell/run.sh` still
-  hardcodes run dir/ranks/provenance). Remaining: T2–T9.
+  hardcodes run dir/ranks/provenance).
+  **T2 DONE — manifest `web` block + `format_version` 1.1 (Phase 1 carried item #2
+  DISCHARGED, no re-export).** The block is a **POINTER, not a census**: it carries
+  `dir`/`manifest`/`web_format_version`/`consumer` and deliberately copies **no** grid,
+  frame count, byte totals or qmax. That reason killed a whole rejected design (a
+  `link-web` subcommand + cross-manifest consistency check + negative-control suite):
+  `web/` is gitignored and regenerable while `manifest.json` is tracked, so any copied
+  figure is false on a fresh clone and stale after re-export, while `web_manifest.json`
+  stays authoritative. **A copy needs a consistency check; a pointer does not** —
+  nothing duplicated, nothing to drift. Keeping it static also dodges the ordering
+  problem (`export` writes the manifest *before* `export-web` runs) and keeps
+  `manifest.build()` a **pure function of (Scenario, frames, provenance)**, which is what
+  the gate rests on. **Versioning rule now written down:** MINOR = additive, 1.0-era
+  readers keep working; MAJOR = channel names/order, SVT map, encodings, transform/units,
+  layout. Load-bearing, not bookkeeping — a minor bump is the only safe kind while the
+  UE contract stays frozen for want of an SVT re-test. `WEB_FORMAT_VERSION` moved into
+  `contract.py` (webvol re-exports it, same pattern as `SVT_TEXTURE_MAP`) and **stays
+  1.0** — the brick format is untouched, and the diorama checks only that field and never
+  reads `manifest.json`. **Gate = T1b's diff, not a new control suite:** rebuild from
+  committed inputs → exactly 2 structural differences (`format_version`, added `.web`)
+  plus a census-leak check, then **revert those two and the bytes are identical (34810
+  chars)** — which is what rules out a reordered key or reformatted float that "only 2
+  changes" alone would permit. T1b's one-shot trick is now a standing gate:
+  `pipeline/tests/test_manifest.py` **7/7**, reading committed files only (a second
+  dividend of the tracked-manifest policy); T1c's 13 deck controls still pass.
+  Remaining: T3–T9.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 

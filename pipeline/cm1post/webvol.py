@@ -35,7 +35,10 @@ import numpy as np
 
 from . import contract
 
-WEB_FORMAT_VERSION = "1.0"
+# Re-exported for callers that still import it from here; the definition lives in
+# contract.py because it is frozen by the format contract, not chosen per scenario
+# (the same reason SVT_TEXTURE_MAP moved there in T1).
+WEB_FORMAT_VERSION = contract.WEB_FORMAT_VERSION
 
 # Mixing-ratio channels, in the fixed RGBA plane order of the .rgba.gz files.
 RGBA_CHANNELS = ["cloud", "ice", "rain", "graupelhail"]

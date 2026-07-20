@@ -90,6 +90,29 @@ def build(sc, frames, provenance):
             "svt_texture_map": contract.SVT_TEXTURE_MAP,
         },
 
+        "web": {
+            "dir": contract.WEB_DIR,
+            "manifest": contract.WEB_MANIFEST,
+            "web_format_version": contract.WEB_FORMAT_VERSION,
+            "consumer": "diorama/ -- the Storm Diorama web viewer (a second 'dumb "
+                        "player' of this same package; see "
+                        "docs/design-diorama-web-viewer-2026-07-16.md).",
+            "content": ("A RENDITION of the same volumes as vdb/, from the same "
+                        "fields/regrid code path: uint8-quantized gzipped raw bricks, "
+                        "two files per frame (fNNNN.rgba.gz = cloud/ice/rain/"
+                        "graupelhail; fNNNN.dbz.gz = the dBZ diagnostic). Not a "
+                        "substitute for vdb/ -- it is lossily quantized for the web."),
+            "authority": ("POINTER, NOT A CENSUS. Grid, encoding, per-channel qmax "
+                          "and the frame list are NOT copied here; web_manifest.json "
+                          "is authoritative for the rendition. Nothing is duplicated, "
+                          "so nothing can drift out of sync with it."),
+            "presence": ("web/ is REGENERABLE and gitignored, so it is absent from a "
+                         "fresh clone until `export_scenario.py export-web` is run "
+                         "(scenarios/README.md). This block declares that the "
+                         "rendition BELONGS to the package -- not that the files are "
+                         "on disk right now."),
+        },
+
         "diagnostics": {
             "dbz": {
                 "source": "CM1 output_dbz=1, computed by the NSSL 2-moment scheme "

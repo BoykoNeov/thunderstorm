@@ -17,8 +17,33 @@ Per-scenario geometry (voxel size, crop box, run dir) lives in `scenario.py`.
 """
 
 # Scenario-package format contract version (the manifest carries this; UE refuses a
-# newer MAJOR version). Bumped when the package layout or channel map changes.
-FORMAT_VERSION = "1.0"
+# newer MAJOR version -- see scenarios/README.md).
+#
+# Versioning rule, made explicit at the 1.1 bump so the next one is mechanical:
+#   MINOR -- ADDITIVE and back-compatible. New manifest keys a 1.0 reader can ignore
+#            and still render the package correctly. A 1.0-era reader MUST keep
+#            working on a 1.1 package; that is what makes the bump UE-safe while the
+#            UE app is deferred and cannot be re-tested.
+#   MAJOR -- anything a reader cannot ignore: channel names/order, the SVT texture
+#            map, encodings, the transform/units contract, package layout.
+#
+# 1.1 (2026-07-20, Phase 2 T2): added the manifest `web` block -- a POINTER to the
+#     web rendition, declaring that `web/` belongs to the package. Purely additive;
+#     no data, no channel, no encoding changed, so no SVT import re-test is implied.
+FORMAT_VERSION = "1.1"
+
+# Version of the web-rendition brick format (web/web_manifest.json carries this, and
+# diorama/src/volume.ts refuses a newer MAJOR). Frozen by the format contract rather
+# than chosen per scenario, so it lives here; webvol.py re-exports it.
+# NOT bumped at package 1.1: the brick layout, quantization and reader contract are
+# byte-for-byte unchanged.
+WEB_FORMAT_VERSION = "1.0"
+
+# Where the web rendition lives inside a package, and what reads it. The manifest's
+# `web` block is built from these; the diorama dev server resolves the same path
+# (diorama/vite.config.ts -> ../scenarios/<name>/web).
+WEB_DIR = "web/"
+WEB_MANIFEST = "web/web_manifest.json"
 
 # --- channel map (docs/phase1-svt-budget.md) --------------------------------
 CHANNELS = ["cloud", "ice", "rain", "graupelhail", "dbz"]
