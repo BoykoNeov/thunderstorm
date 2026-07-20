@@ -214,6 +214,12 @@ def gate_web_version_bumped(shipped):
     The bumps are NOT redundant with the `w`/`cref` keys (the trap T3's bump fell
     into): the version declares the GENERATION, the key declares the CAPABILITY, and
     T8/T9 must feature-detect on the key.
+
+    "major stays 1 so volume.ts still accepts it" is CHECKED, not reasoned:
+    diorama/src/volume.ts:40 does `parseInt(version.split(".")[0], 10)` and rejects
+    only `major > SUPPORTED_MAJOR (1)`. It splits on the dot before parsing, so "1.2"
+    yields 1 and is accepted -- a parseFloat there would also have passed `> 1` today
+    but would break at "1.10". The split is what makes MINOR bumps safe indefinitely.
     """
     v = contract.WEB_FORMAT_VERSION
     major, _, minor = v.partition(".")

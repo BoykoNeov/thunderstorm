@@ -259,19 +259,21 @@ def build_manifest(sc, frames, qmax, observed=None):
                     "by construction: cref exceeds the threshold at (x,y) exactly when "
                     "some dbz in that column does, and the box is sized to contain "
                     "every such voxel. Vertically, cref is CM1's full-column maximum "
-                    "while the exported volume stops at the box top -- but MEASURED "
-                    "over all 301 frames of this run, the peak dBZ anywhere above the "
-                    "box top is 0.0000, so that truncation costs cref exactly nothing "
-                    "here. See docs/phase2-plan-2026-07-20.md; re-measure for a "
-                    "scenario with a deeper storm or a lower box."),
+                    "while the exported volume stops at the box top, so cref may "
+                    "include echo the volume does not show. Whether it actually does "
+                    "is a property of the SCENARIO, not of this format -- see "
+                    "docs/phase2-plan-2026-07-20.md for the measurement, and "
+                    "re-measure for any scenario with a deeper storm or a lower box."),
                 "vs_volume_note": (
-                    "cref can still read slightly HOTTER than the column maximum of "
-                    "the 3D dbz layer, by up to ~2 dB in this run. That is not an "
-                    "inconsistency: cref is max-then-resample while a column max of "
-                    "the volume is resample-then-max, and the former dominates "
-                    "whenever the strongest echo sits at different heights in "
-                    "neighbouring columns. cref is the correct composite reflectivity; "
-                    "the column max of a resampled volume is not."),
+                    "cref can read slightly HOTTER than the column maximum of the 3D "
+                    "dbz layer. That is not an inconsistency: cref is "
+                    "max-then-resample while a column max of the volume is "
+                    "resample-then-max, and the former dominates whenever the "
+                    "strongest echo sits at different heights in neighbouring "
+                    "columns. cref is the correct composite reflectivity; the column "
+                    "max of a resampled volume is not. The size of the gap is "
+                    "scenario-dependent and measured in the plan doc, not asserted "
+                    "here."),
             }
             for name, spec in contract.WEB_PLAN_FIELDS.items()
         },

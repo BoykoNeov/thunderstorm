@@ -250,6 +250,51 @@ class _FakeScenarioForManifest:
     origin_m = (0.0, 0.0, 0.0)
 
 
+def gate_no_run_specific_numbers_in_prose():
+    """The plan-field prose must not assert numbers measured on ONE run.
+
+    `build_manifest` is the GENERIC per-scenario builder, so any figure hard-coded
+    into its strings ships in EVERY scenario's manifest. T5 drafted this wrongly and
+    the gates were blind to it: the caveat asserted "over all 301 frames of this run
+    the peak dBZ above the box top is 0.0000" and "~2 dB", both true for
+    single_cell_500m and both false-by-default for the next scenario -- inside the
+    contract file. This is T2's "a census in PROSE is still a census" one level over,
+    and it contradicts T4's own rule (§14.3: point at the doc, do not copy the
+    numbers).
+
+    Structural claims ("lossless by construction", the max-then-interp ordering) are
+    fine and stay: they are true for every scenario. Per-scenario FIGURES belong in
+    observed_min/observed_max, which are computed, or in the plan doc.
+    """
+    import re
+    qmax = {c: 1.0e-2 for c in contract.CHANNELS}
+    qmax["dbz"] = 72.213715
+    doc = webvol.build_manifest(_FakeScenarioForManifest(), [], qmax,
+                                observed={"w": {"min": -1.0, "max": 1.0},
+                                          "cref": {"min": 0.0, "max": 72.2}})
+
+    # Numbers that would be a measurement: frame counts, dBZ figures, "~N dB".
+    suspicious = re.compile(
+        r"\d+\s*frames|\d+\.\d+\s*dBZ|~\s*\d+(\.\d+)?\s*dB|\ball\s+\d+\b",
+        re.IGNORECASE)
+    hits = []
+    for name, block in doc["plan_fields"].items():
+        for key, val in block.items():
+            if isinstance(val, str) and suspicious.search(val):
+                hits.append(f"{name}.{key}: {suspicious.search(val).group(0)!r}")
+
+    # Prove the gate can fire: the exact text T5 first shipped.
+    prefix = ("MEASURED over all 301 frames of this run, the peak dBZ anywhere "
+              "above the box top is 0.0000, so that truncation costs cref nothing")
+    fires = bool(suspicious.search(prefix))
+
+    return not hits and fires, (
+        f"no run-specific figures in plan_fields prose ({len(hits)} found); the "
+        f"pre-fix draft {'IS' if fires else 'is NOT'} rejected by the same regex "
+        "-- a gate that has only ever passed is not known to work"
+        + (f"; hits: {hits}" if hits else ""))
+
+
 def gate_below_threshold_is_zero():
     """Sub-threshold echo encodes to 0 -- the 'no echo' sentinel, not weak echo.
 
@@ -364,6 +409,8 @@ def main():
 
     print("\nencoding -- shared with the 3D dbz layer, deliberately")
     check("one byte means one dBZ in both views", gate_shares_the_dbz_scale)
+    check("no run-specific numbers asserted in the prose",
+          gate_no_run_specific_numbers_in_prose)
     check("below-threshold encodes to the 0 'no echo' sentinel", gate_below_threshold_is_zero)
 
     negative_controls()
