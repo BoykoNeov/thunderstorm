@@ -157,8 +157,13 @@ def cmd_export_web(args):
     print(f"scanning {len(files)} frames for per-channel maxima")
     qmax = {c: 0.0 for c in contract.CHANNELS}
     # Extra fields (T4) are SIGNED, so a max alone is not a range -- track both ends.
+    # Plan fields (T5) do NOT get their own qmax: they reuse the source channel's,
+    # which for cref is an identity rather than an approximation (cref IS
+    # colmax(dbz), measured bitwise -- contract.WEB_PLAN_FIELDS). Their observed
+    # range is still tracked, for the legend and as a cheap standing re-check of
+    # that identity on every future scenario.
     observed = {n: {"min": float("inf"), "max": float("-inf")}
-                for n in contract.WEB_EXTRA_FIELDS}
+                for n in list(contract.WEB_EXTRA_FIELDS) + list(contract.WEB_PLAN_FIELDS)}
     t0 = time.time()
     for i, path in enumerate(files):
         ch, _ = fields.build_channels(path)
@@ -168,19 +173,40 @@ def cmd_export_web(args):
             a = fields.read_extra(path, n)
             observed[n]["min"] = min(observed[n]["min"], float(a.min()))
             observed[n]["max"] = max(observed[n]["max"], float(a.max()))
+        for n in contract.WEB_PLAN_FIELDS:
+            a = fields.read_plan(path, n)
+            observed[n]["min"] = min(observed[n]["min"], float(a.min()))
+            observed[n]["max"] = max(observed[n]["max"], float(a.max()))
         if i % 60 == 0:
             print(f"  frame {i:3d}  ({(time.time()-t0)/(i+1):.2f} s/frame)")
     print("  qmax: " + "  ".join(f"{c}={qmax[c]:.4g}" for c in contract.CHANNELS))
+    all_specs = {**contract.WEB_EXTRA_FIELDS, **contract.WEB_PLAN_FIELDS}
     for n, o in observed.items():
         print(f"  {n}: observed {o['min']:+.2f} .. {o['max']:+.2f} "
-              f"{contract.WEB_EXTRA_FIELDS[n]['units']}")
+              f"{all_specs[n]['units']}")
+
+    # T5: the plan fields borrow the source channel's vmax, which is only legitimate
+    # because cref IS the column max of that channel. That was measured over the whole
+    # Phase 1 run, but a measurement on one run is not a property of CM1 -- so re-check
+    # it here, per scenario, where it is free. A future ptype/version where cref is
+    # computed differently would otherwise silently mis-scale the entire plan view.
+    for n, spec in contract.WEB_PLAN_FIELDS.items():
+        src = qmax[spec["vmax_from"]]
+        if observed[n]["max"] > src:
+            print(f"\nFAIL: {n} max {observed[n]['max']:.6f} EXCEEDS the "
+                  f"{spec['vmax_from']} max {src:.6f} it borrows as vmax.\n"
+                  f"      {n} is supposed to be the column max of {spec['vmax_from']}, "
+                  "so it cannot be larger. Either CM1 computes it differently in this "
+                  "run, or the field mapping is wrong. Encoding would CLIP the peak.",
+                  file=sys.stderr)
+            return 1
 
     # The fixed encode scale is only honest if the data actually fits inside it.
     # Clipping here would be silent and irreversible, so it is an ERROR, not a
     # warning -- the correct response is a deliberate contract change (which also
     # re-scales every existing package's colours), never a quietly truncated export.
-    for n, o in observed.items():
-        scale = contract.WEB_EXTRA_FIELDS[n]["scale_m_s"]
+    for n, spec in contract.WEB_EXTRA_FIELDS.items():
+        o, scale = observed[n], spec["scale_m_s"]
         if max(abs(o["min"]), abs(o["max"])) > scale:
             print(f"\nFAIL: {n} range {o['min']:+.2f}..{o['max']:+.2f} exceeds the "
                   f"fixed encode scale +/-{scale} (contract.W_ENCODE_SCALE_M_S).\n"
@@ -191,6 +217,7 @@ def cmd_export_web(args):
             return 1
 
     query = regrid.build_query(sc, cm1_x, cm1_y, cm1_z)
+    query2d = regrid.build_query_2d(sc)  # T5 plan fields -- horizontal only
     print(f"export grid {sc.describe_grid()}")
     print(f"exporting {len(idx)} frames -> {args.out}")
 
@@ -210,6 +237,16 @@ def cmd_export_web(args):
             res = regrid.resample_signed(sc, fields.read_extra(files[i], name),
                                          cm1_x, cm1_y, cm1_z, query)
             enc[name] = webvol.encode_signed_u8(res, spec["scale_m_s"])
+        # Plan fields (T5). cref is dBZ, so it resamples in LINEAR Z exactly as the
+        # 3D dbz channel does -- resample_dbz_2d, never the generic path. It is also
+        # encoded with the SOURCE channel's threshold and vmax, so one byte means one
+        # dBZ in both layers and a single colormap serves them.
+        for name, spec in contract.WEB_PLAN_FIELDS.items():
+            res = regrid.resample_dbz_2d(sc, fields.read_plan(files[i], name),
+                                         cm1_x, cm1_y, query2d)
+            enc[name] = webvol.encode_linear_u8(res,
+                                                contract.THRESHOLDS[spec["threshold_from"]],
+                                                qmax[spec["vmax_from"]])
 
         rec = webvol.write_frame(args.out, i, enc)
         rec.update({"index": i, "time_s": storm_t})

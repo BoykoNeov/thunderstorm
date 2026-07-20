@@ -50,7 +50,13 @@ FORMAT_VERSION = "1.1"
 #     is exactly what MINOR means. Feature detection belongs on the PRESENCE of the
 #     `w` block, not on this number: the version declares the generation, the key
 #     declares the capability.
-WEB_FORMAT_VERSION = "1.1"
+# 1.2 (2026-07-20, Phase 2 T5): added the `cref` PLAN field -- again a new per-frame
+#     file and a new manifest block, so the same rule that made T4 a MINOR bump makes
+#     this one. Note it is NOT a MAJOR bump even though the new file has a different
+#     RANK (2D, not 3D): rank is a property of the added block, which a 1.1-era reader
+#     never fetches, not of anything that already existed. Same feature-detection rule:
+#     T9 keys off `plan_fields.cref`, never off this number.
+WEB_FORMAT_VERSION = "1.2"
 
 # Where the web rendition lives inside a package, and what reads it. The manifest's
 # `web` block is built from these; the diorama dev server resolves the same path
@@ -142,6 +148,51 @@ WEB_EXTRA_FIELDS = {
         "scale_m_s": W_ENCODE_SCALE_M_S,
         "diagnostic": False,    # w is a PROGNOSTIC simulation field, not a diagnostic
                                 # like dbz -- it is what the model solved for.
+    },
+}
+
+# --- web-export PLAN fields (2D products, NOT SVT channels) -----------------
+# Phase 2 T5. Separate from WEB_EXTRA_FIELDS because the difference is RANK, and rank
+# is the one thing a consumer cannot discover from a raw brick: a viewer must know
+# whether to allocate a 3D texture or a 2D one BEFORE it reads the bytes. Merging the
+# two dicts would force every reader to branch on a `dims` field anyway, and a reader
+# that forgot would upload a (ny*nx) buffer into a (nz,ny,nx) texture -- a silent
+# garbage render, not an error. Two dicts, two manifest blocks, no branch.
+#
+# `cref` is COMPOSITE REFLECTIVITY: the column maximum of dBZ, and the standard radar
+# plan product. It is view-INDEPENDENT, which is the whole reason it exists here --
+# the diorama's existing 3D dBZ layer is a peak-along-the-VIEW-RAY MIP, so it changes
+# when the camera orbits and is explicitly NOT composite reflectivity
+# (docs/design-diorama-web-viewer-2026-07-16.md). Both ship; T9 must keep them
+# distinctly labelled.
+#
+# MEASURED, not assumed (2026-07-20, probe over all 301 frames of the Phase 1 run):
+# CM1's `cref` is BITWISE identical to `dbz.max(axis=0)` in every frame -- worst
+# |cref - colmax(dbz)| = 0.000e+00, and both sequence maxima are 72.213715 dBZ. So
+# cref is the column max of the SAME reflectivity operator, not an independently
+# computed one. Two consequences the design leans on:
+#   * `vmax` can reuse the dbz sequence max EXACTLY (see VMAX_FROM below) -- it is an
+#     identity, not merely a safe bound, so the same byte means the same dBZ in the 3D
+#     layer and the plan view. Sharing the scale is what lets one NWS colormap serve
+#     both; a separately fitted cref max would drift them apart for no gain.
+#   * `cref >= colmax(exported dbz)` is a valid invariant to gate on (see
+#     pipeline/tests/test_regrid_cref.py).
+#
+# The threshold is shared with the dbz channel for the same reason: a plan view that
+# starts painting at a different dBZ than the volume would misreport echo extent.
+WEB_PLAN_FIELDS = {
+    "cref": {
+        "cm1_var": "cref",      # taken from CM1, NOT recomputed here. Recomputing it
+                                # as colmax of the CROPPED volume would silently
+                                # redefine a standard radar product to mean "composite
+                                # reflectivity of the part we happened to export".
+        "encoding": "linear-uint8",
+        "units": "dBZ",
+        "threshold_from": "dbz",  # contract.THRESHOLDS key
+        "vmax_from": "dbz",       # per-sequence qmax key -- exact, see above
+        "diagnostic": True,       # UNLIKE `w`: cref is computed FROM the simulated
+                                  # state by a reflectivity parameterization, never
+                                  # fed back into it (charter core principle 1).
     },
 }
 

@@ -71,6 +71,54 @@ def resample_dbz(sc, field, cm1_x, cm1_y, cm1_z, query):
     return np.ascontiguousarray(out, dtype="<f4")
 
 
+def build_query_2d(sc):
+    """Precompute the (N,2) HORIZONTAL query points -- identical for every frame.
+
+    The 2D counterpart of `build_query` for plan products (contract.WEB_PLAN_FIELDS).
+    No z clamp exists here because there is no z: a plan field has already been
+    collapsed over the column by CM1.
+    """
+    xs, ys, _ = export_axes(sc)
+    # Index order must match the field array's (y, x).
+    Y, X = np.meshgrid(ys, xs, indexing="ij")
+    return np.stack([Y.ravel(), X.ravel()], axis=-1)
+
+
+def resample_dbz_2d(sc, field, cm1_x, cm1_y, query2d):
+    """Resample a 2D dBZ PLAN field (composite reflectivity) in LINEAR Z.
+
+    Deliberately a near-duplicate of `resample_dbz` rather than a shared core that
+    both call. The dimensionality differs but the assumption -- dBZ is logarithmic
+    and must be interpolated in Z = 10^(dBZ/10) -- is identical, and everything in
+    the sibling's docstring about WHY applies verbatim. It is written out again
+    because `resample_dbz` sits under a passing gate (test_regrid_dbz.py) that was
+    the entire point of T3: refactoring validated code to share a core with new,
+    ungated code puts the old gate's subject at risk to save nine lines. The
+    codebase's taste is explicit entry points (`resample` / `resample_dbz` /
+    `resample_signed`) precisely so a caller cannot land on the wrong assumption by
+    default.
+
+    The linear-Z space is also what makes the T5 invariant true: because the
+    horizontal interpolation weights are shared across all z-levels and convex,
+        max_z interp_xy(Z)  >=  interp_xy(max_z Z)  is FALSE,
+        interp_xy(max_z Z)  >=  max_z interp_xy(Z)  is TRUE,
+    i.e. resampled cref (max-then-interp) is >= the column max of the resampled 3D
+    dbz (interp-then-max), never the reverse. That inequality holds ONLY in linear Z,
+    so the gate that checks it doubles as a check that this function was used and
+    not a dB interpolation (pipeline/tests/test_regrid_cref.py).
+    """
+    z_lin = np.power(10.0, field.astype("f8") / 10.0)
+    interp = RegularGridInterpolator(
+        (cm1_y, cm1_x), z_lin,
+        method="linear", bounds_error=False, fill_value=1.0,  # 1.0 = 0 dBZ = no echo
+    )
+    z_out = interp(query2d).reshape(sc.ny, sc.nx)
+    np.clip(z_out, 1.0e-12, None, out=z_out)  # guard: log10 must not see 0
+    out = 10.0 * np.log10(z_out)
+    np.clip(out, 0.0, None, out=out)
+    return np.ascontiguousarray(out, dtype="<f4")
+
+
 def resample_signed(sc, field, cm1_x, cm1_y, cm1_z, query):
     """Trilinear-resample a SIGNED field (vertical velocity w) onto the export box.
 

@@ -12,6 +12,9 @@ frame records are authoritative, this list is orientation):
   fNNNN.w.gz     uint8 R, same order -- vertical velocity, SIGNED, so it gets its
                  own plane and its own encoding rather than a slot in the rgba
                  interleave (contract.WEB_EXTRA_FIELDS).
+  fNNNN.cref.gz  uint8 R, 2D (NX, NY), x fastest -- composite reflectivity, a PLAN
+                 product with no z axis at all (contract.WEB_PLAN_FIELDS). Same file
+                 shape as the above, different RANK; the manifest says which.
 
 Quantization is a per-channel LOG map: mixing ratios span ~1e-4..1e-2 kg/kg and a
 linear byte map would crush the anvil into 2-3 codes.
@@ -131,7 +134,11 @@ def write_frame(out_dir, index, channels):
     # Extra fields (T4): separate single-plane files, so a viewer that does not
     # implement a layer never downloads it. `w` is signed and cannot ride in the
     # 4-channel rgba plane, which is why this is a file rather than a component.
-    for name in contract.WEB_EXTRA_FIELDS:
+    #
+    # Plan fields (T5) are written by the same loop but from a separate dict: the
+    # file shape is identical (one gzipped uint8 plane), only the RANK of what is
+    # inside differs, and that is declared in the manifest block, not the filename.
+    for name in list(contract.WEB_EXTRA_FIELDS) + list(contract.WEB_PLAN_FIELDS):
         path = os.path.join(out_dir, f"f{index:04d}.{name}.gz")
         with gzip.open(path, "wb", compresslevel=GZIP_LEVEL) as f:
             f.write(np.ascontiguousarray(channels[name]).tobytes())
@@ -208,6 +215,65 @@ def build_manifest(sc, frames, qmax, observed=None):
                     "across the sequence for the UE SVT contract."),
             }
             for name, spec in contract.WEB_EXTRA_FIELDS.items()
+        },
+        # 2D plan products (T5). A SEPARATE block from extra_fields, not a `dims` key
+        # inside it: a reader must know the rank before it touches the bytes, and a
+        # reader that branches wrongly uploads a (ny*nx) buffer into a 3D texture and
+        # renders garbage rather than failing. See contract.WEB_PLAN_FIELDS.
+        "plan_fields": {
+            name: {
+                "file_suffix": f".{name}.gz",
+                "encoding": spec["encoding"],
+                "units": spec["units"],
+                "cm1_var": spec["cm1_var"],
+                "diagnostic": spec["diagnostic"],
+                # Rank and layout, stated because this block's whole reason to exist
+                # separately is that they differ from the volume blocks above.
+                "dims": ["y", "x"],
+                "layout": ("uint8 R, x fastest then y -- a (NX, NY) 2D plane. NOT a "
+                           "volume: this is a plan (map) product, already collapsed "
+                           "over the column."),
+                "threshold": contract.THRESHOLDS[spec["threshold_from"]],
+                "vmax": qmax[spec["vmax_from"]],
+                "decode": ("value = threshold + (byte - 1) / 254 * (vmax - threshold) "
+                           "for byte > 0; byte 0 means BELOW threshold (no echo). "
+                           "Identical to the dbz decode, deliberately."),
+                "scale_note": (
+                    "threshold and vmax are SHARED with the 3D dbz layer, so one byte "
+                    "means one dBZ in both and a single colormap serves both. This is "
+                    "exact, not approximate: CM1's cref was measured bitwise identical "
+                    "to dbz.max(axis=0) over all frames, so the two fields have the "
+                    "same sequence maximum by identity."),
+                "observed_min": (observed or {}).get(name, {}).get("min"),
+                "observed_max": (observed or {}).get(name, {}).get("max"),
+                "view_independence_note": (
+                    "COMPOSITE REFLECTIVITY: the maximum dBZ in each vertical column, "
+                    "independent of the viewing direction. This is the standard radar "
+                    "plan product and is NOT the same thing as the viewer's 3D dBZ "
+                    "layer, which is a maximum along the VIEW RAY and therefore "
+                    "changes as the camera orbits. Both ship in this package; a UI "
+                    "must label them distinctly."),
+                "crop_caveat": (
+                    "Horizontally this field is cropped to the SAME box as the "
+                    "volumes, and above the shared dBZ threshold that crop is lossless "
+                    "by construction: cref exceeds the threshold at (x,y) exactly when "
+                    "some dbz in that column does, and the box is sized to contain "
+                    "every such voxel. Vertically, cref is CM1's full-column maximum "
+                    "while the exported volume stops at the box top -- but MEASURED "
+                    "over all 301 frames of this run, the peak dBZ anywhere above the "
+                    "box top is 0.0000, so that truncation costs cref exactly nothing "
+                    "here. See docs/phase2-plan-2026-07-20.md; re-measure for a "
+                    "scenario with a deeper storm or a lower box."),
+                "vs_volume_note": (
+                    "cref can still read slightly HOTTER than the column maximum of "
+                    "the 3D dbz layer, by up to ~2 dB in this run. That is not an "
+                    "inconsistency: cref is max-then-resample while a column max of "
+                    "the volume is resample-then-max, and the former dominates "
+                    "whenever the strongest echo sits at different heights in "
+                    "neighbouring columns. cref is the correct composite reflectivity; "
+                    "the column max of a resampled volume is not."),
+            }
+            for name, spec in contract.WEB_PLAN_FIELDS.items()
         },
         "frames": frames,
     }

@@ -86,12 +86,14 @@ def gate_byte_identical(shipped_text, rebuilt):
             "diagnostics.dbz.caveat": (ship_dbz["caveat"] == dbz["caveat"]),
             "web.web_format_version": (shipped["web"]["web_format_version"],
                                        doc["web"]["web_format_version"])}
-    expected = {"format_version": ("1.1", "1.1"),   # T3/T4 do NOT bump the PACKAGE
+    expected = {"format_version": ("1.1", "1.1"),   # T3-T5 do NOT bump the PACKAGE
                 "diagnostics.dbz.resampling": (False, True),
                 "diagnostics.dbz.caveat": False,
-                "web.web_format_version": ("1.0", "1.1")}   # T4 bumps the WEB format
+                # T4 bumped the WEB format to 1.1, T5 to 1.2. The skew grows with
+                # each batched task and collapses at the re-export.
+                "web.web_format_version": ("1.0", "1.2")}
     if seen != expected:
-        return False, f"unexpected T3+T4 diff shape: {seen} != {expected}"
+        return False, f"unexpected T3-T5 diff shape: {seen} != {expected}"
 
     # Revert exactly those three, preserving key ORDER: `resampling` was inserted
     # before `caveat`, so rebuilding the dict is how order is restored.
@@ -101,11 +103,11 @@ def gate_byte_identical(shipped_text, rebuilt):
 
     text = dumps(doc)
     if text == shipped_text:
-        return True, (f"rebuilt == shipped after reverting the 3 deliberate T3+T4 "
+        return True, (f"rebuilt == shipped after reverting the 3 deliberate T3-T5 "
                       f"changes, {len(text)} chars byte-identical "
                       "(PENDING the batched T3-T5 re-export)")
     return False, (f"reverted rebuild {len(text)} chars != shipped "
-                   f"{len(shipped_text)}; something moved beyond the T3+T4 diff")
+                   f"{len(shipped_text)}; something moved beyond the T3-T5 diff")
 
 
 def gate_grid_derived(sc, shipped):
@@ -191,27 +193,34 @@ def gate_web_no_prose_census(shipped):
 
 
 def gate_web_version_bumped(shipped):
-    """T4 grows the WEB format, so the WEB version bumps -- MINOR, same major.
+    """T4 and T5 each grow the WEB format, so it bumps MINOR -- same major, twice.
 
     The distinction that decides every version question in this project:
       T3 changed dbz VALUES inside existing files  -> DATA  -> no bump.
       T4 adds a per-frame file, a manifest block and a new encoding
-                                                   -> FORMAT -> MINOR bump.
+                                                   -> FORMAT -> MINOR bump (1.1).
+      T5 adds another per-frame file and block      -> FORMAT -> MINOR bump (1.2).
     Not bumping would assert that "1.0" and "1.0-with-an-updraft-field" are the same
     format, which is false. Bumping the MAJOR would be worse: diorama/src/volume.ts
     refuses a newer major, so it would lock out the very viewer T8 is about to
-    extend -- and a 1.0-era viewer genuinely still renders a T4 package correctly,
-    because it simply never fetches the file it does not know about.
+    extend -- and a 1.0-era viewer genuinely still renders a T4/T5 package correctly,
+    because it simply never fetches the files it does not know about.
 
-    The bump is NOT redundant with the `w` key (the trap T3's bump fell into): the
-    version declares the GENERATION, the key declares the CAPABILITY, and T8 must
-    feature-detect on the key.
+    T5 is worth stating separately because it is the case where MAJOR is most
+    tempting: the file it adds has a different RANK (2D, not 3D). It is still MINOR,
+    because rank is a property of the NEW block, which an older reader never fetches;
+    nothing that already existed changed shape.
+
+    The bumps are NOT redundant with the `w`/`cref` keys (the trap T3's bump fell
+    into): the version declares the GENERATION, the key declares the CAPABILITY, and
+    T8/T9 must feature-detect on the key.
     """
     v = contract.WEB_FORMAT_VERSION
     major, _, minor = v.partition(".")
-    ok = v == "1.1" and major == "1" and minor == "1"
+    ok = v == "1.2" and major == "1" and minor == "2"
     return ok, (f"contract web_format_version {v} -- MINOR bump for additive format "
-                f"growth, major stays {major} so volume.ts still accepts it")
+                f"growth (T4 -> 1.1, T5 -> 1.2), major stays {major} so volume.ts "
+                "still accepts it")
 
 
 def gate_minor_bump_is_additive(shipped):

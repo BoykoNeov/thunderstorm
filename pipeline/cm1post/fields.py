@@ -64,6 +64,24 @@ def read_extra(path, name):
         return np.asarray(nc.variables[var][0], dtype="f4")  # (z, y, x)
 
 
+def read_plan(path, name):
+    """Read one WEB_PLAN_FIELDS field -> float32 (ny, nx).
+
+    The 2D sibling of `read_extra` (Phase 2 T5). Passed through unmodified: `cref`
+    is CM1's own composite-reflectivity diagnostic, and recomputing it here from the
+    cropped `dbz` would quietly redefine a standard radar product.
+
+    Note this field takes NO part in `active_mask` and therefore no part in sizing
+    the bbox. It cannot: a plan field has no z, so it cannot mark a voxel active.
+    It does not need to either -- cref > t at (x,y) holds exactly when some dbz > t
+    exists in that column, so the box sized on the 3D dbz channel already contains
+    every above-threshold cref cell by construction.
+    """
+    var = contract.WEB_PLAN_FIELDS[name]["cm1_var"]
+    with Dataset(path) as nc:
+        return np.asarray(nc.variables[var][0], dtype="f4")  # (y, x)
+
+
 def active_mask(channels):
     """Union of per-channel active voxels at the LOCKED thresholds.
 
