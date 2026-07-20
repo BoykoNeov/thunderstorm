@@ -97,7 +97,7 @@
   "manifest": "web/web_manifest.json",
   "web_format_version": "1.0",
   "consumer": "diorama/ -- the Storm Diorama web viewer (a second 'dumb player' of this same package; see docs/design-diorama-web-viewer-2026-07-16.md).",
-  "content": "A RENDITION of the same volumes as vdb/, from the same fields/regrid code path: uint8-quantized gzipped raw bricks, two files per frame (fNNNN.rgba.gz = cloud/ice/rain/graupelhail; fNNNN.dbz.gz = the dBZ diagnostic). Not a substitute for vdb/ -- it is lossily quantized for the web.",
+  "content": "A RENDITION of the same volumes as vdb/, from the same fields/regrid code path: gzipped uint8-quantized raw bricks. See web_manifest.json for the current per-frame files, channels and encodings. Not a substitute for vdb/ -- it is lossily quantized for the web.",
   "authority": "POINTER, NOT A CENSUS. Grid, encoding, per-channel qmax and the frame list are NOT copied here; web_manifest.json is authoritative for the rendition. Nothing is duplicated, so nothing can drift out of sync with it.",
   "presence": "web/ is REGENERABLE and gitignored, so it is absent from a fresh clone until `export_scenario.py export-web` is run (scenarios/README.md). This block declares that the rendition BELONGS to the package -- not that the files are on disk right now."
  },

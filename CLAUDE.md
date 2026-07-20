@@ -371,8 +371,8 @@ Do not start a phase without explicit go from the owner.
   plus a census-leak check, then **revert those two and the bytes are identical (34810
   chars)** — which is what rules out a reordered key or reformatted float that "only 2
   changes" alone would permit. T1b's one-shot trick is now a standing gate:
-  `pipeline/tests/test_manifest.py` **7/7**, reading committed files only (a second
-  dividend of the tracked-manifest policy); T1c's 13 deck controls still pass.
+  `pipeline/tests/test_manifest.py` **8/8**, reading committed files only (a second
+  dividend of the tracked-manifest policy); T1c's 13 deck controls still pass. **A census in PROSE is still a census** (advisor, post-commit): the block's prose enumerated "two files per frame", which the structured key check cannot see and which T4/T5 falsify (signed `w` cannot ride in the 4-channel rgba plane) — inside a *tracked* contract file. Now an 8th regex gate, **fired against the pre-fix manifest before it passed**. `manifest.write`/`webvol.write_manifest` also pin `newline="\n"`: rebuilding a WSL-written package file from Windows silently CRLF-ed all 1932 lines, invisible to gates that read back in universal-newline mode.
   Remaining: T3–T9.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.

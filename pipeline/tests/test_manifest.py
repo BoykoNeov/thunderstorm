@@ -111,6 +111,25 @@ def gate_web_is_pointer(shipped):
                            else f"CENSUS LEAK: {census}"))
 
 
+def gate_web_no_prose_census(shipped):
+    """A census in PROSE is still a census -- and the key check above is blind to it.
+
+    An earlier draft of `content` enumerated "two files per frame (fNNNN.rgba.gz =
+    cloud/ice/rain/graupelhail; fNNNN.dbz.gz ...)". That is exactly the duplication
+    the pointer design exists to avoid, and it goes stale at T4/T5: `w` is signed and
+    web-export-only, so it cannot ride in the 4-channel rgba plane and the file list
+    grows. The prose must point at web_manifest.json, never restate it.
+    """
+    import re
+    pat = re.compile(r"\.rgba\.gz|\.dbz\.gz|f\s*N{2,}|fNNNN|two files per frame",
+                     re.IGNORECASE)
+    hits = [f"{k}: {m.group(0)!r}"
+            for k, v in shipped.get("web", {}).items()
+            if isinstance(v, str) and (m := pat.search(v))]
+    return not hits, ("no per-frame file layout restated in prose" if not hits
+                      else f"PROSE CENSUS: {hits}")
+
+
 def gate_web_version_not_bumped(shipped):
     """Package 1.0 -> 1.1 must NOT have moved the brick format version.
 
@@ -157,6 +176,8 @@ def main():
           lambda: gate_web_block_present(shipped))
     check("web block is a POINTER, not a census",
           lambda: gate_web_is_pointer(shipped))
+    check("web block restates no per-frame layout in PROSE either",
+          lambda: gate_web_no_prose_census(shipped))
     check("web_format_version NOT bumped (brick format unchanged)",
           lambda: gate_web_version_not_bumped(shipped))
     check("the 1.1 bump is purely ADDITIVE (1.0 readers still work)",

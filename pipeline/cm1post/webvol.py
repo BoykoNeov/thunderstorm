@@ -135,5 +135,5 @@ def build_manifest(sc, frames, qmax):
 
 
 def write_manifest(path, doc):
-    with open(path, "w") as f:
+    with open(path, "w", newline="\n") as f:  # LF always -- see manifest.write()
         json.dump(doc, f, indent=1)

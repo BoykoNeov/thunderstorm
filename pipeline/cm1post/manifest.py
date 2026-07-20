@@ -97,11 +97,15 @@ def build(sc, frames, provenance):
             "consumer": "diorama/ -- the Storm Diorama web viewer (a second 'dumb "
                         "player' of this same package; see "
                         "docs/design-diorama-web-viewer-2026-07-16.md).",
+            # Deliberately does NOT enumerate the per-frame files or channels: that
+            # would be a census in prose, stale the moment a field is added to the
+            # web export, and invisible to the structured census check in
+            # pipeline/tests/test_manifest.py.
             "content": ("A RENDITION of the same volumes as vdb/, from the same "
-                        "fields/regrid code path: uint8-quantized gzipped raw bricks, "
-                        "two files per frame (fNNNN.rgba.gz = cloud/ice/rain/"
-                        "graupelhail; fNNNN.dbz.gz = the dBZ diagnostic). Not a "
-                        "substitute for vdb/ -- it is lossily quantized for the web."),
+                        "fields/regrid code path: gzipped uint8-quantized raw bricks. "
+                        "See web_manifest.json for the current per-frame files, "
+                        "channels and encodings. Not a substitute for vdb/ -- it is "
+                        "lossily quantized for the web."),
             "authority": ("POINTER, NOT A CENSUS. Grid, encoding, per-channel qmax "
                           "and the frame list are NOT copied here; web_manifest.json "
                           "is authoritative for the rendition. Nothing is duplicated, "
@@ -135,5 +139,10 @@ def build(sc, frames, provenance):
 
 
 def write(path, doc):
-    with open(path, "w") as f:
+    # newline="\n": this file is written by the WSL pipeline but is occasionally
+    # rebuilt in place from Windows (the pure-function trick in
+    # pipeline/tests/test_manifest.py). Without this, Windows text mode rewrites
+    # every LF as CRLF and the working file stops matching what the exporter
+    # produces -- invisible to any gate that reads back in universal-newline mode.
+    with open(path, "w", newline="\n") as f:
         json.dump(doc, f, indent=1)
