@@ -40,7 +40,9 @@ import numpy as np
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO, "pipeline"))
 
-from cm1post import contract, fields, regrid, scenario  # noqa: E402
+# `fields` is imported lazily inside _real(): it pulls in netCDF4, which the Windows
+# interpreter does not have. The synthetic gates must stay runnable without it.
+from cm1post import contract, regrid, scenario  # noqa: E402
 
 _results = []
 
@@ -116,6 +118,8 @@ def gate_floor_preserved():
 # --- gates 2-3: real frame --------------------------------------------------
 
 def _real(run_dir, frame):
+    from cm1post import fields  # netCDF4 -- WSL only
+
     sc = scenario.load("single_cell_500m", run_dir_override=run_dir)
     files = fields.frame_files(run_dir)
     ch, _ = fields.build_channels(files[frame])
