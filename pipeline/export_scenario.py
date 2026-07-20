@@ -97,7 +97,9 @@ def cmd_export(args):
     for n, i in enumerate(idx):
         path = files[i]
         ch, storm_t = fields.build_channels(path)
-        res = {name: regrid.resample(sc, arr, cm1_x, cm1_y, cm1_z, query)
+        # dbz is logarithmic -- it resamples in linear Z (see regrid.resample_dbz).
+        res = {name: (regrid.resample_dbz if name in contract.DIAGNOSTIC_CHANNELS
+                      else regrid.resample)(sc, arr, cm1_x, cm1_y, cm1_z, query)
                for name, arr in ch.items()}
 
         stem = f"frame_{i:05d}"
@@ -148,6 +150,9 @@ def cmd_export_web(args):
 
     # Pass 1: per-channel maxima over the whole sequence, on the CM1 source grid
     # (a safe >= bound for every linearly-resampled frame -- see webvol.py).
+    # Still a bound for dbz under the linear-Z resample: an interpolated Z never
+    # exceeds the largest contributing Z, so the resampled dBZ never exceeds the
+    # source frame's max dBZ.
     print(f"scenario {sc.name} ({sc.kind})  run {sc.run_dir}")
     print(f"scanning {len(files)} frames for per-channel maxima")
     qmax = {c: 0.0 for c in contract.CHANNELS}
@@ -172,7 +177,7 @@ def cmd_export_web(args):
         for c in webvol.RGBA_CHANNELS:
             res = regrid.resample(sc, ch[c], cm1_x, cm1_y, cm1_z, query)
             enc[c] = webvol.encode_log_u8(res, contract.THRESHOLDS[c], qmax[c])
-        res = regrid.resample(sc, ch["dbz"], cm1_x, cm1_y, cm1_z, query)
+        res = regrid.resample_dbz(sc, ch["dbz"], cm1_x, cm1_y, cm1_z, query)
         enc["dbz"] = webvol.encode_linear_u8(res, contract.THRESHOLDS["dbz"], qmax["dbz"])
 
         rec = webvol.write_frame(args.out, i, enc)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manifest gates (Phase 2 T1b + T2).
+"""Manifest gates (Phase 2 T1b + T2 + T3).
 
     python3 pipeline/tests/test_manifest.py
 
@@ -61,11 +61,48 @@ def rebuild(shipped):
 # --- T1b: the shipped manifest is reproducible from committed inputs --------
 
 def gate_byte_identical(shipped_text, rebuilt):
-    text = dumps(rebuilt)
+    """Byte-identity modulo the T3 diff -- which is DELIBERATE, per plan §9.
+
+    The shipped package is still the 1.1 / dB-resampled export: T3, T4 and T5 each
+    invalidate it and the 301-frame re-export is BATCHED until all three land, so
+    regenerating manifest.json now would advertise linear-Z dBZ over dB-resampled
+    bricks. Until that batch, this gate uses T2's trick: name the expected
+    differences EXACTLY, revert them, and require the remaining bytes to be
+    identical. "Only three changes" alone would still permit a reordered key or a
+    reformatted float; reverting and comparing bytes does not.
+
+    AT RE-EXPORT: drop the revert block and this collapses back to plain
+    byte-identity against a regenerated 1.2 manifest. If it does not, something
+    moved that T3-T5 did not intend.
+    """
+    doc = json.loads(json.dumps(rebuilt))
+    dbz = doc["diagnostics"]["dbz"]
+    shipped = json.loads(shipped_text)
+    ship_dbz = shipped["diagnostics"]["dbz"]
+
+    seen = {"format_version": (shipped["format_version"], doc["format_version"]),
+            "diagnostics.dbz.resampling": ("resampling" in ship_dbz,
+                                           "resampling" in dbz),
+            "diagnostics.dbz.caveat": (ship_dbz["caveat"] == dbz["caveat"])}
+    expected = {"format_version": ("1.1", "1.2"),
+                "diagnostics.dbz.resampling": (False, True),
+                "diagnostics.dbz.caveat": False}
+    if seen != expected:
+        return False, f"unexpected T3 diff shape: {seen} != {expected}"
+
+    # Revert exactly those three, in place, preserving key ORDER: `resampling` was
+    # inserted before `caveat`, so rebuilding the dict is how order is restored.
+    doc["format_version"] = "1.1"
+    doc["diagnostics"]["dbz"] = {k: v for k, v in dbz.items() if k != "resampling"}
+    doc["diagnostics"]["dbz"]["caveat"] = ship_dbz["caveat"]
+
+    text = dumps(doc)
     if text == shipped_text:
-        return True, f"rebuilt == shipped, {len(text)} chars byte-identical"
-    return False, (f"rebuilt {len(text)} chars != shipped {len(shipped_text)}; "
-                   "manifest.build() no longer reproduces the shipped contract")
+        return True, (f"rebuilt == shipped after reverting the 3 deliberate T3 "
+                      f"changes, {len(text)} chars byte-identical "
+                      "(PENDING the batched T3-T5 re-export)")
+    return False, (f"reverted rebuild {len(text)} chars != shipped "
+                   f"{len(shipped_text)}; something moved beyond the T3 diff")
 
 
 def gate_grid_derived(sc, shipped):
@@ -79,9 +116,17 @@ def gate_grid_derived(sc, shipped):
 # --- T2: the web block ------------------------------------------------------
 
 def gate_format_version(shipped):
+    """Shipped 1.1 (T2's web block); contract 1.2 (T3's linear-Z dBZ).
+
+    The gap is the un-re-exported package, not a mistake -- see gate_byte_identical.
+    Both must be MINOR bumps off 1.0: a MAJOR would owe an SVT import re-test that
+    cannot happen this phase (plan §7).
+    """
     v = shipped["format_version"]
-    ok = v == contract.FORMAT_VERSION == "1.1"
-    return ok, f"format_version {v} (contract says {contract.FORMAT_VERSION})"
+    c = contract.FORMAT_VERSION
+    ok = v == "1.1" and c == "1.2" and v.split(".")[0] == c.split(".")[0] == "1"
+    return ok, (f"shipped format_version {v}, contract {c} -- same MAJOR, "
+                "gap closes at the batched T3-T5 re-export")
 
 
 def gate_web_block_present(shipped):
@@ -156,6 +201,48 @@ def gate_minor_bump_is_additive(shipped):
                 f"removed {sorted(removed) or 'nothing'} vs the 1.0 key set")
 
 
+# --- negative controls ------------------------------------------------------
+
+def negative_controls(shipped_text, rebuilt):
+    """The revert gate must FAIL on anything other than the exact T3 diff.
+
+    T2's rewritten gate is now doing more work than a plain `==`: it names three
+    expected differences and reverts them. That is precisely the kind of gate that
+    can rot into "always passes" -- if the revert were too broad (e.g. copying the
+    whole dbz block over), an unrelated manifest regression would sail through. So
+    each control perturbs the rebuild one way and must be caught.
+    """
+    print("\nnegative controls -- the T3 revert gate must reject everything else")
+
+    def control(name, mutate):
+        doc = json.loads(json.dumps(rebuilt))
+        mutate(doc)
+        ok, detail = gate_byte_identical(shipped_text, doc)
+        _results.append(not ok)
+        print(f"  {'PASS' if not ok else 'FAIL'}  fires on: {name}\n"
+              f"          {'rejected' if not ok else 'ACCEPTED -- gate is blind'}"
+              f": {detail[:96]}")
+
+    def set_dbz(doc, **kw):
+        doc["diagnostics"]["dbz"].update(kw)
+
+    control("format_version never bumped (still 1.1)",
+            lambda d: d.__setitem__("format_version", "1.1"))
+    control("format_version bumped MAJOR instead of MINOR",
+            lambda d: d.__setitem__("format_version", "2.0"))
+    control("the `resampling` key was never added",
+            lambda d: d["diagnostics"]["dbz"].pop("resampling"))
+    control("caveat left at the old dB-interpolation text",
+            lambda d: set_dbz(d, caveat=json.loads(shipped_text)
+                              ["diagnostics"]["dbz"]["caveat"]))
+    control("an UNRELATED field changed alongside the T3 diff",
+            lambda d: d["volume"].__setitem__("voxel_size_m", 999.0))
+    control("an unrelated PROSE field changed alongside the T3 diff",
+            lambda d: set_dbz(d, feedback="none at all"))
+    control("a frame record was dropped",
+            lambda d: d["frames"].pop())
+
+
 def main():
     print(f"manifest gates -- {SHIPPED}")
     shipped_text, shipped = load_shipped()
@@ -164,13 +251,13 @@ def main():
           f"{shipped['frame_count']} frames\n")
 
     print("T1b -- shipped manifest reproducible from committed inputs")
-    check("rebuild is byte-identical to the shipped manifest",
+    check("rebuild is byte-identical modulo the deliberate T3 diff",
           lambda: gate_byte_identical(shipped_text, rebuilt))
     check("export grid derives from the scenario crop box",
           lambda: gate_grid_derived(sc, shipped))
 
     print("\nT2 -- web block + format_version 1.1")
-    check("format_version is 1.1 and matches contract.py",
+    check("format_version: shipped 1.1, contract 1.2, same MAJOR",
           lambda: gate_format_version(shipped))
     check("web block present and agrees with contract constants",
           lambda: gate_web_block_present(shipped))
@@ -182,6 +269,8 @@ def main():
           lambda: gate_web_version_not_bumped(shipped))
     check("the 1.1 bump is purely ADDITIVE (1.0 readers still work)",
           lambda: gate_minor_bump_is_additive(shipped))
+
+    negative_controls(shipped_text, rebuilt)
 
     n, tot = sum(_results), len(_results)
     print(f"\n{n}/{tot} gates pass")

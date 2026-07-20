@@ -39,8 +39,44 @@ def build_query(sc, cm1_x, cm1_y, cm1_z):
     return np.stack([Z.ravel(), Y.ravel(), X.ravel()], axis=-1)
 
 
+def resample_dbz(sc, field, cm1_x, cm1_y, cm1_z, query):
+    """Resample the dBZ diagnostic in LINEAR reflectivity factor Z, not in dB.
+
+    dBZ = 10*log10(Z) is a LOGARITHMIC quantity, so averaging it is not averaging
+    reflectivity. Between neighbours at 20 and 40 dBZ the physically correct
+    midpoint is 10*log10((1e2 + 1e4)/2) = 37.03 dBZ -- dominated by the strong
+    return, as a radar volume actually is. Interpolating in dB gives 30.0 dBZ, a
+    7 dB (5x in Z) underestimate that systematically hollows out echo cores and
+    smears their edges. Phase 1 shipped the dB version knowingly (carried item
+    #3); it becomes load-bearing in Phase 2, where the radar view is a deliverable.
+
+    Because 10*log10 is CONCAVE, this transform can only ever RAISE the result:
+    new >= old everywhere, with equality exactly at grid points and in flat
+    regions. That inequality is the T3 gate (pipeline/tests/test_regrid_dbz.py).
+
+    Floors: CM1's dbz is floored at 0 dBZ (Z = 1 mm^6/m^3), so fill_value=1.0 in
+    Z-space is the same "no echo" that the generic resampler's fill_value=0.0
+    means in dB -- and it keeps log10 off zero. The output is clipped at 0 dBZ to
+    match `resample`, so the ONLY semantic change here is the interpolation space.
+    """
+    z_lin = np.power(10.0, field.astype("f8") / 10.0)
+    interp = RegularGridInterpolator(
+        (cm1_z, cm1_y, cm1_x), z_lin,
+        method="linear", bounds_error=False, fill_value=1.0,
+    )
+    z_out = interp(query).reshape(sc.nz, sc.ny, sc.nx)
+    np.clip(z_out, 1.0e-12, None, out=z_out)  # guard: log10 must not see 0
+    out = 10.0 * np.log10(z_out)
+    np.clip(out, 0.0, None, out=out)
+    return np.ascontiguousarray(out, dtype="<f4")
+
+
 def resample(sc, field, cm1_x, cm1_y, cm1_z, query):
-    """Trilinear-resample one (nz,ny,nx) CM1 field onto the export box."""
+    """Trilinear-resample one (nz,ny,nx) CM1 field onto the export box.
+
+    LINEAR quantities only -- the mixing ratios. The dBZ diagnostic is logarithmic
+    and must go through `resample_dbz`; interpolating it here would average dB.
+    """
     interp = RegularGridInterpolator(
         (cm1_z, cm1_y, cm1_x), field.astype("f8"),
         method="linear", bounds_error=False, fill_value=0.0,

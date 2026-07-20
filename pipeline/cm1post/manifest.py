@@ -124,10 +124,18 @@ def build(sc, frames, provenance):
                 "citation": "Mansell, Ziegler & Bruning (2010), J. Atmos. Sci. 67, "
                             "276-299; Ziegler (1985), J. Atmos. Sci. 42, 1487-1509.",
                 "feedback": "none -- diagnostic only, never fed back into the simulation",
-                "caveat": ("dBZ is logarithmic; the 500->250 m resample interpolates in "
-                           "dB rather than linear Z, which slightly smooths gradients at "
-                           "echo edges. Acceptable for a plumbing spike; revisit if dBZ "
-                           "is ever used quantitatively in the UI."),
+                "resampling": ("dBZ is logarithmic, so it is resampled in LINEAR "
+                               "reflectivity factor Z = 10^(dBZ/10) and converted back "
+                               "-- NOT interpolated in dB. Averaging dB would let a "
+                               "20/40 dBZ pair land at 30.0 instead of the correct "
+                               "37.03 dBZ, systematically hollowing echo cores. "
+                               "(Phase 1 shipped the dB version knowingly; corrected "
+                               "in Phase 2 T3, where the radar view made it "
+                               "load-bearing.)"),
+                "caveat": ("Still a DIAGNOSTIC, and still not a radar simulation: no "
+                           "beam geometry, attenuation, or Doppler. The export grid "
+                           "upsamples 2x from the 500 m run, so resampled values are "
+                           "interpolated, not independent measurements."),
             },
         },
 
