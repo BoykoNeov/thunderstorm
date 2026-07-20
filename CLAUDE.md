@@ -545,7 +545,27 @@ Do not start a phase without explicit go from the owner.
   `reshape(ny,nx)` (x-fastest) matching the dbz/rgba bricks' `reshape(nz,ny,nx)` x-fastest
   order; the independent orientation TEST waits on the Phase 3 asymmetric asset (§2.1).
   128/128 tests, build clean.
-- **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
+- **Phase 3 (STARTED 2026-07-20, owner go):** FLAT convective-regime scenarios —
+  supercell + seed-driven outcome variation + multicell. Plan + task breakdown:
+  `docs/phase3-plan-2026-07-20.md`. **Scope pinned by the owner:** full flat set
+  (supercell → seed → multicell), **diorama-only again** (no UE — Y-flip/carried-item-#1
+  stays deferred with the UE app), **333 m overnight default** (no 250 m flat-imove hero).
+  **Terrain SPLIT OUT to its own later phase** ("Phase 3T", before the old Phase 4) — the
+  advisor's flat/terrain fork (`imove` and terrain are mutually exclusive) made into
+  scheduling: terrain owns the new Cartesian-regridding module, the diorama heightfield
+  render path, the static full-size domain (15–30 h class) and the VHDX resize, none of
+  which the flat scenarios need. **Key framing (plan §2):** the base deck template IS the
+  Phase 0 supercell validation deck (`iwnd=2`, `imove=1`, `umove/vmove` set), so the
+  supercell scenario is a near-empty override set (stop overriding `iwnd`/`imove`) — cheapest
+  task, not a shear-design task; multicell is a different CLASS of work (initiation likely
+  needs `init3d.F` Fortran → must commit/tag modified CM1 source + fresh binary sha256 or the
+  "regenerate from sim/+pipeline/" recovery path breaks); the split supercell discharges the
+  T9 **cref orientation test** (NOT the Y-flip, which stays UE-deferred). Real T1 work is the
+  asymmetric/splitting export box (measured not matched). Tasks T1 supercell → T2 run/bbox
+  gate → T3 cref orientation discharge → T4 seed → T5–T6 multicell → T7 close-out.
+- **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
+  regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
+  static full-size domain, VHDX resize before the first 250 m terrain hero run.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 
 Full advisor pressure-test of this plan: docs/advisor-review-2026-07-09.md
