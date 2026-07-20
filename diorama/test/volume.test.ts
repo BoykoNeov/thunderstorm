@@ -145,6 +145,44 @@ describe("signed-uint8 w quantization", () => {
   });
 });
 
+// Composite reflectivity cref (T9): the RADAR PLAN VIEW. Its whole design rests
+// on one measured identity — CM1's cref is bitwise dbz.max(axis=0), so the plan
+// field ships the SAME (threshold, vmax) as the 3D dbz layer and decodes with the
+// SAME linear map. That is what lets one NWS colormap serve both radar views
+// exactly (one byte ⇒ one dBZ in both). These tests are the viewer-side tripwire
+// for that: cref is decoded with decodeLinearU8 (the dbz decoder), never the log
+// map, and matches dbz code-for-code when the scales agree.
+describe("cref plan field shares the dbz linear decode (T9)", () => {
+  it("uses the LINEAR map, not the log map the hydrometeors use", () => {
+    // The real viewer-side bug risk is decoding cref with decodeLogU8 (a
+    // copy-paste from the hydrometeor path). A mid code must land at the LINEAR
+    // midpoint of (threshold, vmax], distinctly not the log one.
+    const mid = decodeLinearU8(128, DBZ_THR, DBZ_MAX);
+    expect(mid).toBeCloseTo(DBZ_THR + (DBZ_MAX - DBZ_THR) * (127 / 254), 10);
+    expect(mid).not.toBeCloseTo(decodeLogU8(128, DBZ_THR, DBZ_MAX), 2);
+  });
+
+  it("code 0 is no-echo (transparent), code 1 is the threshold", () => {
+    // the shader's `v > 0.5` gate: below-threshold columns paint nothing so the
+    // toy ground shows through, exactly like the dbz plane. Never the 5 dBZ floor.
+    expect(decodeLinearU8(0, DBZ_THR, DBZ_MAX)).toBe(0);
+    expect(decodeLinearU8(1, DBZ_THR, DBZ_MAX)).toBeCloseTo(DBZ_THR, 10);
+  });
+
+  it("the shared-scale identity is load-bearing: decode is sensitive to vmax", () => {
+    // cref shares dbz's (threshold, vmax) so one colormap serves both EXACTLY.
+    // That equality only means something because the decode genuinely depends on
+    // vmax — if a future ptype broke CM1's cref==dbz.max identity and shipped a
+    // different vmax, the same byte would read as a different dBZ. The exporter's
+    // standing check (webvol §15.6) is what forbids that; this shows the
+    // dependence is real, so sharing the scale is not an incidental no-op.
+    expect(decodeLinearU8(200, DBZ_THR, DBZ_MAX)).not.toBeCloseTo(
+      decodeLinearU8(200, DBZ_THR, DBZ_MAX * 0.8),
+      3,
+    );
+  });
+});
+
 describe("decodeConstants", () => {
   it("reproduces q = thr * exp(k * (v - 1)) matching decodeLogU8", () => {
     const ch = [

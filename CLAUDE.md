@@ -518,8 +518,29 @@ Do not start a phase without explicit go from the owner.
   guard; the encoded-traversal 200 is vite's own dev module serving on `next()`, NOT the handler
   (body is the transformed module, not raw fs bytes) — universal vite-dev, dev-only. **No version
   moves** (viewer + dev-server only; the web manifest already carries `grid`).
-  Remaining: T8 (`w` layer panel), T9 (`cref` radar plan view) — both packages ship `w` +
-  `cref` at web 1.2.
+  **T8 DONE — data-layer panel + updraft `w` (§18).** Teaching-grade top-right radio panel
+  (Hydrometeors / Radar (dBZ) / Updraft (w)) with a manifest-driven DIAGNOSTIC badge, plus
+  the `w` render path: the signed field streams parallel to the dbz ring (gated + lazy, hydro
+  byte-untouched) and renders as a signed max-|w| view-ray projection on a colorblind-safe
+  coolwarm map, colour domain FIXED at ±`extra_fields.w.scale` (same red = same m/s across
+  packages — the 500 m/333 m cells compare directly). Feature-detected on `extra_fields.w`;
+  viewer-only. Real-GPU both grids; hydro bit-identical with `w` off. 125/125 tests.
+  **T9 DONE — composite-reflectivity radar plan view (§19). PHASE 2 COMPLETE.** The standard
+  top-down TV radar product — CM1's column-max `cref`, VIEW-INDEPENDENT — distinct from the
+  3D dBZ layer (a view-ray MIP that changes as you orbit; the §2.3 labeling trap). Ships as
+  the 2D `.cref.gz` plan plane (lazy 2D-texture ring parallel to dbz/w) and is painted FLAT on
+  the toy landscape at the ground surface point (occlusion-free, drapes over terrain), using
+  the SAME NWS palette + dBZ scale as the dBZ layer — exact by identity (`cref ≡ dbz.max(axis=0)`,
+  §15.1). The load-bearing decision was the CAMERA, not the render: a flat map at the default
+  11° reads edge-on, so entering the layer frames near-overhead (78°, orbit free afterward;
+  `?el=` pins a capture angle). The `uLayer=3` value collided with the `w` branches
+  (`uLayer > 1.5`) in FOUR shader sites incl. the cut-face sheet's trailing `else` (would have
+  painted cref as viridis hydrometeors) — fixed with `< 2.5` bounds + `else if (uLayer < 0.5)`;
+  hydro untouched by construction. Feature-detected on `plan_fields.cref`; panel names it
+  "Composite reflectivity" vs "Radar (dBZ)"; DIAGNOSTIC + view-independence in HUD/legend.
+  Viewer-only, no version move. **Real-GPU verified both grids** (echo aligns with the dbz MIP
+  → orientation correct; per-package vmax 72/78 read correctly; cref core fuller than the MIP
+  per §15.3's max-then-interp). 128/128 tests, build clean.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 

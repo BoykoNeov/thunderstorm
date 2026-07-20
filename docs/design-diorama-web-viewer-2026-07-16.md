@@ -508,7 +508,20 @@ one-package player into a scenario system:
   `extra_fields.w`; viewer-only, no version move. Real-GPU verified on both
   grids; hydro render bit-identical with `w` off (stash diff, render pixels ≤2 =
   the wall-clock ripple floor).
-- **T9** `cref` radar plan view — pending.
+- **T9 (DONE 2026-07-20)** `cref` composite-reflectivity **radar plan view**. The
+  standard top-down TV radar product — CM1's column-max dBZ, **view-independent** —
+  distinct from the 3D dBZ layer (a view-ray MIP that changes as you orbit). Ships
+  as the 2D `.cref.gz` plan plane (streamed lazily like dbz/w) and is painted
+  **flat on the toy landscape** as a radar footprint (sampled at the ground
+  surface point, so it drapes over terrain and is occlusion-free), using the
+  **same** NWS palette + dBZ scale as the dBZ layer — exact by identity (CM1 `cref`
+  ≡ `dbz.max(axis=0)`). Entering the layer **frames the camera near-overhead** (78°;
+  a flat map at the default 11° reads edge-on) with orbit still free afterward and
+  `?el=` pinning a capture angle. Labeled DIAGNOSTIC and view-independent in HUD +
+  legend + panel ("Composite reflectivity" vs "Radar (dBZ)"). Feature-detected on
+  `plan_fields.cref`; viewer-only, no version move. Real-GPU verified on both grids
+  (echo aligned with the dBZ MIP → orientation correct; per-package vmax 72/78 read
+  correctly).
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.
 **Slices 1–3 complete (2026-07-16) — beauty gate PASSED (owner GO, 2026-07-17):**

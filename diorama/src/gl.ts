@@ -97,6 +97,40 @@ export function uploadDbz(
   gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, gl.RED, gl.UNSIGNED_BYTE, data);
 }
 
+/** R8 2D composite-reflectivity plane at full grid resolution (T9). cref is a
+ *  (NX, NY) PLAN product — 2D, not a volume — so it rides in a 2D texture, one
+ *  per ring slot, streamed only when the cref layer is active (lazy, so the
+ *  hydrometeor default pays nothing). Bilinear + clamp, like the dbz volume. */
+export function createCrefTexture(
+  gl: WebGL2RenderingContext,
+  nx: number,
+  ny: number,
+): WebGLTexture {
+  const tex = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, nx, ny);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return tex;
+}
+
+/** Upload one decoded R8 cref plane into its ring-slot texture. The brick byte
+ *  order is x-fastest-then-y (webvol.py), matching a width=NX, height=NY 2D
+ *  texture row-major, so (u,v)=(x,y) aligns with the volume's uvw.xy. */
+export function uploadCref(
+  gl: WebGL2RenderingContext,
+  tex: WebGLTexture,
+  nx: number,
+  ny: number,
+  data: Uint8Array,
+): void {
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, nx, ny, gl.RED, gl.UNSIGNED_BYTE, data);
+}
+
 /** Small tileable RG8 3D value-noise texture (REPEAT, trilinear) — detail
  *  erosion + rain-veil modulation in the volume march (noise3d.ts bakes it). */
 export function createNoiseTexture(

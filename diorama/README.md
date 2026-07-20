@@ -116,12 +116,14 @@ storm's vertical echo structure. Off by default → the shipped look is unchange
 ### Data-layer panel + updraft w (T8)
 
 The **top-right panel** is the teaching-grade layer selector — one radio row per
-shipped field (Hydrometeors / Radar (dBZ) / Updraft (w)), each carrying a
-**DIAGNOSTIC** badge iff the manifest flags that field a diagnostic (the badge is
-*read* from the contract — `dbz.diagnostic`, `extra_fields.w.diagnostic` — never
-hardcoded, so it cannot drift). It replaces keystroke-only discovery; `?layer=`
-and `d` remain as accelerators. The updraft row is **feature-detected** on
-`extra_fields.w` — a pre-T8 package simply doesn't offer it.
+shipped field (Hydrometeors / Radar (dBZ) / Updraft (w) / Composite reflectivity),
+each carrying a **DIAGNOSTIC** badge iff the manifest flags that field a diagnostic
+(the badge is *read* from the contract — `dbz.diagnostic`,
+`extra_fields.w.diagnostic`, `plan_fields.cref.diagnostic` — never hardcoded, so it
+cannot drift). It replaces keystroke-only discovery; `?layer=` and `d` remain as
+accelerators. The updraft and composite-reflectivity rows are **feature-detected**
+on `extra_fields.w` / `plan_fields.cref` — a package that predates them simply
+doesn't offer them.
 
 `?layer=w` (or the panel) swaps the storm to **updraft `w`** — the simulated
 vertical wind (m/s), a *prognostic* field (no DIAGNOSTIC badge), shipped as the
@@ -136,6 +138,24 @@ sets a tighter *fixed* clip (more colour resolution, saturates above it);
 `?wdead=2`/`?wramp=8` (m/s) tune the transparent deadband + alpha ramp so weak
 environmental motion stays clear and the storm core reads solid. Cut face paints
 `w` too.
+
+### Composite-reflectivity radar plan view (T9 — labeled diagnostic)
+
+`?layer=cref` (or the panel) shows **composite reflectivity** — the standard
+top-down radar product from TV weather: the column-max dBZ, **view-independent**.
+This is the deliberate counterpart to the dBZ layer above, which is a maximum
+along the **view ray** and so changes as you orbit; `cref` is CM1's true column
+maximum, computed in the pipeline and shipped as the 2D `.cref.gz` plan plane
+(streamed only when active, hydrometeor default unchanged). It is painted **flat
+on the toy landscape** as a radar footprint — a genuine map (plan) product, not a
+volume — using the **same** NWS palette and dBZ scale as the dBZ layer (exact, not
+approximate: CM1's `cref` is bitwise `dbz.max(axis=0)`, so one colour means one
+dBZ in both). Because a flat ground map at the default low camera would read
+edge-on, **entering the layer frames the camera near-overhead** (azimuth/distance
+untouched, orbit stays free afterward; `?el=` pins a capture angle and suppresses
+the auto-framing). Labeled **DIAGNOSTIC** in the HUD and legend, stated as
+view-independent so it never reads as the same thing as the dBZ MIP.
+Feature-detected on `plan_fields.cref`.
 
 ### Scale bar + storm-time clock (slice 5c — honest scale chip)
 

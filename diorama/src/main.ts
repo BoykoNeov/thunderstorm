@@ -23,6 +23,7 @@ import { BrickDecoder } from "./decoder";
 import {
   compileProgram,
   createColorTarget,
+  createCrefTexture,
   createDbzTexture,
   createGBuffer,
   createInstancedVAO,
@@ -32,6 +33,7 @@ import {
   createVolumeTexture,
   drawFullscreen,
   getGL,
+  uploadCref,
   uploadDbz,
   uploadVolume,
   type ColorTarget,
@@ -186,14 +188,17 @@ let xsecPos = Math.min(1, Math.max(0, numParam("xpos", 0.5)));
 const xsecMax = Math.max(0.1, numParam("xmax", 10)); // g/kg at the colormap top
 
 // data layer: ?layer=dbz swaps the storm to a dBZ radar-reflectivity diagnostic
-// (5b); ?layer=w to the signed updraft field (T8). Both are emissive max-along-
-// view-ray projections that replace the cloud march, plus a matching cut-face
-// sheet. Off by default (?layer=hydro, the shipped hydrometeor look): when hydro
-// NO extra plane is fetched/decoded/uploaded and the march is bit-unchanged. The
-// panel (or `d`) toggles at runtime. Diagnostic layers are labeled (charter).
-type Layer = "hydro" | "dbz" | "w";
+// (5b); ?layer=w to the signed updraft field (T8); ?layer=cref to the composite-
+// reflectivity RADAR PLAN view (T9). dbz/w are emissive max-along-view-ray
+// projections that replace the cloud march; cref is a 2D view-INDEPENDENT map
+// painted flat on the ground. Off by default (?layer=hydro, the shipped
+// hydrometeor look): when hydro NO extra plane is fetched/decoded/uploaded and
+// the march is bit-unchanged. The panel (or `d`) toggles at runtime. Diagnostic
+// layers are labeled (charter).
+type Layer = "hydro" | "dbz" | "w" | "cref";
 const layerParam = params.get("layer");
-let layer: Layer = layerParam === "dbz" ? "dbz" : layerParam === "w" ? "w" : "hydro";
+let layer: Layer =
+  layerParam === "dbz" ? "dbz" : layerParam === "w" ? "w" : layerParam === "cref" ? "cref" : "hydro";
 // updraft-w render knobs (T8), all in m/s. uWClip is the FIXED colour-domain
 // clip (|w|≥clip saturates); defaults to the manifest scale below so red = the
 // same m/s everywhere — a tighter fixed ?wclip only trades headroom for
@@ -218,6 +223,15 @@ let orbit: OrbitState = {
   distance: Number(params.get("d") ?? "145") || 145,
   fovY: ((Number(params.get("fov") ?? "34") || 34) * Math.PI) / 180,
 };
+// Whether the user pinned elevation explicitly (?el=): if so the cref plan view
+// respects it for reproducible captures instead of framing overhead.
+const elExplicit = params.get("el") !== null;
+// The radar PLAN view is a flat ground map; at the default 11° it would read as
+// an edge-on smear, not "the top-down product from TV". Entering cref nudges the
+// camera near-overhead (azimuth/distance untouched, orbit still free afterward —
+// the data is view-independent). Restored on leaving. 78° keeps a whisker of the
+// toy-scene depth cue while the map dominates.
+const CREF_ELEVATION = (78 * Math.PI) / 180;
 
 function fmt(t: number): string {
   return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
@@ -275,17 +289,33 @@ async function start() {
   const frameBytes = nx * ny * nz * 4;
   const dbzBytes = nx * ny * nz; // R8, one byte/voxel (slice 5b)
   const planeBytes = nx * ny * nz; // R8 — dbz and w are both one byte/voxel
+  const crefBytes = nx * ny; // R8 2D plan plane (T9); the DECOMPRESSED size —
+  // frame.cref_bytes is the gzipped size, loadBrick checks the inflated length.
   // Updraft w (T8) is feature-detected on the manifest key, NOT the version
   // (charter): a pre-T8 package simply omits `extra_fields.w` and the layer is
   // never offered. If ?layer=w was asked for on a package without it, fall back.
   const wSpec = man.extra_fields?.w;
   const hasW = !!wSpec;
   if (layer === "w" && !hasW) layer = "hydro";
+  // Composite reflectivity `cref` (T9), same feature-detect discipline: the plan
+  // view is offered only when the package ships `plan_fields.cref`.
+  const crefSpec = man.plan_fields?.cref;
+  const hasCref = !!crefSpec;
+  if (layer === "cref" && !hasCref) layer = "hydro";
   // Colour-domain clip: the FIXED manifest scale unless a tighter fixed ?wclip
   // was given. Never a per-sequence max (would break "same colour = same m/s").
   const wClip = wClipParam > 0 ? wClipParam : wSpec?.scale ?? 80;
   let dbzActive = layer === "dbz"; // gates all dbz fetch/decode/upload
   let wActive = layer === "w"; // gates all w fetch/decode/upload (parallel to dbz)
+  let crefActive = layer === "cref"; // gates all cref fetch/decode/upload
+  // Elevation to restore when leaving the cref plan view (null ⇒ not overridden).
+  let elevBeforeCref: number | null = null;
+  // A package opened directly on the plan view frames overhead on first paint
+  // (unless ?el pinned it for a capture), so it reads as a map immediately.
+  if (crefActive && !elExplicit) {
+    elevBeforeCref = orbit.elevation;
+    orbit.elevation = CREF_ELEVATION;
+  }
   const times = man.frames.map((f) => f.time_s);
   const nFrames = man.frames.length;
   const tEnd = times[nFrames - 1];
@@ -351,12 +381,24 @@ async function start() {
     for (let i = 0; i < RING_CAPACITY; i++) wTex.push(createDbzTexture(gl, nx, ny, nz));
   }
   if (wActive) ensureWTex();
+  // cref plan ring (T9): same lazy pattern, but a 2D R8 texture (cref is a plan
+  // product, not a volume) — tiny (nx·ny ≈ 43 KB/slot), so ~1 MB total.
+  let crefTex: WebGLTexture[] | null = null;
+  function ensureCrefTex() {
+    if (crefTex) return;
+    crefTex = [];
+    for (let i = 0; i < RING_CAPACITY; i++) crefTex.push(createCrefTexture(gl, nx, ny));
+  }
+  if (crefActive) ensureCrefTex();
   const bakeFBO = gl.createFramebuffer()!;
   const decoder = new BrickDecoder();
   const inflight = new Set<number>();
-  // a decoded frame: the rgba brick always, the dbz/w plane only when its layer
-  // is active (only one extra plane is ever active at a time).
-  const ready = new Map<number, { rgba: Uint8Array; dbz: Uint8Array | null; w: Uint8Array | null }>();
+  // a decoded frame: the rgba brick always, the dbz/w/cref plane only when its
+  // layer is active (only one extra plane is ever active at a time).
+  const ready = new Map<
+    number,
+    { rgba: Uint8Array; dbz: Uint8Array | null; w: Uint8Array | null; cref: Uint8Array | null }
+  >();
   let lastGood: { fa: number; fb: number; mix: number } | null = null;
   // stream generation: bumped on a layer toggle so in-flight requests from the
   // previous layer (which may lack the dbz plane) are discarded on arrival
@@ -374,9 +416,13 @@ async function start() {
       wActive && man.frames[f].w
         ? decoder.request(`${root}/${man.frames[f].w}`, planeBytes)
         : Promise.resolve<Uint8Array | null>(null);
-    Promise.all([rgbaP, dbzP, wP])
-      .then(([rgba, dbz, w]) => {
-        if (gen === streamGen) ready.set(f, { rgba, dbz, w });
+    const crefP =
+      crefActive && man.frames[f].cref
+        ? decoder.request(`${root}/${man.frames[f].cref}`, crefBytes)
+        : Promise.resolve<Uint8Array | null>(null);
+    Promise.all([rgbaP, dbzP, wP, crefP])
+      .then(([rgba, dbz, w, cref]) => {
+        if (gen === streamGen) ready.set(f, { rgba, dbz, w, cref });
       })
       .catch((e: unknown) => console.error(`frame ${f}:`, e))
       .finally(() => {
@@ -392,11 +438,27 @@ async function start() {
   function switchLayer(next: Layer) {
     if (next === layer) return;
     if (next === "w" && !hasW) return; // never switch to an unshipped layer
+    if (next === "cref" && !hasCref) return;
+    // Camera framing (T9): the plan view frames near-overhead so a flat map does
+    // not read as an edge-on smear; leaving restores the prior elevation. Skipped
+    // when ?el pinned it (a deliberate capture angle). azimuth/distance untouched
+    // and orbit stays free afterward — the cref field is view-independent.
+    if (!elExplicit) {
+      if (next === "cref" && layer !== "cref") {
+        elevBeforeCref = orbit.elevation;
+        orbit.elevation = CREF_ELEVATION;
+      } else if (layer === "cref" && next !== "cref" && elevBeforeCref !== null) {
+        orbit.elevation = elevBeforeCref;
+        elevBeforeCref = null;
+      }
+    }
     layer = next;
     dbzActive = layer === "dbz";
     wActive = layer === "w";
+    crefActive = layer === "cref";
     if (dbzActive) ensureDbzTex();
     if (wActive) ensureWTex();
+    if (crefActive) ensureCrefTex();
     streamGen++;
     inflight.clear();
     ready.clear();
@@ -534,13 +596,18 @@ async function start() {
   // a DIAGNOSTIC badge iff the manifest flags it so (charter: diagnostics labeled;
   // the flag is READ, never hardcoded, so the panel cannot drift from the
   // contract). The updraft row is feature-detected on `hasW`. `?layer=`/keys stay
-  // as accelerators — this panel just makes the choice discoverable. Built so a
-  // fourth entry (T9 cref plan view) slots straight in.
+  // as accelerators — this panel just makes the choice discoverable. The two
+  // radar rows are named to keep the §2.3 distinction legible in the panel
+  // itself: "Radar (dBZ)" is the 3D view-ray MIP; "Composite reflectivity" is
+  // the T9 view-independent plan map. cref is feature-detected on `hasCref`.
   const layersPanel = document.getElementById("layers") as HTMLDivElement;
   const layerDefs: { id: Layer; name: string; diagnostic: boolean }[] = [
     { id: "hydro", name: "Hydrometeors", diagnostic: false },
     { id: "dbz", name: "Radar (dBZ)", diagnostic: man.dbz.diagnostic },
     ...(hasW ? [{ id: "w" as Layer, name: "Updraft (w)", diagnostic: wSpec!.diagnostic }] : []),
+    ...(hasCref
+      ? [{ id: "cref" as Layer, name: "Composite reflectivity", diagnostic: crefSpec!.diagnostic }]
+      : []),
   ];
   const layerRadios = new Map<Layer, HTMLInputElement>();
   for (const def of layerDefs) {
@@ -583,6 +650,7 @@ async function start() {
   function updateLayerUI() {
     const isDbz = layer === "dbz";
     const isW = layer === "w";
+    const isCref = layer === "cref";
     layerRadios.forEach((r, id) => (r.checked = id === layer)); // keep the panel in sync
     // HUD: controls + honest scale + staging disclaimer + a diagnostic banner
     // when a diagnostic layer is active (charter: diagnostics are labeled). The
@@ -596,11 +664,15 @@ async function start() {
       `land, towns & forests are decorative staging, not simulation data` +
       (precipOn && layer === "hydro" ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "") +
       (isDbz ? `\n⚠ DIAGNOSTIC: radar reflectivity (dBZ), computed from the simulated fields — max-intensity projection (peak dBZ along the line of sight)` : "") +
-      (isW ? `\nupdraft w (m/s): the simulated vertical wind — strongest |w| along each view ray, red rising / blue sinking` : "");
+      (isW ? `\nupdraft w (m/s): the simulated vertical wind — strongest |w| along each view ray, red rising / blue sinking` : "") +
+      (isCref ? `\n⚠ DIAGNOSTIC: composite reflectivity (dBZ) — the RADAR PLAN VIEW, column-max echo painted on the ground. View-INDEPENDENT: unlike the dBZ layer's line-of-sight MIP, it does not change as you orbit` : "");
 
-    // legend palette + units follow the layer
-    if (isDbz) {
-      xlTitle.textContent = "dBZ reflectivity (diagnostic)";
+    // legend palette + units follow the layer. cref shares the dbz ramp exactly
+    // (same threshold/vmax by identity), so one colormap serves both radar views.
+    if (isDbz || isCref) {
+      xlTitle.textContent = isCref
+        ? "composite reflectivity (diagnostic)"
+        : "dBZ reflectivity (diagnostic)";
       xlBar.style.background = `linear-gradient(to right, ${dbzCssGradientStops(dbzThr, dbzMax)})`;
       xlMin.textContent = `${Math.round(dbzThr)} dBZ`;
       xlMax.textContent = `${Math.round(dbzMax)} dBZ`;
@@ -615,14 +687,16 @@ async function start() {
       xlMin.textContent = "0";
       xlMax.textContent = `${xsecMax} g/kg`;
     }
-    xlegend.style.display = isDbz || isW || xsecAxis > 0 ? "block" : "none";
+    xlegend.style.display = isDbz || isW || isCref || xsecAxis > 0 ? "block" : "none";
     xlAxis.textContent =
-      xsecAxis > 0
+      xsecAxis > 0 && !isCref
         ? `cut plane: ${AXIS_NAME[xsecAxis]} · ${Math.round(xsecPos * 100)}%  ( , / . move )`
         : isDbz
         ? "peak reflectivity along each view ray"
         : isW
         ? "peak |w| along each view ray, coloured by sign"
+        : isCref
+        ? "column-max reflectivity — view-independent plan (map) product"
         : "";
   }
   const updateXsecUI = updateLayerUI; // xsec key handlers refresh the same UI
@@ -746,6 +820,9 @@ async function start() {
   gl.uniform1f(loc(progVol, "uWClip"), wClip);
   gl.uniform1f(loc(progVol, "uWDead"), wDead);
   gl.uniform1f(loc(progVol, "uWRamp"), wRamp);
+  // composite reflectivity plan plane (T9): 2D texture on unit 10. It shares the
+  // dbz decode (uDbzThr/uDbzMax) by identity, so no extra scale uniforms.
+  gl.uniform1i(loc(progVol, "uCref"), 10);
 
   // ---- static uniforms (precip program) --------------------------------------
   // The shared VOL_COMMON chunk gives this program the same names/values as
@@ -886,6 +963,7 @@ async function start() {
         // present here whenever dbzActive — stale rgba-only frames were orphaned)
         if (dbzActive && data.dbz && dbzTex) uploadDbz(gl, dbzTex[slot], nx, ny, nz, data.dbz);
         if (wActive && data.w && wTex) uploadDbz(gl, wTex[slot], nx, ny, nz, data.w);
+        if (crefActive && data.cref && crefTex) uploadCref(gl, crefTex[slot], nx, ny, data.cref);
         if (lightCache) bakeShadow(slot); // fill the slot's cache in the same rAF
         if (collectStats && stats.uploadMs.length < 2000) stats.uploadMs.push(performance.now() - u0);
         ready.delete(f);
@@ -935,7 +1013,8 @@ async function start() {
       fovY: orbit.fovY,
       targetX: orbit.target.x, targetY: orbit.target.y, targetZ: orbit.target.z,
       fa: bind?.fa ?? -1, fb: bind?.fb ?? -1, mix: bind?.mix ?? -1,
-      xsec: xsecAxis, xpos: xsecPos, layer: layer === "dbz" ? 1 : layer === "w" ? 2 : 0,
+      xsec: xsecAxis, xpos: xsecPos,
+      layer: layer === "dbz" ? 1 : layer === "w" ? 2 : layer === "cref" ? 3 : 0,
     };
     const same = accEnabled && !dragging && !scrubbing && sameView(prevKey, key);
     prevKey = key;
@@ -988,7 +1067,7 @@ async function start() {
         gl.uniform1f(loc(progVol, "uMix"), bind.mix);
         gl.uniform1f(loc(progVol, "uXsec"), xsecAxis);
         gl.uniform1f(loc(progVol, "uXpos"), xsecPos);
-        gl.uniform1f(loc(progVol, "uLayer"), layer === "dbz" ? 1 : layer === "w" ? 2 : 0);
+        gl.uniform1f(loc(progVol, "uLayer"), layer === "dbz" ? 1 : layer === "w" ? 2 : layer === "cref" ? 3 : 0);
         gl.uniform1f(loc(progVol, "uTime"), tAnim);
         // fresh jitter per accumulation pass while holding still; 0 during motion
         // and with ?acc=0 ⇒ bit-for-bit today's image.
@@ -1020,6 +1099,11 @@ async function start() {
         if (wActive && wTex) {
           gl.activeTexture(gl.TEXTURE9);
           gl.bindTexture(gl.TEXTURE_3D, wTex[pool.slotOf(bind.fa)!]);
+        }
+        // cref plan plane (unit 10, 2D): nearest bound frame (fa), same guarantee.
+        if (crefActive && crefTex) {
+          gl.activeTexture(gl.TEXTURE10);
+          gl.bindTexture(gl.TEXTURE_2D, crefTex[pool.slotOf(bind.fa)!]);
         }
         drawFullscreen(gl);
 

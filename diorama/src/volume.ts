@@ -23,6 +23,8 @@ export interface FrameRecord {
   dbz_bytes: number;
   w?: string; // present only when the package ships the updraft field (T8)
   w_bytes?: number;
+  cref?: string; // present only when the package ships composite reflectivity (T9)
+  cref_bytes?: number;
 }
 
 // Updraft `w` extra field (T8). SIGNED (blue↔red), so a distinct encoding from
@@ -38,12 +40,29 @@ export interface WSpec {
   scale: number;
 }
 
+// Composite reflectivity `cref` plan field (T9). A 2D (NX, NY) plan product —
+// the column-max dBZ, view-INDEPENDENT — distinct from the 3D dbz layer (a
+// view-ray MIP). Encoding is linear-uint8, IDENTICAL to `dbz` and sharing its
+// (threshold, vmax): CM1's cref is bitwise dbz.max(axis=0), so one byte means
+// one dBZ in both and a single NWS colormap serves both exactly (webvol.py,
+// phase2-plan §15). Feature-detected: `plan_fields.cref` is absent pre-T5.
+export interface CrefSpec {
+  file_suffix: string;
+  encoding: string;
+  units: string;
+  diagnostic: boolean;
+  dims: [string, string];
+  threshold: number;
+  vmax: number;
+}
+
 export interface WebManifest {
   web_format_version: string;
   grid: { nx: number; ny: number; nz: number; voxel_m: number; origin_m: [number, number, number] };
   volume: { layout: string; channels: ChannelSpec[] };
   dbz: DbzSpec;
   extra_fields?: { w?: WSpec };
+  plan_fields?: { cref?: CrefSpec };
   frames: FrameRecord[];
 }
 

@@ -265,6 +265,10 @@ uniform float uWScale;        // physical decode scale (m/s at code 255) = manif
 uniform float uWClip;         // colour-domain clip (m/s): |w|>=uWClip saturates
 uniform float uWDead;         // deadband (m/s): |w|<uWDead is transparent
 uniform float uWRamp;         // alpha ramp width (m/s) above the deadband
+uniform sampler2D uCref;      // composite-reflectivity PLAN plane (T9): a 2D
+                              // (NX,NY) map, decoded with uDbzThr/uDbzMax which
+                              // cref shares with the 3D dbz layer by identity
+                              // (CM1 cref == dbz.max(axis=0); webvol §15).
 ${VOL_COMMON}
 ${dbzColorGLSL()}
 ${wColorGLSL()}
@@ -515,7 +519,7 @@ void main() {
   // stronger). Init 0 so a ray through still air stays at the transparent
   // deadband. Emissive, composited in LDR below so its colour == the DOM legend.
   float wExt = 0.0;
-  if (uLayer > 1.5 && t1 > t0) {
+  if (uLayer > 1.5 && uLayer < 2.5 && t1 > t0) {
     float N = uSteps;
     float dt = (t1 - t0) / N;
     float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
@@ -656,9 +660,29 @@ void main() {
   // (still air shows the diorama through it); alpha rises over uWRamp so weak
   // motion is faint and the storm core reads near-solid. Colour normalizes by
   // the FIXED clip (uWClip), so red = the same m/s in every scenario.
-  if (uLayer > 1.5 && abs(wExt) > uWDead) {
+  if (uLayer > 1.5 && uLayer < 2.5 && abs(wExt) > uWDead) {
     float a = smoothstep(uWDead, uWDead + uWRamp, abs(wExt)) * 0.92;
     col = mix(col, wColor(clamp(wExt / uWClip, -1.0, 1.0)), a);
+  }
+
+  // composite reflectivity — the RADAR PLAN VIEW (T9). Distinct from the dBZ
+  // layer above: that is a max along the VIEW RAY (changes as you orbit); this
+  // is CM1's column-max cref, a VIEW-INDEPENDENT 2D map, painted flat on the
+  // rendered ground where the ray hits land (d<1.0) inside the storm footprint.
+  // Same NWS palette + (uDbzThr,uDbzMax) as the dbz layer — exact, not
+  // approximate (cref shares the dbz scale by identity). LDR, so on-screen
+  // colour == the DOM legend. Beyond the footprint / over sea it does not paint.
+  if (uLayer > 2.5 && d < 1.0) {
+    vec3 pG = ro + rd * tSurf;                       // the shaded surface point
+    vec2 fuv = (pG.xy - uBoxMin.xy) / (uBoxMax.xy - uBoxMin.xy);
+    if (fuv.x >= 0.0 && fuv.x <= 1.0 && fuv.y >= 0.0 && fuv.y <= 1.0) {
+      float v = texture(uCref, fuv).r * 255.0;
+      if (v > 0.5) {                                 // code 0 = below threshold = no echo
+        float dbz = uDbzThr + (uDbzMax - uDbzThr) * ((v - 1.0) / 254.0);
+        float a = smoothstep(uDbzThr, uDbzThr + 8.0, dbz) * 0.92;
+        col = mix(col, dbzColor(dbz), a);
+      }
+    }
   }
 
   // cross-section sheet: paint the false-color field on the cut face, in LDR so
@@ -674,13 +698,15 @@ void main() {
         float a = smoothstep(uDbzThr, uDbzThr + 8.0, dbz) * 0.95;
         col = mix(col, dbzColor(dbz), a);
       }
-    } else if (uLayer > 1.5) {
+    } else if (uLayer > 1.5 && uLayer < 2.5) {
       float w = wAt(pS);
       if (abs(w) > uWDead) {
         float a = smoothstep(uWDead, uWDead + uWRamp, abs(w)) * 0.95;
         col = mix(col, wColor(clamp(w / uWClip, -1.0, 1.0)), a);
       }
-    } else {
+    } else if (uLayer < 0.5) {
+      // hydrometeor cut face only. cref (uLayer≈3) is a plan product with no
+      // volumetric cross-section, so it matches nothing here (no viridis paint).
       float f = xsecField(pS);
       float tn = clamp(f / max(uXmax, 1e-3), 0.0, 1.0);
       float a = pow(tn, 0.6);   // lift thin echo without hiding the empty-air gaps
