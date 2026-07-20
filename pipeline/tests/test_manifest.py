@@ -68,11 +68,11 @@ def gate_byte_identical(shipped_text, rebuilt):
     regenerating manifest.json now would advertise linear-Z dBZ over dB-resampled
     bricks. Until that batch, this gate uses T2's trick: name the expected
     differences EXACTLY, revert them, and require the remaining bytes to be
-    identical. "Only three changes" alone would still permit a reordered key or a
+    identical. "Only two changes" alone would still permit a reordered key or a
     reformatted float; reverting and comparing bytes does not.
 
     AT RE-EXPORT: drop the revert block and this collapses back to plain
-    byte-identity against a regenerated 1.2 manifest. If it does not, something
+    byte-identity against the regenerated manifest. If it does not, something
     moved that T3-T5 did not intend.
     """
     doc = json.loads(json.dumps(rebuilt))
@@ -84,21 +84,20 @@ def gate_byte_identical(shipped_text, rebuilt):
             "diagnostics.dbz.resampling": ("resampling" in ship_dbz,
                                            "resampling" in dbz),
             "diagnostics.dbz.caveat": (ship_dbz["caveat"] == dbz["caveat"])}
-    expected = {"format_version": ("1.1", "1.2"),
+    expected = {"format_version": ("1.1", "1.1"),   # T3 does NOT bump it
                 "diagnostics.dbz.resampling": (False, True),
                 "diagnostics.dbz.caveat": False}
     if seen != expected:
         return False, f"unexpected T3 diff shape: {seen} != {expected}"
 
-    # Revert exactly those three, in place, preserving key ORDER: `resampling` was
-    # inserted before `caveat`, so rebuilding the dict is how order is restored.
-    doc["format_version"] = "1.1"
+    # Revert exactly those two, preserving key ORDER: `resampling` was inserted
+    # before `caveat`, so rebuilding the dict is how order is restored.
     doc["diagnostics"]["dbz"] = {k: v for k, v in dbz.items() if k != "resampling"}
     doc["diagnostics"]["dbz"]["caveat"] = ship_dbz["caveat"]
 
     text = dumps(doc)
     if text == shipped_text:
-        return True, (f"rebuilt == shipped after reverting the 3 deliberate T3 "
+        return True, (f"rebuilt == shipped after reverting the 2 deliberate T3 "
                       f"changes, {len(text)} chars byte-identical "
                       "(PENDING the batched T3-T5 re-export)")
     return False, (f"reverted rebuild {len(text)} chars != shipped "
@@ -116,17 +115,18 @@ def gate_grid_derived(sc, shipped):
 # --- T2: the web block ------------------------------------------------------
 
 def gate_format_version(shipped):
-    """Shipped 1.1 (T2's web block); contract 1.2 (T3's linear-Z dBZ).
+    """Still 1.1 -- and T3 must NOT have moved it.
 
-    The gap is the un-re-exported package, not a mistake -- see gate_byte_identical.
-    Both must be MINOR bumps off 1.0: a MAJOR would owe an SVT import re-test that
-    cannot happen this phase (plan §7).
+    The rule is about FORMAT compatibility. T3 changed dbz VALUES, not the format: a
+    1.0-era reader renders a linear-Z package correctly, and the method is recorded
+    in `diagnostics.dbz.resampling` where a consumer actually looks. A version number
+    that moves for data changes stops meaning "format" -- and a MAJOR would owe an SVT
+    import re-test that cannot happen this phase (plan §7).
     """
     v = shipped["format_version"]
-    c = contract.FORMAT_VERSION
-    ok = v == "1.1" and c == "1.2" and v.split(".")[0] == c.split(".")[0] == "1"
-    return ok, (f"shipped format_version {v}, contract {c} -- same MAJOR, "
-                "gap closes at the batched T3-T5 re-export")
+    ok = v == contract.FORMAT_VERSION == "1.1"
+    return ok, (f"format_version {v} (contract says {contract.FORMAT_VERSION}) "
+                "-- unmoved by T3, as a data-only change should be")
 
 
 def gate_web_block_present(shipped):
@@ -226,9 +226,9 @@ def negative_controls(shipped_text, rebuilt):
     def set_dbz(doc, **kw):
         doc["diagnostics"]["dbz"].update(kw)
 
-    control("format_version never bumped (still 1.1)",
-            lambda d: d.__setitem__("format_version", "1.1"))
-    control("format_version bumped MAJOR instead of MINOR",
+    control("format_version bumped MINOR for a data-only change",
+            lambda d: d.__setitem__("format_version", "1.2"))
+    control("format_version bumped MAJOR (would owe an SVT re-test)",
             lambda d: d.__setitem__("format_version", "2.0"))
     control("the `resampling` key was never added",
             lambda d: d["diagnostics"]["dbz"].pop("resampling"))
@@ -257,7 +257,7 @@ def main():
           lambda: gate_grid_derived(sc, shipped))
 
     print("\nT2 -- web block + format_version 1.1")
-    check("format_version: shipped 1.1, contract 1.2, same MAJOR",
+    check("format_version 1.1, UNMOVED by T3 (data-only change)",
           lambda: gate_format_version(shipped))
     check("web block present and agrees with contract constants",
           lambda: gate_web_block_present(shipped))

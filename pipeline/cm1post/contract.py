@@ -30,13 +30,13 @@ Per-scenario geometry (voxel size, crop box, run dir) lives in `scenario.py`.
 # 1.1 (2026-07-20, Phase 2 T2): added the manifest `web` block -- a POINTER to the
 #     web rendition, declaring that `web/` belongs to the package. Purely additive;
 #     no data, no channel, no encoding changed, so no SVT import re-test is implied.
-# 1.2 (2026-07-20, Phase 2 T3): dbz is now resampled in LINEAR Z, not in dB, and the
-#     manifest says so (added `diagnostics.dbz.resampling`; `caveat` rewritten). The
-#     dbz VALUES in a 1.2 package differ from a 1.1 one -- but no channel name, order,
-#     encoding, texture map or layout moved, so a 1.0-era reader still reads it and no
-#     SVT import re-test is implied. The bump exists so a consumer can TELL the two
-#     apart; without it the same format_version would cover two different diagnostics.
-FORMAT_VERSION = "1.2"
+# NOT bumped by Phase 2 T3 (linear-Z dbz), deliberately -- the rule above is about
+#     FORMAT compatibility, and T3 changed dbz VALUES, not the format. No channel name,
+#     order, encoding, texture map or layout moved; a 1.0-era reader renders a T3
+#     package correctly. The method is recorded where a consumer actually looks for it,
+#     `manifest.diagnostics.dbz.resampling` -- which makes a bump redundant, and a
+#     version number that moves for data changes stops meaning "format".
+FORMAT_VERSION = "1.1"
 
 # Version of the web-rendition brick format (web/web_manifest.json carries this, and
 # diorama/src/volume.ts refuses a newer MAJOR). Frozen by the format contract rather

@@ -373,8 +373,7 @@ Do not start a phase without explicit go from the owner.
   changes" alone would permit. T1b's one-shot trick is now a standing gate:
   `pipeline/tests/test_manifest.py` **8/8**, reading committed files only (a second
   dividend of the tracked-manifest policy); T1c's 13 deck controls still pass. **A census in PROSE is still a census** (advisor, post-commit): the block's prose enumerated "two files per frame", which the structured key check cannot see and which T4/T5 falsify (signed `w` cannot ride in the 4-channel rgba plane) — inside a *tracked* contract file. Now an 8th regex gate, **fired against the pre-fix manifest before it passed**. `manifest.write`/`webvol.write_manifest` also pin `newline="\n"`: rebuilding a WSL-written package file from Windows silently CRLF-ed all 1932 lines, invisible to gates that read back in universal-newline mode.
-  **T3 DONE — dBZ resampled in LINEAR Z, `format_version` 1.2 (Phase 1 carried item #3
-  DISCHARGED).** `regrid.resample_dbz` converts to Z = 10^(dBZ/10), interpolates, converts
+  **T3 DONE — dBZ resampled in LINEAR Z (Phase 1 carried item #3 DISCHARGED).** `regrid.resample_dbz` converts to Z = 10^(dBZ/10), interpolates, converts
   back; both dbz call sites route through it. **A separate function, deliberately** — folding
   Z-space into the generic `resample()` would corrupt the four mixing-ratio channels sharing
   it. The error was **not cosmetic**: a 20/40 dBZ pair interpolates to 30.0 in dB vs the
@@ -389,14 +388,19 @@ Do not start a phase without explicit go from the owner.
   inequality and `new ≥ old` also holds when new *is* old — its no-op and reversed-arrow
   negative controls are the only thing separating it from a gate that always passes. The
   bbox sweep is untouched either way: `active_mask` runs on the **native CM1 grid**,
-  pre-resample. **1.2 is a MINOR bump for a VALUE change** — no channel name, order,
-  encoding, texture map or layout moved, so §7's SVT freeze holds and no import re-test is
-  owed; the bump exists so a consumer can tell a linear-Z package from a dB one. **The
-  shipped package is deliberately left stale at 1.1** (re-export batched behind T4/T5 — a
-  regenerated manifest now would advertise linear-Z over dB-resampled bricks, i.e. lie), so
-  `test_manifest.py` reuses T2's trick: name the 3 expected diffs, revert them, require the
-  rest byte-identical — **15/15 incl. 7 negative controls**, one of them a same-length edit
-  (35838 chars either way) that a length check would miss.
+  pre-resample. **`format_version` stays 1.1 — a DATA change is not a FORMAT change.**
+  T3 first bumped it to 1.2; that was scope creep past the plan (§9 scoped the manifest
+  deliverable to rewriting `caveat`, no bump) and is reverted. No channel name, order,
+  encoding, texture map or layout moved, so a 1.0-era reader renders a linear-Z package
+  and §7's SVT freeze holds; the method is recorded in `diagnostics.dbz.resampling`, where
+  a consumer actually looks — which made the bump **redundant with the key added in the
+  same change**, while costing a contract-vs-shipped skew hardcoded into two gates. A
+  version number that moves for data changes stops meaning "format". **The shipped package
+  is deliberately left stale** (re-export batched behind T4/T5 — a manifest regenerated now
+  would advertise linear-Z over dB-resampled bricks, i.e. lie), so `test_manifest.py` reuses
+  T2's trick: name the 2 expected diffs, revert them, require the rest byte-identical —
+  **15/15 incl. 7 negative controls**, one a same-length edit (35838 chars either way) that
+  a length check would miss.
   Remaining: T4–T9.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
