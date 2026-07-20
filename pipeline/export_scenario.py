@@ -156,14 +156,39 @@ def cmd_export_web(args):
     print(f"scenario {sc.name} ({sc.kind})  run {sc.run_dir}")
     print(f"scanning {len(files)} frames for per-channel maxima")
     qmax = {c: 0.0 for c in contract.CHANNELS}
+    # Extra fields (T4) are SIGNED, so a max alone is not a range -- track both ends.
+    observed = {n: {"min": float("inf"), "max": float("-inf")}
+                for n in contract.WEB_EXTRA_FIELDS}
     t0 = time.time()
     for i, path in enumerate(files):
         ch, _ = fields.build_channels(path)
         for c, arr in ch.items():
             qmax[c] = max(qmax[c], float(arr.max()))
+        for n in contract.WEB_EXTRA_FIELDS:
+            a = fields.read_extra(path, n)
+            observed[n]["min"] = min(observed[n]["min"], float(a.min()))
+            observed[n]["max"] = max(observed[n]["max"], float(a.max()))
         if i % 60 == 0:
             print(f"  frame {i:3d}  ({(time.time()-t0)/(i+1):.2f} s/frame)")
     print("  qmax: " + "  ".join(f"{c}={qmax[c]:.4g}" for c in contract.CHANNELS))
+    for n, o in observed.items():
+        print(f"  {n}: observed {o['min']:+.2f} .. {o['max']:+.2f} "
+              f"{contract.WEB_EXTRA_FIELDS[n]['units']}")
+
+    # The fixed encode scale is only honest if the data actually fits inside it.
+    # Clipping here would be silent and irreversible, so it is an ERROR, not a
+    # warning -- the correct response is a deliberate contract change (which also
+    # re-scales every existing package's colours), never a quietly truncated export.
+    for n, o in observed.items():
+        scale = contract.WEB_EXTRA_FIELDS[n]["scale_m_s"]
+        if max(abs(o["min"]), abs(o["max"])) > scale:
+            print(f"\nFAIL: {n} range {o['min']:+.2f}..{o['max']:+.2f} exceeds the "
+                  f"fixed encode scale +/-{scale} (contract.W_ENCODE_SCALE_M_S).\n"
+                  "      Encoding would CLIP the peak of the field. Raise the scale "
+                  "in contract.py deliberately -- it is cross-scenario, so this "
+                  "re-scales every package's colours and every legend.",
+                  file=sys.stderr)
+            return 1
 
     query = regrid.build_query(sc, cm1_x, cm1_y, cm1_z)
     print(f"export grid {sc.describe_grid()}")
@@ -179,6 +204,12 @@ def cmd_export_web(args):
             enc[c] = webvol.encode_log_u8(res, contract.THRESHOLDS[c], qmax[c])
         res = regrid.resample_dbz(sc, ch["dbz"], cm1_x, cm1_y, cm1_z, query)
         enc["dbz"] = webvol.encode_linear_u8(res, contract.THRESHOLDS["dbz"], qmax["dbz"])
+        # Extra fields (T4). `w` is SIGNED: resample_signed, never resample -- the
+        # latter's clip at 0 would erase every downdraft (see regrid.resample_signed).
+        for name, spec in contract.WEB_EXTRA_FIELDS.items():
+            res = regrid.resample_signed(sc, fields.read_extra(files[i], name),
+                                         cm1_x, cm1_y, cm1_z, query)
+            enc[name] = webvol.encode_signed_u8(res, spec["scale_m_s"])
 
         rec = webvol.write_frame(args.out, i, enc)
         rec.update({"index": i, "time_s": storm_t})
@@ -188,10 +219,12 @@ def cmd_export_web(args):
             print(f"  [{n+1:3d}/{len(idx)}] f{i:04d} t={storm_t/60:5.1f}min "
                   f"{rec['rgba_bytes']/1e6:5.2f} MB  ({el/(n+1):.1f} s/frame)")
 
-    doc = webvol.build_manifest(sc, records, qmax)
+    doc = webvol.build_manifest(sc, records, qmax, observed=observed)
     webvol.write_manifest(os.path.join(args.out, "web_manifest.json"), doc)
 
-    tot = sum(r["rgba_bytes"] + r["dbz_bytes"] for r in records)
+    # Sum every *_bytes key, so an added extra field cannot silently fall out of
+    # the reported total (the payload budget must count what actually ships).
+    tot = sum(v for r in records for k, v in r.items() if k.endswith("_bytes"))
     peak = max(records, key=lambda r: r["rgba_bytes"])
     print(f"\ndone in {time.time()-t0:.0f} s")
     print(f"  frames     : {len(records)}")

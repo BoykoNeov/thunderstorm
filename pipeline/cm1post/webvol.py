@@ -2,12 +2,16 @@
 
 Per-frame format (design: docs/design-diorama-web-viewer-2026-07-16.md):
 gzipped raw bricks, no container header -- everything the reader needs lives in
-web_manifest.json. Two files per frame:
+web_manifest.json. Files per frame (the set GROWS -- T4 added `w`; the manifest's
+frame records are authoritative, this list is orientation):
 
   fNNNN.rgba.gz  interleaved uint8 RGBA = (cloud, ice, rain, graupelhail),
                  x fastest, then y, then z -- exactly WebGL texImage3D order
                  for a (NX, NY, NZ) 3D texture.
   fNNNN.dbz.gz   uint8 R, same order (diagnostic layer, optional to load).
+  fNNNN.w.gz     uint8 R, same order -- vertical velocity, SIGNED, so it gets its
+                 own plane and its own encoding rather than a slot in the rgba
+                 interleave (contract.WEB_EXTRA_FIELDS).
 
 Quantization is a per-channel LOG map: mixing ratios span ~1e-4..1e-2 kg/kg and a
 linear byte map would crush the anvil into 2-3 codes.
@@ -70,6 +74,34 @@ def encode_linear_u8(q, thr, vmax):
     return v
 
 
+def encode_signed_u8(w, scale):
+    """SIGNED float32 field -> uint8 linear, symmetric about code 128 (Phase 2 T4).
+
+    v = 128 + round(127 * clip(w, -scale, +scale) / scale)   ->  codes 1..255
+
+    Symmetric-about-128 rather than an affine map over the observed [wmin, wmax],
+    and that is the whole design decision. An affine map would use every code, but
+    w = 0 would land on a FRACTIONAL code, so no byte decodes to exactly zero and
+    the updraft/downdraft boundary -- the one feature a viewer actually reads off
+    this field -- would sit at a rounded, scenario-dependent place and paint a thin
+    band of false vertical motion along it. Pinning 0 to an exact integer code costs
+    only the unused negative headroom.
+
+    `scale` is FIXED cross-scenario (contract.W_ENCODE_SCALE_M_S), so the same code
+    means the same m/s in every package. Clipping first means code 0 never occurs:
+    the representable range is exactly [-scale, +scale] on codes 1..255, with no
+    sentinel value to confuse a decoder. Values beyond the scale would be clipped,
+    so the exporter checks the observed range against it and says so loudly.
+    """
+    ww = np.clip(w.astype(np.float64), -scale, scale)
+    return np.clip(np.rint(128.0 + 127.0 * ww / scale), 0, 255).astype(np.uint8)
+
+
+def decode_signed_u8(v, scale):
+    """Inverse of encode_signed_u8 (reference decode; T8's GLSL will mirror this)."""
+    return (v.astype(np.float64) - 128.0) / 127.0 * scale
+
+
 def decode_log_u8(v, thr, qmax):
     """Inverse of encode_log_u8 (reference decode; the GLSL mirrors this)."""
     q = np.zeros(v.shape, dtype=np.float64)
@@ -89,15 +121,27 @@ def write_frame(out_dir, index, channels):
     with gzip.open(dbz_path, "wb", compresslevel=GZIP_LEVEL) as f:
         f.write(np.ascontiguousarray(channels["dbz"]).tobytes())
 
-    return {
+    rec = {
         "rgba": os.path.basename(rgba_path),
         "dbz": os.path.basename(dbz_path),
         "rgba_bytes": os.path.getsize(rgba_path),
         "dbz_bytes": os.path.getsize(dbz_path),
     }
 
+    # Extra fields (T4): separate single-plane files, so a viewer that does not
+    # implement a layer never downloads it. `w` is signed and cannot ride in the
+    # 4-channel rgba plane, which is why this is a file rather than a component.
+    for name in contract.WEB_EXTRA_FIELDS:
+        path = os.path.join(out_dir, f"f{index:04d}.{name}.gz")
+        with gzip.open(path, "wb", compresslevel=GZIP_LEVEL) as f:
+            f.write(np.ascontiguousarray(channels[name]).tobytes())
+        rec[name] = os.path.basename(path)
+        rec[f"{name}_bytes"] = os.path.getsize(path)
 
-def build_manifest(sc, frames, qmax):
+    return rec
+
+
+def build_manifest(sc, frames, qmax, observed=None):
     """web_manifest.json contents -- the whole reader contract."""
     return {
         "web_format_version": WEB_FORMAT_VERSION,
@@ -129,6 +173,41 @@ def build_manifest(sc, frames, qmax):
             "vmax": qmax["dbz"],
             "units": "dBZ",
             "diagnostic": True,
+        },
+        "extra_fields": {
+            name: {
+                "file_suffix": f".{name}.gz",
+                "encoding": spec["encoding"],
+                "units": spec["units"],
+                "cm1_var": spec["cm1_var"],
+                "diagnostic": spec["diagnostic"],
+                # The decode, stated in full so a reader never has to guess it.
+                "scale": spec["scale_m_s"],
+                "decode": ("value = (byte - 128) / 127 * scale; codes 1..255 span "
+                           "[-scale, +scale] and byte 128 is EXACTLY zero, so the "
+                           "updraft/downdraft boundary is exact rather than rounded."),
+                "scale_note": ("FIXED across all scenarios, not fitted per sequence: "
+                               "the same colour means the same m/s in every package, "
+                               "which is what makes updraft strength comparable "
+                               "between scenarios by eye. Values are CLIPPED to "
+                               "+/-scale on encode; the exporter verifies the "
+                               "observed range fits."),
+                # Recorded so a legend can state the REAL range of this sequence,
+                # which the fixed scale deliberately does not tell you.
+                "observed_min": (observed or {}).get(name, {}).get("min"),
+                "observed_max": (observed or {}).get(name, {}).get("max"),
+                "crop_caveat": (
+                    "This field is cropped to the SAME box as the hydrometeor "
+                    "volumes, and that box was sized to the CONDENSATE (see the "
+                    "package manifest's threshold_note). Vertical motion exists "
+                    "outside it: broad, weak environmental subsidence around the "
+                    "storm is not included. The storm-scale updraft and downdraft "
+                    "core are -- see docs/phase2-plan-2026-07-20.md for the measured "
+                    "fraction. The box was NOT resized for this field: it is shared "
+                    "with the VDB rendition, whose bbox centre must stay static "
+                    "across the sequence for the UE SVT contract."),
+            }
+            for name, spec in contract.WEB_EXTRA_FIELDS.items()
         },
         "frames": frames,
     }

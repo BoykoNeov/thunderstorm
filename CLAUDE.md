@@ -401,7 +401,42 @@ Do not start a phase without explicit go from the owner.
   T2's trick: name the 2 expected diffs, revert them, require the rest byte-identical —
   **15/15 incl. 7 negative controls**, one a same-length edit (35838 chars either way) that
   a length check would miss.
-  Remaining: T4–T9.
+  **T4 DONE — updraft `w` exported as a web-only field.** Source is `winterp` (already on
+  scalar points — no destaggering). `w` violates three assumptions the five-channel path
+  rests on, and the SIGNED one is the hazard: `regrid.resample` ends with `clip(0, None)`,
+  so routing `w` through it **zeroes every downdraft** — no crash, no warning, just a storm
+  whose air only goes up. Hence `regrid.resample_signed`, a separate entry point rather than
+  a flag a caller can forget (T3's lesson: *a shared resampler encodes an assumption one
+  field violates*). Encoding is **signed uint8 symmetric about code 128**, codes 1–255, code
+  0 never occurs — rejected the affine map over the observed range because `w=0` then lands
+  on a FRACTIONAL code (measured: code 91 → +0.02 m/s), painting false vertical motion along
+  the updraft/downdraft boundary, the one feature a viewer reads off this field. Scale is
+  **FIXED cross-scenario at ±80 m/s**, not per-sequence, so the same colour means the same
+  m/s in every package (T6 exists to compare scenarios): this cell peaks +54.8 but the Phase
+  0 supercell hit +60.6, so a per-sequence scale would ALREADY disagree between two runs
+  made here and a 60 m/s scale would ALREADY clip one. Exporter **errors** rather than
+  silently clipping if a sequence exceeds it. No deadband baked into the byte — transparency
+  is a T8 render decision. **Crop caveat MEASURED, not asserted** (301-frame sweep): the
+  condensate-sized box clips **0.000%** of |w|≥10 m/s and **0.005%** of ≥5 m/s (peak clipped
+  6.30 m/s); the 10.8% at ≥0.5 m/s is broad environmental subsidence. Box NOT resized — it
+  is shared with the VDB, whose bbox centre must stay static. Gates: `test_regrid_w.py`
+  **10/10**, positive (byte-identity is unavailable when a change adds output by design), the
+  key one being *a purely-negative field survives*, which also DEMONSTRATES the failure
+  (`resample` → +0.000) so it is not just asserting today's code; 3 negative controls each
+  reject a design actually considered. Verified end to end on real CM1: round-trip within
+  exactly the half-quantum, 235 048 negative voxels present, and **`rgba` bricks
+  BYTE-IDENTICAL to the shipped package** while `dbz` differs ≤51 codes (T3's correction,
+  exactly where §9 puts it). **`WEB_FORMAT_VERSION` 1.0 → 1.1; package `format_version`
+  stays 1.1.** The rule that settles this: *T3 changed values inside existing files → DATA →
+  no bump; T4 adds a file, a block and an encoding → FORMAT → MINOR bump.* MAJOR would lock
+  out `volume.ts` (`SUPPORTED_MAJOR = 1`, checked not assumed) — the very viewer T8 extends.
+  Unlike T3's bump it is NOT redundant with a key added alongside it: the version declares
+  the GENERATION, `extra_fields.w` declares the CAPABILITY, and **T8 must feature-detect on
+  the key**. T4 is also the **first time `contract` moves AHEAD of the shipped package on a
+  version number** — which broke `gate_web_block_present` (it asserted shipped == contract
+  and has no revert mechanism); resolved by treating the skew as a named expected diff.
+  `test_manifest.py` now **17/17**.
+  Remaining: T5–T9 (the batched T3–T5 re-export still pending).
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.
 

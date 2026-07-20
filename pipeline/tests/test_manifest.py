@@ -83,25 +83,29 @@ def gate_byte_identical(shipped_text, rebuilt):
     seen = {"format_version": (shipped["format_version"], doc["format_version"]),
             "diagnostics.dbz.resampling": ("resampling" in ship_dbz,
                                            "resampling" in dbz),
-            "diagnostics.dbz.caveat": (ship_dbz["caveat"] == dbz["caveat"])}
-    expected = {"format_version": ("1.1", "1.1"),   # T3 does NOT bump it
+            "diagnostics.dbz.caveat": (ship_dbz["caveat"] == dbz["caveat"]),
+            "web.web_format_version": (shipped["web"]["web_format_version"],
+                                       doc["web"]["web_format_version"])}
+    expected = {"format_version": ("1.1", "1.1"),   # T3/T4 do NOT bump the PACKAGE
                 "diagnostics.dbz.resampling": (False, True),
-                "diagnostics.dbz.caveat": False}
+                "diagnostics.dbz.caveat": False,
+                "web.web_format_version": ("1.0", "1.1")}   # T4 bumps the WEB format
     if seen != expected:
-        return False, f"unexpected T3 diff shape: {seen} != {expected}"
+        return False, f"unexpected T3+T4 diff shape: {seen} != {expected}"
 
-    # Revert exactly those two, preserving key ORDER: `resampling` was inserted
+    # Revert exactly those three, preserving key ORDER: `resampling` was inserted
     # before `caveat`, so rebuilding the dict is how order is restored.
     doc["diagnostics"]["dbz"] = {k: v for k, v in dbz.items() if k != "resampling"}
     doc["diagnostics"]["dbz"]["caveat"] = ship_dbz["caveat"]
+    doc["web"]["web_format_version"] = shipped["web"]["web_format_version"]
 
     text = dumps(doc)
     if text == shipped_text:
-        return True, (f"rebuilt == shipped after reverting the 2 deliberate T3 "
+        return True, (f"rebuilt == shipped after reverting the 3 deliberate T3+T4 "
                       f"changes, {len(text)} chars byte-identical "
                       "(PENDING the batched T3-T5 re-export)")
     return False, (f"reverted rebuild {len(text)} chars != shipped "
-                   f"{len(shipped_text)}; something moved beyond the T3 diff")
+                   f"{len(shipped_text)}; something moved beyond the T3+T4 diff")
 
 
 def gate_grid_derived(sc, shipped):
@@ -130,14 +134,25 @@ def gate_format_version(shipped):
 
 
 def gate_web_block_present(shipped):
+    """Paths must match the contract; the VERSION is deliberately allowed to lag.
+
+    T4 is the first time `contract` moves AHEAD of the shipped package on a version
+    number -- T3 was easy only because it correctly declined to bump anything. The
+    package is stale by design (the 301-frame re-export is batched behind T3-T5 per
+    plan §9), so asserting shipped == contract on the web version would fail for the
+    right reason at the wrong place, with no revert mechanism to explain it. Paths
+    are structural and must agree NOW; the version skew is a named, expected
+    difference handled in gate_byte_identical and gate_web_version_bumped.
+    """
     w = shipped.get("web")
     if not isinstance(w, dict):
         return False, "no `web` block -- carried item #2 is not closed"
     ok = (w["dir"] == contract.WEB_DIR
           and w["manifest"] == contract.WEB_MANIFEST
-          and w["web_format_version"] == contract.WEB_FORMAT_VERSION)
+          and w["web_format_version"] == "1.0")   # stale-by-design, see above
     return ok, (f"dir={w['dir']} manifest={w['manifest']} "
-                f"web_format_version={w['web_format_version']}")
+                f"web_format_version={w['web_format_version']} (shipped, stale) "
+                f"vs contract {contract.WEB_FORMAT_VERSION} -- awaiting re-export")
 
 
 def gate_web_is_pointer(shipped):
@@ -175,14 +190,28 @@ def gate_web_no_prose_census(shipped):
                       else f"PROSE CENSUS: {hits}")
 
 
-def gate_web_version_not_bumped(shipped):
-    """Package 1.0 -> 1.1 must NOT have moved the brick format version.
+def gate_web_version_bumped(shipped):
+    """T4 grows the WEB format, so the WEB version bumps -- MINOR, same major.
 
-    diorama/src/volume.ts refuses a newer MAJOR web_format_version; the brick
-    layout, quantization and reader contract were untouched by T2.
+    The distinction that decides every version question in this project:
+      T3 changed dbz VALUES inside existing files  -> DATA  -> no bump.
+      T4 adds a per-frame file, a manifest block and a new encoding
+                                                   -> FORMAT -> MINOR bump.
+    Not bumping would assert that "1.0" and "1.0-with-an-updraft-field" are the same
+    format, which is false. Bumping the MAJOR would be worse: diorama/src/volume.ts
+    refuses a newer major, so it would lock out the very viewer T8 is about to
+    extend -- and a 1.0-era viewer genuinely still renders a T4 package correctly,
+    because it simply never fetches the file it does not know about.
+
+    The bump is NOT redundant with the `w` key (the trap T3's bump fell into): the
+    version declares the GENERATION, the key declares the CAPABILITY, and T8 must
+    feature-detect on the key.
     """
-    v = shipped["web"]["web_format_version"]
-    return v == "1.0", f"web_format_version {v} (brick format unchanged by T2)"
+    v = contract.WEB_FORMAT_VERSION
+    major, _, minor = v.partition(".")
+    ok = v == "1.1" and major == "1" and minor == "1"
+    return ok, (f"contract web_format_version {v} -- MINOR bump for additive format "
+                f"growth, major stays {major} so volume.ts still accepts it")
 
 
 def gate_minor_bump_is_additive(shipped):
@@ -241,6 +270,10 @@ def negative_controls(shipped_text, rebuilt):
             lambda d: set_dbz(d, feedback="none at all"))
     control("a frame record was dropped",
             lambda d: d["frames"].pop())
+    control("the web format version was left un-bumped as the format grew",
+            lambda d: d["web"].__setitem__("web_format_version", "1.0"))
+    control("the web format version was bumped MAJOR (locks out volume.ts)",
+            lambda d: d["web"].__setitem__("web_format_version", "2.0"))
 
 
 def main():
@@ -265,8 +298,8 @@ def main():
           lambda: gate_web_is_pointer(shipped))
     check("web block restates no per-frame layout in PROSE either",
           lambda: gate_web_no_prose_census(shipped))
-    check("web_format_version NOT bumped (brick format unchanged)",
-          lambda: gate_web_version_not_bumped(shipped))
+    check("web_format_version bumped MINOR for T4's additive format growth",
+          lambda: gate_web_version_bumped(shipped))
     check("the 1.1 bump is purely ADDITIVE (1.0 readers still work)",
           lambda: gate_minor_bump_is_additive(shipped))
 

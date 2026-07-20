@@ -41,9 +41,16 @@ FORMAT_VERSION = "1.1"
 # Version of the web-rendition brick format (web/web_manifest.json carries this, and
 # diorama/src/volume.ts refuses a newer MAJOR). Frozen by the format contract rather
 # than chosen per scenario, so it lives here; webvol.py re-exports it.
-# NOT bumped at package 1.1: the brick layout, quantization and reader contract are
-# byte-for-byte unchanged.
-WEB_FORMAT_VERSION = "1.0"
+# NOT bumped at package 1.1 (T2): the brick layout, quantization and reader contract
+#     were byte-for-byte unchanged -- a pointer block is not a format change.
+# 1.1 (2026-07-20, Phase 2 T4): added the `w` (updraft) extra field -- a NEW per-frame
+#     file and a NEW manifest block. This IS additive format growth, unlike T3: T3
+#     changed dbz VALUES inside existing files (data), T4 grows the file set and the
+#     reader contract (format). A 1.0-era viewer ignores both and still renders, which
+#     is exactly what MINOR means. Feature detection belongs on the PRESENCE of the
+#     `w` block, not on this number: the version declares the generation, the key
+#     declares the capability.
+WEB_FORMAT_VERSION = "1.1"
 
 # Where the web rendition lives inside a package, and what reads it. The manifest's
 # `web` block is built from these; the diorama dev server resolves the same path
@@ -85,6 +92,57 @@ THRESHOLDS = {
     "rain": 1.0e-4,
     "graupelhail": 1.0e-4,
     "dbz": 5.0,            # dBZ
+}
+
+# --- extra web-export fields (NOT SVT channels) -----------------------------
+# The second export path introduced by Phase 2 T4 (plan §7). These fields ship in the
+# WEB rendition only; `CHANNELS` and `SVT_TEXTURE_MAP` above stay frozen because
+# changing them forces an SVT import re-test that cannot happen while the editor is
+# owner-gated (and `-nullrhi` is structurally incapable of validating a render).
+# Tex B keeps 3 spare channels for a deliberate, re-tested promotion later.
+#
+# These constants are FROZEN here rather than chosen per scenario for the same reason
+# THRESHOLDS are: a per-scenario encode scale would make the same colour mean
+# different m/s in different packages, silently defeating the cross-scenario
+# comparison that T6 exists to enable.
+#
+# `w` is UNLIKE every channel above in three ways, and each one costs a decision:
+#   SIGNED    -- downdrafts are the physically interesting half. The generic
+#                `regrid.resample` CLIPS AT 0 and would silently delete all of them,
+#                so `w` must route through `regrid.resample_signed`.
+#   DENSE     -- mixing ratios are ~0 almost everywhere and earn a threshold-to-zero
+#                sentinel; w is nonzero nearly everywhere. There is no sparsity to
+#                exploit and no threshold: any "|w| < eps is transparent" deadband is
+#                a RENDER-time decision (T8), never baked into the byte, which would
+#                discard weak-w data irreversibly at the wrong layer.
+#   NOT LOG   -- w spans ~1e2, not the ~1e4 of the mixing ratios, so a linear map
+#                does not crush it the way it would crush the anvil.
+W_ENCODE_SCALE_M_S = 80.0
+"""Fixed, cross-scenario full-scale for the signed-uint8 `w` encoding (m/s).
+
+Chosen FIXED rather than per-sequence (the `qmax` pattern) so that the same colour
+means the same vertical velocity in every package -- updraft strength becomes
+comparable by eye across scenarios, which is the teaching payload.
+
+80 m/s is empirical headroom, not a round number: the Phase 1 single cell peaks at
++52.5 m/s, but the Phase 0 validated supercell reached +60.6 m/s
+(docs/phase0-validation.md). A per-sequence scale would therefore ALREADY disagree
+between two runs this project has made, and a 60 m/s fixed scale would already clip
+one of them. Resolution is 80/127 = 0.63 m/s per code -- far finer than any
+vertical velocity this app asks a viewer to read off a colour.
+"""
+
+WEB_EXTRA_FIELDS = {
+    "w": {
+        "cm1_var": "winterp",   # w ALREADY interpolated to scalar points by CM1:
+                                # same grid as the hydrometeors, so no destaggering
+                                # here. The raw staggered `w` on zf is ignored.
+        "encoding": "signed-linear-uint8",
+        "units": "m/s",
+        "scale_m_s": W_ENCODE_SCALE_M_S,
+        "diagnostic": False,    # w is a PROGNOSTIC simulation field, not a diagnostic
+                                # like dbz -- it is what the model solved for.
+    },
 }
 
 # Which rendered channel lands in which SVT texture/component. Task 3 confirmed UE

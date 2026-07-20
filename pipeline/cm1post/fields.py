@@ -51,6 +51,19 @@ def build_channels(path):
     return out, t
 
 
+def read_extra(path, name):
+    """Read one WEB_EXTRA_FIELDS field -> float32 (nz, ny, nx).
+
+    The second export path (Phase 2 T4, plan §7): CM1 vars that ship in the web
+    rendition WITHOUT entering the frozen SVT channel map. Unlike `build_channels`
+    these are passed through unsummed and unmodified -- `w` is a prognostic field,
+    not a composite of source fields.
+    """
+    var = contract.WEB_EXTRA_FIELDS[name]["cm1_var"]
+    with Dataset(path) as nc:
+        return np.asarray(nc.variables[var][0], dtype="f4")  # (z, y, x)
+
+
 def active_mask(channels):
     """Union of per-channel active voxels at the LOCKED thresholds.
 

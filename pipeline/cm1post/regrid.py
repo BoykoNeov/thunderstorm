@@ -71,11 +71,44 @@ def resample_dbz(sc, field, cm1_x, cm1_y, cm1_z, query):
     return np.ascontiguousarray(out, dtype="<f4")
 
 
+def resample_signed(sc, field, cm1_x, cm1_y, cm1_z, query):
+    """Trilinear-resample a SIGNED field (vertical velocity w) onto the export box.
+
+    A separate function from `resample` for one blunt reason: `resample` ends with
+    `np.clip(out, 0.0, None)`. That clamp is correct there -- mixing ratios and dBZ
+    are non-negative by definition and it guards against fill-value edges -- but on
+    w it would silently DELETE EVERY DOWNDRAFT, zeroing the entire negative half of
+    the field. The storm's downdrafts and cold pool are the physically interesting
+    half; losing them would not crash anything, it would just quietly render a storm
+    that only ever goes up. The same reasoning as T3's `resample_dbz`: the shared
+    resampler encodes an assumption (non-negativity there, linearity here) that one
+    field violates, so the field gets its own entry point rather than a flag that a
+    future caller can forget to pass.
+
+    Interpolation is LINEAR and in the field's own units -- unlike dBZ, w is already
+    a linear physical quantity, so there is no transform to interpolate through.
+    Linear also cannot overshoot, so a resampled w never exceeds the largest
+    contributing w; the recorded wmin/wmax stay valid bounds after resampling.
+
+    fill_value=0.0 is physical here rather than merely convenient: outside the CM1
+    domain there is no vertical motion.
+    """
+    interp = RegularGridInterpolator(
+        (cm1_z, cm1_y, cm1_x), field.astype("f8"),
+        method="linear", bounds_error=False, fill_value=0.0,
+    )
+    out = interp(query).reshape(sc.nz, sc.ny, sc.nx)
+    # Deliberately NO clip -- see above.
+    return np.ascontiguousarray(out, dtype="<f4")
+
+
 def resample(sc, field, cm1_x, cm1_y, cm1_z, query):
     """Trilinear-resample one (nz,ny,nx) CM1 field onto the export box.
 
-    LINEAR quantities only -- the mixing ratios. The dBZ diagnostic is logarithmic
-    and must go through `resample_dbz`; interpolating it here would average dB.
+    NON-NEGATIVE linear quantities only -- the mixing ratios. The dBZ diagnostic is
+    logarithmic and must go through `resample_dbz`; interpolating it here would
+    average dB. Signed fields (w) must go through `resample_signed`; the clip below
+    would erase their negative half.
     """
     interp = RegularGridInterpolator(
         (cm1_z, cm1_y, cm1_x), field.astype("f8"),
