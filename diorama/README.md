@@ -38,16 +38,30 @@ then copied out of WSL. The bricks are gzipped uint8 log-quantized volumes;
 
 ## Controls
 
-Left-drag = orbit · **right-drag = pan** (middle-drag or shift+left-drag also
-pan) · wheel = zoom · space = play/pause · `[` / `]` = step frame ·
+Left-drag = orbit · **right-drag = pan across the ground** · **middle-drag =
+height** · wheel = zoom · space = play/pause · `[` / `]` = step frame ·
 `\` cross-section axis · `,` / `.` slide the cut plane · `d` toggle the dBZ
 radar layer · `b` toggle the scale bar · bottom bar: play/pause, speed
 (15×–300×, a pure UI multiplier over storm time), scrubber, storm-time clock.
 
-Pan slides the look-at point in the camera's image plane at the target's depth,
-so the scene tracks the cursor 1:1 at any zoom and the orbit angles/zoom are
-untouched. The target is clamped to the diorama (ground floor at z = 0, ±60 km
-horizontally) so a stray drag cannot lose the storm.
+The two pans are separate axes of one gesture, and neither touches the orbit
+angles or zoom:
+
+- **Right-drag** (or shift+left-drag) walks the look-at point **across the
+  ground**, z held — sideways along the world-horizontal `right` vector,
+  up/down along the ground-projected view direction, so dragging down pulls the
+  far countryside toward you. Vertical motion divides by `sin(elevation)`
+  because the ground is foreshortened on screen (clamped at 0.15 so a
+  near-horizon camera cannot teleport the target).
+- **Middle-drag** (or alt+left-drag) is the **elevator** — raises/lowers the
+  look-at point for following a tall storm from cloud base to anvil. Same
+  grab-the-world sense as the ground pan (drag down ⇒ you rise), so the two
+  read as one gesture on different axes rather than opposites.
+
+Both convert pixels at the target's depth, so the scene tracks the cursor at any
+zoom. The shift/alt duplicates exist because plenty of trackpads make right- and
+middle-drag awkward. The target is clamped to the diorama (ground floor at
+z = 0, up to 40 km, ±60 km horizontally) so a stray drag cannot lose the storm.
 
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
 the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
@@ -182,7 +196,8 @@ Slice 5c (scale chip + clock polish) done (2026-07-20): the HUD's domain extents
 are derived from the manifest instead of hard-coded text; a live cartographic
 scale bar (`b` / `?scalebar=0`) reports real storm km, GPU-verified to 0.03 %
 against the render matrix; the clock is labelled "storm time"; and right-drag
-pans the look-at point (`camera.ts::panTarget`, image-plane, clamped to the
-diorama) — which required `targetX`/`targetY` in the accumulation `ViewKey`,
-the same trap slice 5a hit with the cut plane. **Slice 5 is complete.**
+pans across the ground while middle-drag changes height (`camera.ts::panGround`
+/ `panAltitude`, clamped to the diorama) — which required `targetX`/`targetY`
+in the accumulation `ViewKey`, the same trap slice 5a hit with the cut plane.
+**Slice 5 is complete.**
 Slice 6 = lightning event list (blocked on the Phase 4 pipeline exporter).

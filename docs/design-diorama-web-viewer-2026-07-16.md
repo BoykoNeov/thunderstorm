@@ -444,16 +444,34 @@ is always evidence.
    (c) The clock reads **"storm time"** — it counts simulated storm time, never
    wall time (the speed select is a pure multiplier over it, charter §Time).
    The scrubber itself needed nothing.
-   (d) **Right-drag pan** (owner request; middle-drag and shift+left also pan —
-   a trackpad's two-finger right-click is awkward to drag with). `panTarget`
-   slides the look-at point in the camera's image plane, converting pixels at
-   the target's depth so the scene tracks the cursor 1:1 at any zoom, leaving
-   azimuth/elevation/distance alone; the target is clamped to the diorama
-   (ground floor z = 0, ±60 km horizontally) so a stray drag cannot lose the
-   storm. Load-bearing, and the same trap 5a sprang: the accumulation `ViewKey`
+   (d) **Pan** (owner request), as TWO gestures on separate axes, neither
+   touching azimuth/elevation/distance:
+   **right-drag = across the ground** (`panGround`, z held — sideways along the
+   world-horizontal `right` vector, up/down along the ground-projected view
+   direction, so dragging down pulls the far countryside toward the viewer;
+   vertical divides by `sin(elevation)` for ground foreshortening, clamped at
+   0.15 so a near-horizon camera cannot teleport the target), and
+   **middle-drag = height** (`panAltitude`, the elevator for following a tall
+   storm base→anvil, same grab-the-world sense so the two read as one gesture
+   rather than opposites). shift+left and alt+left duplicate them for trackpads.
+   Both convert pixels at the target's depth so the scene tracks the cursor at
+   any zoom; the target is clamped to the diorama (z 0–40 km, ±60 km
+   horizontally) so a stray drag cannot lose the storm.
+   *Design history worth keeping:* the first cut made vertical drag move the
+   look-at point in the camera's **image plane**, i.e. straight up into the sky.
+   Horizontal pan is identical under either convention (`right` is always
+   world-horizontal); only the vertical axis forks. The image-plane version was
+   detectably wrong in use — from the default 11° view it had only 3.5 km of
+   downward travel before the ground floor stopped it, which reads as the drag
+   stalling. The owner asked for both behaviours, hence the two-gesture split.
+   Load-bearing, and the same trap 5a sprang: the accumulation `ViewKey`
    carried only `targetZ` (safe while the target was pinned to the storm axis)
    and gained `targetX`/`targetY` — without them a pan in x/y alone would
    average two framings into one still.
+   GPU-verified: a pure downward right-drag left the horizon at exactly the same
+   screen height (camera altitude untouched) while the countryside slid toward
+   the viewer; a middle-drag shifted the whole scene down-frame at unchanged
+   apparent slab size. The two axes are cleanly separated.
    Verification note: a Chrome tab that is not foregrounded halts `rAF`
    entirely, so the canvas captures black and the clock/scale-bar readout never
    runs. That is the harness, not the app — give the tab real foreground time

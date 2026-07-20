@@ -8,7 +8,8 @@ import {
   dot,
   kmPerPixel,
   norm,
-  panTarget,
+  panAltitude,
+  panGround,
   type OrbitState,
 } from "../src/camera";
 import { volumeBox } from "../src/scene";
@@ -71,7 +72,7 @@ describe("orbit camera basis", () => {
   });
 });
 
-describe("pan (slice 5c: right-drag moves the look-at point)", () => {
+describe("pan (slice 5c: right-drag ground, middle-drag altitude)", () => {
   const H = 1000; // viewport height, CSS px
 
   it("kmPerPixel spans the frustum height over the viewport", () => {
@@ -79,51 +80,77 @@ describe("pan (slice 5c: right-drag moves the look-at point)", () => {
     expect(kmPerPixel(S, H) * H).toBeCloseTo(2 * Math.tan(S.fovY / 2) * S.distance, 10);
   });
 
-  it("changes only the target — orbit angles and zoom survive a pan", () => {
-    const p = panTarget(S, 120, -45, H);
-    expect(p.azimuth).toBe(S.azimuth);
-    expect(p.elevation).toBe(S.elevation);
-    expect(p.distance).toBe(S.distance);
-    expect(p.fovY).toBe(S.fovY);
+  it("changes only the target — orbit angles and zoom survive either pan", () => {
+    for (const p of [panGround(S, 120, -45, H), panAltitude(S, -45, H)]) {
+      expect(p.azimuth).toBe(S.azimuth);
+      expect(p.elevation).toBe(S.elevation);
+      expect(p.distance).toBe(S.distance);
+      expect(p.fovY).toBe(S.fovY);
+    }
   });
 
-  it("stays in the image plane (the target never dollies toward the camera)", () => {
-    const b = basis(S);
-    const p = panTarget(S, 80, 33, H);
-    const d = { x: p.target.x - S.target.x, y: p.target.y - S.target.y, z: p.target.z - S.target.z };
-    expect(dot(d, b.forward)).toBeCloseTo(0, 10);
+  it("ground pan holds altitude — that axis belongs to the middle drag", () => {
+    expect(panGround(S, 80, 33, H).target.z).toBe(S.target.z);
+    expect(panGround(S, -200, 400, H).target.z).toBe(S.target.z);
   });
 
-  it("moves the scene WITH the cursor, by the distance under it", () => {
+  it("ground pan slides horizontally with the cursor, by the distance under it", () => {
     const b = basis(S);
     const dx = 60;
-    const p = panTarget(S, dx, 0, H);
-    const d = { x: p.target.x - S.target.x, y: p.target.y - S.target.y, z: p.target.z - S.target.z };
+    const p = panGround(S, dx, 0, H);
+    const d = { x: p.target.x - S.target.x, y: p.target.y - S.target.y, z: 0 };
     // dragging right walks the target along −right, so the world slides right
     expect(dot(d, b.right)).toBeCloseTo(-dx * kmPerPixel(S, H), 10);
-    expect(Math.hypot(d.x, d.y, d.z)).toBeCloseTo(dx * kmPerPixel(S, H), 10);
+    expect(b.right.z).toBeCloseTo(0, 12); // `right` is world-horizontal by construction
   });
 
-  it("drags down to rise (grab-the-world), on the simple axis-aligned view", () => {
-    const flat: OrbitState = { ...S, azimuth: 0, elevation: 0 };
-    expect(panTarget(flat, 0, 50, H).target.z).toBeGreaterThan(flat.target.z);
-    expect(panTarget(flat, 0, -50, H).target.z).toBeLessThan(flat.target.z);
+  it("ground pan drags down to push the target away along the view direction", () => {
+    const b = basis(S);
+    const p = panGround(S, 0, 50, H);
+    const d = { x: p.target.x - S.target.x, y: p.target.y - S.target.y, z: 0 };
+    // grab-the-world: dragging down pulls the far countryside toward the viewer
+    expect(d.x * b.forward.x + d.y * b.forward.y).toBeGreaterThan(0);
+    expect(panGround(S, 0, -50, H).target.y).not.toBe(S.target.y);
+  });
+
+  it("ground pan covers more ground per pixel from a low camera (foreshortening)", () => {
+    const low = panGround({ ...S, elevation: 0.3 }, 0, 100, H).target;
+    const high = panGround({ ...S, elevation: 1.4 }, 0, 100, H).target;
+    const span = (t: typeof low, s: OrbitState) =>
+      Math.hypot(t.x - s.target.x, t.y - s.target.y);
+    expect(span(low, S)).toBeGreaterThan(span(high, S));
+  });
+
+  it("ground pan stays finite as the camera approaches the horizon", () => {
+    // 1/sin(elevation) diverges at el→0; the clamp is what keeps this sane
+    const t = panGround({ ...S, elevation: 1e-6 }, 0, 100, H).target;
+    expect(Number.isFinite(t.x)).toBe(true);
+    expect(Number.isFinite(t.y)).toBe(true);
+  });
+
+  it("altitude pan moves only in z, and drags down to rise (same sense as ground)", () => {
+    const up = panAltitude(S, 50, H);
+    expect(up.target.x).toBe(S.target.x);
+    expect(up.target.y).toBe(S.target.y);
+    expect(up.target.z).toBeCloseTo(S.target.z + 50 * kmPerPixel(S, H), 10);
+    expect(panAltitude(S, -20, H).target.z).toBeLessThan(S.target.z);
   });
 
   it("pans further per pixel when zoomed out — the scene still tracks the cursor", () => {
-    const near = panTarget({ ...S, distance: 20 }, 100, 0, H).target;
-    const far = panTarget({ ...S, distance: 200 }, 100, 0, H).target;
+    const near = panGround({ ...S, distance: 20 }, 100, 0, H).target;
+    const far = panGround({ ...S, distance: 200 }, 100, 0, H).target;
     expect(Math.hypot(far.x, far.y)).toBeGreaterThan(Math.hypot(near.x, near.y));
   });
 
   it("clamps the target into the diorama (ground floor, no flying off the slab)", () => {
     expect(clampTarget({ x: 900, y: -900, z: -5 })).toEqual({ x: 60, y: -60, z: 0 });
     expect(clampTarget({ x: 0, y: 0, z: 999 }).z).toBe(40);
-    // a huge drag saturates rather than losing the storm
-    const p = panTarget(S, 1e6, 0, H);
-    expect(Math.abs(p.target.x)).toBeLessThanOrEqual(60);
-    expect(Math.abs(p.target.y)).toBeLessThanOrEqual(60);
-    expect(p.target.z).toBeGreaterThanOrEqual(0);
+    // huge drags saturate rather than losing the storm
+    const g = panGround(S, 1e6, 1e6, H);
+    expect(Math.abs(g.target.x)).toBeLessThanOrEqual(60);
+    expect(Math.abs(g.target.y)).toBeLessThanOrEqual(60);
+    expect(panAltitude(S, 1e6, H).target.z).toBe(40);
+    expect(panAltitude(S, -1e6, H).target.z).toBe(0);
   });
 });
 

@@ -64,17 +64,27 @@ export function kmPerPixel(s: OrbitState, viewportHeightPx: number): number {
   return (2 * Math.tan(s.fovY / 2) * s.distance) / viewportHeightPx;
 }
 
+// Ground pan is foreshortened by sin(elevation): near the horizon one screen
+// pixel spans a great deal of ground, and at el→0 the exact factor diverges.
+// Clamping the divisor keeps a low camera from teleporting the target. 0.15 sits
+// just under the default 11° view (sin = 0.19), so the default is exact.
+const GROUND_MIN_SIN = 0.15;
+
 /**
- * Right-drag pan: slide the look-at point within the camera's image plane.
+ * Right-drag pan: slide the look-at point ACROSS THE GROUND (z held).
  *
  * "Grab the world" convention — the scene follows the cursor, so the camera
- * translates opposite to the drag. Motion is in CSS pixels and converted at the
- * target's depth, which makes a drag move the scene by very nearly the distance
- * under the cursor regardless of zoom (the reason pan feels wrong when it is
- * hard-coded to a fixed km/px). Orbit is untouched: pan changes only `target`,
- * so azimuth/elevation/distance survive it.
+ * translates opposite to the drag. Horizontal motion runs along `right`, which
+ * is world-horizontal by construction (right.z === 0 for a z-up orbit), and
+ * vertical motion runs along the ground-projected view direction, so dragging
+ * down pulls the far countryside toward the viewer. Pixels convert at the
+ * target's depth, which keeps the scene under the cursor at any zoom (the
+ * reason pan feels wrong when it is hard-coded to a fixed km/px).
+ *
+ * Orbit is untouched: pan changes only `target`, so azimuth/elevation/distance
+ * survive it.
  */
-export function panTarget(
+export function panGround(
   s: OrbitState,
   dxPx: number,
   dyPx: number,
@@ -82,16 +92,29 @@ export function panTarget(
 ): OrbitState {
   const k = kmPerPixel(s, viewportHeightPx);
   const b = basis(s);
-  // screen +y points DOWN, camera `up` points up ⇒ dragging down (+dy) walks
-  // the target up, which slides the scene down after the cursor.
+  const f = Math.hypot(b.forward.x, b.forward.y); // forward, flattened onto the ground
+  const fx = f > 1e-9 ? b.forward.x / f : 0;
+  const fy = f > 1e-9 ? b.forward.y / f : 0;
+  const fwd = (dyPx * k) / Math.max(Math.sin(s.elevation), GROUND_MIN_SIN);
   return {
     ...s,
     target: clampTarget({
-      x: s.target.x - b.right.x * dxPx * k + b.up.x * dyPx * k,
-      y: s.target.y - b.right.y * dxPx * k + b.up.y * dyPx * k,
-      z: s.target.z - b.right.z * dxPx * k + b.up.z * dyPx * k,
+      x: s.target.x - b.right.x * dxPx * k + fx * fwd,
+      y: s.target.y - b.right.y * dxPx * k + fy * fwd,
+      z: s.target.z,
     }),
   };
+}
+
+/**
+ * Middle-drag: raise/lower the look-at point — the elevator for following a
+ * tall storm from cloud base to anvil. Same grab-the-world sense as panGround
+ * (drag down ⇒ the scene slides down ⇒ you rise), so the two feel like one
+ * gesture on different axes rather than opposites.
+ */
+export function panAltitude(s: OrbitState, dyPx: number, viewportHeightPx: number): OrbitState {
+  const k = kmPerPixel(s, viewportHeightPx);
+  return { ...s, target: clampTarget({ ...s.target, z: s.target.z + dyPx * k }) };
 }
 
 /** Camera position + orthonormal basis (forward toward the target). */

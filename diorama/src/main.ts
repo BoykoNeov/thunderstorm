@@ -9,7 +9,15 @@
 // Design: docs/design-diorama-web-viewer-2026-07-16.md §2, §4, §5.2, slice 3.
 
 import { ACC_CAP, jitterSeq, nextCount, sameView, type ViewKey } from "./accum";
-import { basis, clampOrbit, direction, kmPerPixel, panTarget, type OrbitState } from "./camera";
+import {
+  basis,
+  clampOrbit,
+  direction,
+  kmPerPixel,
+  panAltitude,
+  panGround,
+  type OrbitState,
+} from "./camera";
 import { cssGradientStops, dbzCssGradientStops } from "./colormap";
 import { BrickDecoder } from "./decoder";
 import {
@@ -378,22 +386,27 @@ async function start() {
     }
   });
 
-  // orbit: left-drag + wheel.  pan: right-drag (or middle, or shift+left — a
-  // trackpad's two-finger right-click is awkward to drag with). Pan slides the
-  // look-at point in the image plane at the target's depth, so the scene tracks
-  // the cursor 1:1 at any zoom, and leaves azimuth/elevation/distance alone.
-  // `dragging` stays "a drag of either kind is in progress" — the accumulation
-  // gate reads it, and a panned still must not average across the motion.
+  // Three drag gestures on the canvas, all leaving the others' state alone:
+  //   left   → orbit (azimuth/elevation)
+  //   right  → pan across the ground (shift+left too — a trackpad's two-finger
+  //            right-click is awkward to drag with)
+  //   middle → raise/lower the look-at point (alt+left too, for the same
+  //            reason: plenty of trackpads have no middle button)
+  // Both pans convert pixels at the target's depth, so the scene tracks the
+  // cursor at any zoom. `dragging` stays "a drag of ANY kind is in progress" —
+  // the accumulation gate reads it, and a still must not average across motion.
+  type DragMode = "orbit" | "ground" | "altitude";
   let dragging = false;
-  let panMode = false;
+  let dragMode: DragMode = "orbit";
   canvas.addEventListener("pointerdown", (e) => {
     dragging = true;
-    panMode = e.button === 2 || e.button === 1 || e.shiftKey;
+    dragMode =
+      e.button === 1 || e.altKey ? "altitude" : e.button === 2 || e.shiftKey ? "ground" : "orbit";
     canvas.setPointerCapture(e.pointerId);
   });
   const endDrag = () => {
     dragging = false;
-    panMode = false;
+    dragMode = "orbit";
   };
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
@@ -401,15 +414,17 @@ async function start() {
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointermove", (e) => {
     if (!dragging) return;
-    if (panMode) {
-      orbit = panTarget(orbit, e.movementX, e.movementY, canvas.clientHeight);
-      return;
+    if (dragMode === "ground") {
+      orbit = panGround(orbit, e.movementX, e.movementY, canvas.clientHeight);
+    } else if (dragMode === "altitude") {
+      orbit = panAltitude(orbit, e.movementY, canvas.clientHeight);
+    } else {
+      orbit = clampOrbit({
+        ...orbit,
+        azimuth: orbit.azimuth - e.movementX * 0.005,
+        elevation: orbit.elevation + e.movementY * 0.005,
+      });
     }
-    orbit = clampOrbit({
-      ...orbit,
-      azimuth: orbit.azimuth - e.movementX * 0.005,
-      elevation: orbit.elevation + e.movementY * 0.005,
-    });
   });
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
@@ -447,7 +462,7 @@ async function start() {
     // HUD: controls + honest scale + staging disclaimer + a diagnostic banner
     // when the dBZ layer is active (charter: diagnostics are labeled).
     hud.textContent =
-      `drag orbit · right-drag pan · wheel zoom · space play/pause · [ ] frame step\n` +
+      `drag orbit · right-drag pan · middle-drag height · wheel zoom · space play/pause · [ ] frame step\n` +
       `\\ cross-section · d dBZ layer · b scale bar\n` +
       `this storm is ${extentText}` +
       (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
