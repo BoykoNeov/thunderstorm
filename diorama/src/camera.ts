@@ -25,11 +25,72 @@ export interface CameraBasis {
 const EL_MIN = 0.02;
 const EL_MAX = Math.PI / 2 - 0.02;
 
+// Pan bounds for the look-at point (km). The staging slab is 110×110 km and the
+// storm box reaches ±52 km at the 3× scale cap, so ±60 lets you walk the target
+// to any corner of either without letting a stray drag lose the diorama
+// entirely. The z floor is the ground plane; 40 km clears the anvil at 3×.
+const TARGET_XY = 60;
+const TARGET_Z_MAX = 40;
+
 export function clampOrbit(s: OrbitState): OrbitState {
   return {
     ...s,
     elevation: Math.min(EL_MAX, Math.max(EL_MIN, s.elevation)),
     distance: Math.min(500, Math.max(5, s.distance)),
+  };
+}
+
+/** Keeps a panned look-at point inside the diorama (see TARGET_XY / _Z_MAX). */
+export function clampTarget(t: Vec3): Vec3 {
+  return {
+    x: Math.min(TARGET_XY, Math.max(-TARGET_XY, t.x)),
+    y: Math.min(TARGET_XY, Math.max(-TARGET_XY, t.y)),
+    z: Math.min(TARGET_Z_MAX, Math.max(0, t.z)),
+  };
+}
+
+/**
+ * Scene-kilometres spanned by ONE pixel at the look-at point's depth.
+ *
+ * Exact only on the plane through the target perpendicular to the view — this
+ * is a perspective camera, so nearer things read bigger and farther things
+ * smaller. That is why the scale bar this feeds is labelled "at storm centre"
+ * rather than presented as a scale for the whole image.
+ *
+ * `viewportHeightPx` must be CSS pixels (canvas.clientHeight), not the
+ * device-pixel backing-store height — the bar is DOM and is laid out in CSS px.
+ */
+export function kmPerPixel(s: OrbitState, viewportHeightPx: number): number {
+  return (2 * Math.tan(s.fovY / 2) * s.distance) / viewportHeightPx;
+}
+
+/**
+ * Right-drag pan: slide the look-at point within the camera's image plane.
+ *
+ * "Grab the world" convention — the scene follows the cursor, so the camera
+ * translates opposite to the drag. Motion is in CSS pixels and converted at the
+ * target's depth, which makes a drag move the scene by very nearly the distance
+ * under the cursor regardless of zoom (the reason pan feels wrong when it is
+ * hard-coded to a fixed km/px). Orbit is untouched: pan changes only `target`,
+ * so azimuth/elevation/distance survive it.
+ */
+export function panTarget(
+  s: OrbitState,
+  dxPx: number,
+  dyPx: number,
+  viewportHeightPx: number,
+): OrbitState {
+  const k = kmPerPixel(s, viewportHeightPx);
+  const b = basis(s);
+  // screen +y points DOWN, camera `up` points up ⇒ dragging down (+dy) walks
+  // the target up, which slides the scene down after the cursor.
+  return {
+    ...s,
+    target: clampTarget({
+      x: s.target.x - b.right.x * dxPx * k + b.up.x * dyPx * k,
+      y: s.target.y - b.right.y * dxPx * k + b.up.y * dyPx * k,
+      z: s.target.z - b.right.z * dxPx * k + b.up.z * dyPx * k,
+    }),
   };
 }
 

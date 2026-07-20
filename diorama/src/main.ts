@@ -9,7 +9,7 @@
 // Design: docs/design-diorama-web-viewer-2026-07-16.md §2, §4, §5.2, slice 3.
 
 import { ACC_CAP, jitterSeq, nextCount, sameView, type ViewKey } from "./accum";
-import { basis, clampOrbit, direction, type OrbitState } from "./camera";
+import { basis, clampOrbit, direction, kmPerPixel, panTarget, type OrbitState } from "./camera";
 import { cssGradientStops, dbzCssGradientStops } from "./colormap";
 import { BrickDecoder } from "./decoder";
 import {
@@ -34,6 +34,7 @@ import { buildNoise3D, NOISE_SIZE } from "./noise3d";
 import { multiply, perspective, project, view } from "./mat";
 import { advance, locate, wantedFrames } from "./playback";
 import { buildPrecipInstances, HAIL, RAIN, type PrecipSpec } from "./precip";
+import { niceScaleBar } from "./scalebar";
 import { SlotPool } from "./ring";
 import { volumeBox } from "./scene";
 import { decodeConstants, loadManifest, type WebManifest } from "./volume";
@@ -74,6 +75,9 @@ const speedSel = document.getElementById("speed") as HTMLSelectElement;
 const fpsInput = document.getElementById("fps") as HTMLInputElement;
 const scrub = document.getElementById("scrub") as HTMLInputElement;
 const clockEl = document.getElementById("clock") as HTMLSpanElement;
+const sbBox = document.getElementById("scalebar") as HTMLDivElement;
+const sbRule = document.getElementById("sbRule") as HTMLDivElement;
+const sbLabel = document.getElementById("sbLabel") as HTMLDivElement;
 
 const params = new URLSearchParams(location.search);
 const renderScale = Number(params.get("rs") ?? "1") || 1;
@@ -172,6 +176,12 @@ const xsecMax = Math.max(0.1, numParam("xmax", 10)); // g/kg at the colormap top
 // fetched/decoded/uploaded and the march is bit-unchanged. `d` toggles at
 // runtime. Labeled diagnostic in the HUD + legend (charter: diagnostics labeled).
 let layer: "hydro" | "dbz" = params.get("layer") === "dbz" ? "dbz" : "hydro";
+
+// scale bar (slice 5c): a live cartographic rule for the STORM (the staging is
+// decorative and stays 1×). ON by default — it is the teaching half of the
+// scale chip — and toggleable with `?scalebar=0` / key `b` for clean captures.
+let scaleBarOn = params.get("scalebar") !== "0";
+const SCALE_BAR_MAX_PX = 150; // longest the rule may draw; niceScaleBar fits under it
 
 // starting view, overridable for tuning/captures: ?az=45&el=11&d=145&fov=34
 // (deg, km). The default elevation is low enough that the sea horizon sits in
@@ -361,17 +371,40 @@ async function start() {
     if (e.key === "\\") { xsecAxis = (xsecAxis + 1) % 4; updateXsecUI(); }
     // toggle the dBZ radar diagnostic layer (slice 5b)
     if (e.key === "d" || e.key === "D") switchLayer(layer === "dbz" ? "hydro" : "dbz");
+    // toggle the scale bar (slice 5c) — for clean captures
+    if (e.key === "b" || e.key === "B") {
+      scaleBarOn = !scaleBarOn;
+      sbBox.style.display = scaleBarOn ? "block" : "none";
+    }
   });
 
-  // orbit: drag + wheel
+  // orbit: left-drag + wheel.  pan: right-drag (or middle, or shift+left — a
+  // trackpad's two-finger right-click is awkward to drag with). Pan slides the
+  // look-at point in the image plane at the target's depth, so the scene tracks
+  // the cursor 1:1 at any zoom, and leaves azimuth/elevation/distance alone.
+  // `dragging` stays "a drag of either kind is in progress" — the accumulation
+  // gate reads it, and a panned still must not average across the motion.
   let dragging = false;
+  let panMode = false;
   canvas.addEventListener("pointerdown", (e) => {
     dragging = true;
+    panMode = e.button === 2 || e.button === 1 || e.shiftKey;
     canvas.setPointerCapture(e.pointerId);
   });
-  canvas.addEventListener("pointerup", () => (dragging = false));
+  const endDrag = () => {
+    dragging = false;
+    panMode = false;
+  };
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+  // without this the right-drag pops the browser context menu on release
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointermove", (e) => {
     if (!dragging) return;
+    if (panMode) {
+      orbit = panTarget(orbit, e.movementX, e.movementY, canvas.clientHeight);
+      return;
+    }
     orbit = clampOrbit({
       ...orbit,
       azimuth: orbit.azimuth - e.movementX * 0.005,
@@ -397,13 +430,26 @@ async function start() {
   const dbzThr = man.dbz.threshold;
   const dbzMax = man.dbz.vmax;
 
+  // Honest domain extents, DERIVED (slice 5c) — these were literal "52 km wide,
+  // 18 km tall" text, which is correct for this package (208×208×72 @ 250 m) but
+  // would silently lie the first time a scenario ships a different crop.
+  const kmText = (v: number) => v.toFixed(v % 1 ? 1 : 0);
+  const domW = (man.grid.nx * man.grid.voxel_m) / 1000;
+  const domD = (man.grid.ny * man.grid.voxel_m) / 1000;
+  const domH = (man.grid.nz * man.grid.voxel_m) / 1000;
+  const extentText =
+    (Math.abs(domW - domD) < 1e-6
+      ? `${kmText(domW)} km wide`
+      : `${kmText(domW)} × ${kmText(domD)} km across`) + `, ${kmText(domH)} km tall`;
+
   function updateLayerUI() {
     const isDbz = layer === "dbz";
     // HUD: controls + honest scale + staging disclaimer + a diagnostic banner
     // when the dBZ layer is active (charter: diagnostics are labeled).
     hud.textContent =
-      `drag orbit · wheel zoom · space play/pause · [ ] frame step · \\ cross-section · d dBZ layer\n` +
-      `this storm is 52 km wide, 18 km tall` +
+      `drag orbit · right-drag pan · wheel zoom · space play/pause · [ ] frame step\n` +
+      `\\ cross-section · d dBZ layer · b scale bar\n` +
+      `this storm is ${extentText}` +
       (stormScale !== 1 ? ` — shown at ${stormScale}× scale` : "") + `\n` +
       `land, towns & forests are decorative staging, not simulation data` +
       (precipOn && !isDbz ? `\nrain & hail are stylized particles gated by the simulated near-surface fields` : "") +
@@ -431,6 +477,11 @@ async function start() {
   }
   const updateXsecUI = updateLayerUI; // xsec key handlers refresh the same UI
   updateLayerUI();
+  sbBox.style.display = scaleBarOn ? "block" : "none";
+  // last-written scale-bar geometry, so the render loop only touches the DOM
+  // when the zoom actually changed (a per-frame style write forces layout).
+  let sbLastLabel = "";
+  let sbLastPx = -1;
 
   // ---- render targets (recreated on resize) ----------------------------------
   // These MUST be declared before resize() runs — resize() writes accT/accN.
@@ -723,7 +774,8 @@ async function start() {
     // not smear the average — pausing therefore freezes the whole miniature.
     const key: ViewKey = {
       az: orbit.azimuth, el: orbit.elevation, dist: orbit.distance,
-      fovY: orbit.fovY, targetZ: orbit.target.z,
+      fovY: orbit.fovY,
+      targetX: orbit.target.x, targetY: orbit.target.y, targetZ: orbit.target.z,
       fa: bind?.fa ?? -1, fb: bind?.fb ?? -1, mix: bind?.mix ?? -1,
       xsec: xsecAxis, xpos: xsecPos, layer: layer === "dbz" ? 1 : 0,
     };
@@ -931,9 +983,31 @@ async function start() {
 
     // 6. UI readout
     if (!scrubbing) scrub.value = String(tStorm);
+    // "storm time" names what the clock counts: simulated time in the storm,
+    // NOT wall time — the speed select is a pure multiplier over it (charter).
     clockEl.textContent =
-      `${fmt(tStorm)} / ${fmt(tEnd)} · frame ${pos.i0}/${nFrames - 1}` +
+      `storm time ${fmt(tStorm)} / ${fmt(tEnd)} · frame ${pos.i0}/${nFrames - 1}` +
       (buffering ? " · buffering…" : "");
+
+    // scale bar (slice 5c): scene-km per pixel at the look-at depth, converted
+    // to REAL storm km — the storm draws at `stormScale`× while the staging
+    // stays 1×, so the bar must undo the magnification or it would overstate
+    // the storm by that factor.
+    if (scaleBarOn) {
+      const sb = niceScaleBar(kmPerPixel(orbit, canvas.clientHeight) / stormScale, SCALE_BAR_MAX_PX);
+      // guard on whole pixels (so a slow zoom writes ~once per pixel of change)
+      // but SET the fractional width — rounding the drawn length would make the
+      // bar disagree with its own label by up to half a pixel.
+      const px = Math.round(sb.px);
+      if (px !== sbLastPx) {
+        sbRule.style.width = `${sb.px.toFixed(2)}px`;
+        sbLastPx = px;
+      }
+      if (sb.label !== sbLastLabel) {
+        sbLabel.textContent = sb.label;
+        sbLastLabel = sb.label;
+      }
+    }
 
     if (collectStats) {
       stats.deltas.push(rawDtMs); // raw rAF spacing, ms

@@ -38,10 +38,16 @@ then copied out of WSL. The bricks are gzipped uint8 log-quantized volumes;
 
 ## Controls
 
-Drag = orbit · wheel = zoom · space = play/pause · `[` / `]` = step frame ·
+Left-drag = orbit · **right-drag = pan** (middle-drag or shift+left-drag also
+pan) · wheel = zoom · space = play/pause · `[` / `]` = step frame ·
 `\` cross-section axis · `,` / `.` slide the cut plane · `d` toggle the dBZ
-radar layer · bottom bar: play/pause, speed (15×–300×, a pure UI multiplier
-over storm time), scrubber, storm-time clock.
+radar layer · `b` toggle the scale bar · bottom bar: play/pause, speed
+(15×–300×, a pure UI multiplier over storm time), scrubber, storm-time clock.
+
+Pan slides the look-at point in the camera's image plane at the target's depth,
+so the scene tracks the cursor 1:1 at any zoom and the orbit angles/zoom are
+untouched. The target is clamped to the diorama (ground floor at z = 0, ±60 km
+horizontally) so a stray drag cannot lose the storm.
 
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
 the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
@@ -83,6 +89,32 @@ already reads as "a storm on radar" is the teaching goal. It is labeled
 cross-section active, the cut face paints dBZ too (same palette), pairing the
 plan-view MIP silhouette with the
 storm's vertical echo structure. Off by default → the shipped look is unchanged.
+
+### Scale bar + storm-time clock (slice 5c — honest scale chip)
+
+The HUD states the domain's true size (**derived from the manifest grid**, not
+written into the text — a scenario with a different crop reports its own size),
+and a live cartographic scale bar is drawn bottom-left. **On by default**;
+`?scalebar=0` or key `b` hides it for clean captures.
+
+The bar reports **real storm kilometres**: the storm draws at `?sx`× uniform
+magnification while the staging land stays 1×, so the bar undoes the
+magnification — at the default `sx=2` it reads 5 km where a scene-space bar
+would read 10. Because the projection is perspective, the bar is exact on the
+plane through the look-at point, which is what its "across the storm, at centre
+depth" caption says. Verified on the GPU against the render's own view-projection
+matrix (`mat.ts`, a code path independent of the bar's `camera.ts::kmPerPixel`):
+0.03 % agreement at `sx=2`, i.e. sub-pixel.
+
+The design doc's §7 originally asked for a "diorama scale ≈ 1 : N" chip. That
+was **deliberately not built**: in a freely-orbited 3D scene there is no honest
+single N — it changes with every zoom, and deriving one from screen size needs
+the viewer's *physical* display dimensions (the CSS pixel's 1/96 in is nominal
+and wrong on most monitors). A live bar carries the same teaching payload and
+stays true at any zoom, so it supersedes the ratio.
+
+The clock is prefixed **"storm time"** — it counts simulated time in the storm,
+never wall time; the speed select is a pure multiplier over it (charter).
 
 ### Beauty knobs (2026-07-18 beauty pass, steps 0–6)
 
@@ -145,5 +177,12 @@ plane (R8 ring parallel to the rgba bricks, allocated + fetched only when the
 layer is active) and renders a max-intensity-projection (peak dBZ along the view
 ray) + rainbow palette, labeled diagnostic; the cut face reads dBZ too (see the dBZ radar section
 above). One `?layer=`/`d` toggle drives both. Off by default → shipped look
-unchanged. Next: scale chip + clock/scrubber polish (5c). Slice 6 = lightning
-event list (blocked on the Phase 4 pipeline exporter).
+unchanged.
+Slice 5c (scale chip + clock polish) done (2026-07-20): the HUD's domain extents
+are derived from the manifest instead of hard-coded text; a live cartographic
+scale bar (`b` / `?scalebar=0`) reports real storm km, GPU-verified to 0.03 %
+against the render matrix; the clock is labelled "storm time"; and right-drag
+pans the look-at point (`camera.ts::panTarget`, image-plane, clamped to the
+diorama) — which required `targetX`/`targetY` in the accumulation `ViewKey`,
+the same trap slice 5a hit with the cut plane. **Slice 5 is complete.**
+Slice 6 = lightning event list (blocked on the Phase 4 pipeline exporter).

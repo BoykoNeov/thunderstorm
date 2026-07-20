@@ -200,6 +200,20 @@ volume pass + bilateral upsample. Not designed in until measured.
 - Play/pause/speed, frame scrubber.
 - **Scale chip**: "diorama scale ≈ 1 : N — this storm is 52 km wide, 18 km tall"
   so the toy framing teaches rather than misleads.
+  **AMENDED (slice 5c, 2026-07-20): the "1 : N" half of this was not built, by
+  decision.** This is a freely-orbited 3D scene, not a fixed tabletop render:
+  there is no honest single N — it changes with every zoom, and deriving one
+  from screen size requires the viewer's *physical* display dimensions (the CSS
+  pixel is defined as 1/96 in, which is nominal and wrong on most real
+  monitors). Shipping a confident-looking ratio that is neither stable nor
+  measurable would violate §1's honesty principle in the name of obeying §7.
+  What shipped instead: the extents half, **derived from the manifest grid**
+  (so a different crop reports its own size rather than inheriting stale text),
+  plus a **live cartographic scale bar** — same teaching payload, true at any
+  zoom. The bar reports REAL storm km (it divides out the `?sx` magnification,
+  which the 1× decorative staging does not share) and is captioned "at centre
+  depth" because a perspective projection makes it exact only on the plane
+  through the look-at point.
 - Vertical-exaggeration slider (1×–3×).
 - Later, selectable layers: hydrometeor volume (default) / dBZ radar volume
   (labeled diagnostic) — the same manifest-driven layer idea as the UE app.
@@ -409,6 +423,41 @@ is always evidence.
    Verified on the real GPU: frame 150 reads as a textbook Cb echo, frame 230
    shows the magenta/white hail core to ground; hydro baseline + 5a cut both
    unregressed.
+   **5c (scale chip + clock polish, DONE 2026-07-20) — SLICE 5 COMPLETE.** Four
+   changes, all UI:
+   (a) the HUD's "52 km wide, 18 km tall" is **derived** from `man.grid`
+   (`nx·voxel_m`…). It was literal text that happens to be right for this
+   package (208×208×72 @ 250 m) and would have silently lied the first time a
+   Phase 3 scenario shipped a different crop — insurance, not a live bug fix.
+   (b) A **live cartographic scale bar**, bottom-left, on by default
+   (`?scalebar=0` / key `b`). See the §7 amendment for why this replaced the
+   spec'd "1 : N" ratio. Two honesty constraints are baked in: it divides out
+   the `?sx` storm magnification (the 1× decorative staging does not share it,
+   so one bar cannot describe both — this one describes the storm), and it is
+   captioned "at centre depth" because perspective makes it exact only on the
+   look-at plane. Pure math in `scalebar.ts` (1-2-5 ladder) + `camera.ts::
+   kmPerPixel`, unit-tested, then **GPU-verified against the render's own
+   view-projection matrix** — an independent code path (`mat.ts`) — to 0.03 %
+   at `sx=2`, i.e. sub-pixel. An earlier 0.66 % discrepancy was real and fixed:
+   the rule div was content-box, so its two 1 px end ticks were added on top of
+   the width JS set.
+   (c) The clock reads **"storm time"** — it counts simulated storm time, never
+   wall time (the speed select is a pure multiplier over it, charter §Time).
+   The scrubber itself needed nothing.
+   (d) **Right-drag pan** (owner request; middle-drag and shift+left also pan —
+   a trackpad's two-finger right-click is awkward to drag with). `panTarget`
+   slides the look-at point in the camera's image plane, converting pixels at
+   the target's depth so the scene tracks the cursor 1:1 at any zoom, leaving
+   azimuth/elevation/distance alone; the target is clamped to the diorama
+   (ground floor z = 0, ±60 km horizontally) so a stray drag cannot lose the
+   storm. Load-bearing, and the same trap 5a sprang: the accumulation `ViewKey`
+   carried only `targetZ` (safe while the target was pinned to the storm axis)
+   and gained `targetX`/`targetY` — without them a pan in x/y alone would
+   average two framings into one still.
+   Verification note: a Chrome tab that is not foregrounded halts `rAF`
+   entirely, so the canvas captures black and the clock/scale-bar readout never
+   runs. That is the harness, not the app — give the tab real foreground time
+   before concluding anything about a black frame.
 6. **Lightning** — event-list playback (blocked on Phase 4 pipeline exporter).
 
 Slices 1–3 are the "is this beautiful?" gate; stop/reassess after 3.

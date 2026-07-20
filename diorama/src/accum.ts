@@ -18,6 +18,12 @@ export interface ViewKey {
   el: number;
   dist: number;
   fovY: number;
+  // full look-at point. targetZ alone sufficed while the target was pinned to
+  // the storm axis; right-drag pan (slice 5c) moves it in all three axes, and a
+  // pan that changed only x/y would otherwise average two different framings
+  // into one still — the same trap the 5a cut plane sprang.
+  targetX: number;
+  targetY: number;
   targetZ: number;
   fa: number;
   fb: number;
@@ -39,7 +45,8 @@ export function sameView(a: ViewKey | null, b: ViewKey): boolean {
   if (a === null) return false;
   return (
     a.az === b.az && a.el === b.el && a.dist === b.dist && a.fovY === b.fovY &&
-    a.targetZ === b.targetZ && a.fa === b.fa && a.fb === b.fb && a.mix === b.mix &&
+    a.targetX === b.targetX && a.targetY === b.targetY && a.targetZ === b.targetZ &&
+    a.fa === b.fa && a.fb === b.fb && a.mix === b.mix &&
     a.xsec === b.xsec && a.xpos === b.xpos && a.layer === b.layer
   );
 }
