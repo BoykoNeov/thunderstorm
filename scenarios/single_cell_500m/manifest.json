@@ -1,0 +1,1924 @@
+{
+ "format_version": "1.0",
+ "scenario": "single_cell_500m",
+ "kind": "single_cell",
+ "phase": "phase1-spike",
+ "units": {
+  "length": "m",
+  "note": "All geometry is CM1-native SI: metres, z-up, right-handed. The metres->centimetres and Y-flip conversion into UE space is applied at ACTOR PLACEMENT in the UE app, never baked into the data (single-conversion-site rule)."
+ },
+ "volume": {
+  "voxel_size_m": 250.0,
+  "dimensions": [
+   208,
+   208,
+   72
+  ],
+  "origin_m": [
+   -25875.0,
+   -25875.0,
+   125.0
+  ],
+  "origin_note": "World coords of the CENTRE of voxel (0,0,0); the VDB's shared linear transform carries this translation.",
+  "bbox_center_m": [
+   0.0,
+   0.0,
+   9000.0
+  ],
+  "bbox_center_static": true,
+  "extent_m": {
+   "x": [
+    -26000.0,
+    26000.0
+   ],
+   "y": [
+    -26000.0,
+    26000.0
+   ],
+   "z": [
+    0.0,
+    18000.0
+   ]
+  },
+  "ue_import_note": "These numbers describe the VDB ON DISK. UE 5.8's SVT factory does NOT import the padded box as authored: it unions the active voxels across the whole sequence, tightens the volume to that union, and re-bases the transform translation by exactly trimmed_voxels * voxel_size. Measured on this package (docs/phase1-task5-pipeline.md): 208x208x72 @ origin -25875 arrives as 186x186x65 @ -23125, z-centre 8125 (not 9000). No data is lost -- only empty pad -- and the index->world mapping is preserved exactly, so the active volume lands at identical CM1 world coordinates.",
+  "ue_placement_rule": "PROVEN ON A REAL GPU 2026-07-15/16 -- the storm renders full-size (46.5 km) at the correct location under this rule (docs/session-handoff-2026-07-15-visuals.md, docs/phase1-svt-streaming-views-rootcause.md). (1) Read placement from the IMPORTED ASSET's frame transform (svt.get_frame_transform()), never from origin_m here: UE's factory trims and re-bases the box, so origin_m describes the VDB on disk, not the asset; adding it on top double-applies and lands the volume 2750 m off in X/Y. Take any vertical-exaggeration pivot from the asset too. (2) On a real RHI the HeterogeneousVolumeComponent applies the asset's frame transform ITSELF (voxel scale + translation; earlier -nullrhi-derived claims to the contrary were wrong). The actor therefore carries ONLY the units conversion: actor scale = 100 (m -> cm), location = (0,0,0), rotation identity. Do NOT multiply by frame.scale3d -- that double-applies the 250 m/voxel scale and renders the volume 250x oversized. (3) OPEN -- the Y-flip (CM1 right-handed -> UE left-handed) is not yet applied or verified; the candidate is actor scale.y = -100, to be confirmed against a known-asymmetric storm feature before Phase 2 placement code ships. (4) Playback: leave the component's bIssueBlockingRequests at its engine default (false) -- blocking requests do not stream in-editor and stall the volume at lowest mip."
+ },
+ "channels": {
+  "order": [
+   "cloud",
+   "ice",
+   "rain",
+   "graupelhail",
+   "dbz"
+  ],
+  "sources": {
+   "cloud": [
+    "qc"
+   ],
+   "ice": [
+    "qi",
+    "qs"
+   ],
+   "rain": [
+    "qr"
+   ],
+   "graupelhail": [
+    "qg",
+    "qhl"
+   ],
+   "dbz": [
+    "dbz"
+   ]
+  },
+  "thresholds": {
+   "cloud": 0.0001,
+   "ice": 0.0001,
+   "rain": 0.0001,
+   "graupelhail": 0.0001,
+   "dbz": 5.0
+  },
+  "threshold_note": "Voxels at/below these values are inactive VDB background. The padded bbox was sized to the active region AT THESE VALUES -- lowering one without re-sweeping the bbox can push condensate outside the box and silently clip it.",
+  "svt_texture_map": {
+   "A": {
+    "format": "RGBA16F",
+    "R": "cloud",
+    "G": "ice",
+    "B": "rain",
+    "A": "graupelhail"
+   },
+   "B": {
+    "format": "R16F",
+    "R": "dbz"
+   }
+  }
+ },
+ "diagnostics": {
+  "dbz": {
+   "source": "CM1 output_dbz=1, computed by the NSSL 2-moment scheme (ptype=27) from its own hydrometeor distributions.",
+   "citation": "Mansell, Ziegler & Bruning (2010), J. Atmos. Sci. 67, 276-299; Ziegler (1985), J. Atmos. Sci. 42, 1487-1509.",
+   "feedback": "none -- diagnostic only, never fed back into the simulation",
+   "caveat": "dBZ is logarithmic; the 500->250 m resample interpolates in dB rather than linear Z, which slightly smooths gradients at echo edges. Acceptable for a plumbing spike; revisit if dBZ is ever used quantitatively in the UI."
+  }
+ },
+ "provenance": {
+  "cm1_version": "cm1r21.1",
+  "build_doc": "docs/phase0-cm1-build.md",
+  "namelist": "sim/single_cell/namelist.input",
+  "microphysics": "NSSL 2-moment, ptype=27 (true hail category)",
+  "sounding": "Weisman-Klemp analytic (isnd=5)",
+  "shear": "none (iwnd=0) -- the zero-shear pulse-cell baseline",
+  "initiation": "warm bubble (iinit=1), no random perturbations (irandp=0)",
+  "domain_motion": "stationary (imove=0)",
+  "cm1_config": "cm1_config.txt present in source run"
+ },
+ "source_run": "/home/boiko/thunderstorm/runs/singlecell",
+ "frame_count": 301,
+ "frames": [
+  {
+   "index": 0,
+   "time_s": 0.0,
+   "file": "vdb/frame_00000.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 1,
+   "time_s": 12.0,
+   "file": "vdb/frame_00001.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 2,
+   "time_s": 24.0,
+   "file": "vdb/frame_00002.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 3,
+   "time_s": 36.0,
+   "file": "vdb/frame_00003.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 4,
+   "time_s": 48.0,
+   "file": "vdb/frame_00004.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 5,
+   "time_s": 60.0,
+   "file": "vdb/frame_00005.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 6,
+   "time_s": 72.0,
+   "file": "vdb/frame_00006.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 7,
+   "time_s": 84.0,
+   "file": "vdb/frame_00007.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 8,
+   "time_s": 96.0,
+   "file": "vdb/frame_00008.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 9,
+   "time_s": 108.0,
+   "file": "vdb/frame_00009.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 10,
+   "time_s": 120.0,
+   "file": "vdb/frame_00010.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 11,
+   "time_s": 132.0,
+   "file": "vdb/frame_00011.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 12,
+   "time_s": 144.0,
+   "file": "vdb/frame_00012.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 13,
+   "time_s": 156.0,
+   "file": "vdb/frame_00013.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 14,
+   "time_s": 168.0,
+   "file": "vdb/frame_00014.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 15,
+   "time_s": 180.0,
+   "file": "vdb/frame_00015.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 16,
+   "time_s": 192.0,
+   "file": "vdb/frame_00016.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 17,
+   "time_s": 204.0,
+   "file": "vdb/frame_00017.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 18,
+   "time_s": 216.0,
+   "file": "vdb/frame_00018.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 19,
+   "time_s": 228.0,
+   "file": "vdb/frame_00019.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 20,
+   "time_s": 240.0,
+   "file": "vdb/frame_00020.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 21,
+   "time_s": 252.0,
+   "file": "vdb/frame_00021.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 22,
+   "time_s": 264.0,
+   "file": "vdb/frame_00022.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 23,
+   "time_s": 276.0,
+   "file": "vdb/frame_00023.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 24,
+   "time_s": 288.0,
+   "file": "vdb/frame_00024.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 25,
+   "time_s": 300.0,
+   "file": "vdb/frame_00025.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 26,
+   "time_s": 312.0,
+   "file": "vdb/frame_00026.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 27,
+   "time_s": 324.0,
+   "file": "vdb/frame_00027.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 28,
+   "time_s": 336.0,
+   "file": "vdb/frame_00028.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 29,
+   "time_s": 348.0,
+   "file": "vdb/frame_00029.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 30,
+   "time_s": 360.0,
+   "file": "vdb/frame_00030.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 31,
+   "time_s": 372.0,
+   "file": "vdb/frame_00031.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 32,
+   "time_s": 384.0,
+   "file": "vdb/frame_00032.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 33,
+   "time_s": 396.0,
+   "file": "vdb/frame_00033.vdb",
+   "bytes": 2937
+  },
+  {
+   "index": 34,
+   "time_s": 408.0,
+   "file": "vdb/frame_00034.vdb",
+   "bytes": 13051
+  },
+  {
+   "index": 35,
+   "time_s": 420.0,
+   "file": "vdb/frame_00035.vdb",
+   "bytes": 13632
+  },
+  {
+   "index": 36,
+   "time_s": 432.0,
+   "file": "vdb/frame_00036.vdb",
+   "bytes": 14984
+  },
+  {
+   "index": 37,
+   "time_s": 444.0,
+   "file": "vdb/frame_00037.vdb",
+   "bytes": 16984
+  },
+  {
+   "index": 38,
+   "time_s": 456.0,
+   "file": "vdb/frame_00038.vdb",
+   "bytes": 17771
+  },
+  {
+   "index": 39,
+   "time_s": 468.0,
+   "file": "vdb/frame_00039.vdb",
+   "bytes": 19736
+  },
+  {
+   "index": 40,
+   "time_s": 480.0,
+   "file": "vdb/frame_00040.vdb",
+   "bytes": 20467
+  },
+  {
+   "index": 41,
+   "time_s": 492.0,
+   "file": "vdb/frame_00041.vdb",
+   "bytes": 21706
+  },
+  {
+   "index": 42,
+   "time_s": 504.0,
+   "file": "vdb/frame_00042.vdb",
+   "bytes": 22402
+  },
+  {
+   "index": 43,
+   "time_s": 516.0,
+   "file": "vdb/frame_00043.vdb",
+   "bytes": 22959
+  },
+  {
+   "index": 44,
+   "time_s": 528.0,
+   "file": "vdb/frame_00044.vdb",
+   "bytes": 23588
+  },
+  {
+   "index": 45,
+   "time_s": 540.0,
+   "file": "vdb/frame_00045.vdb",
+   "bytes": 24889
+  },
+  {
+   "index": 46,
+   "time_s": 552.0,
+   "file": "vdb/frame_00046.vdb",
+   "bytes": 25703
+  },
+  {
+   "index": 47,
+   "time_s": 564.0,
+   "file": "vdb/frame_00047.vdb",
+   "bytes": 26420
+  },
+  {
+   "index": 48,
+   "time_s": 576.0,
+   "file": "vdb/frame_00048.vdb",
+   "bytes": 27082
+  },
+  {
+   "index": 49,
+   "time_s": 588.0,
+   "file": "vdb/frame_00049.vdb",
+   "bytes": 27751
+  },
+  {
+   "index": 50,
+   "time_s": 600.0,
+   "file": "vdb/frame_00050.vdb",
+   "bytes": 28362
+  },
+  {
+   "index": 51,
+   "time_s": 612.0,
+   "file": "vdb/frame_00051.vdb",
+   "bytes": 28752
+  },
+  {
+   "index": 52,
+   "time_s": 624.0,
+   "file": "vdb/frame_00052.vdb",
+   "bytes": 29423
+  },
+  {
+   "index": 53,
+   "time_s": 636.0,
+   "file": "vdb/frame_00053.vdb",
+   "bytes": 29842
+  },
+  {
+   "index": 54,
+   "time_s": 648.0,
+   "file": "vdb/frame_00054.vdb",
+   "bytes": 30309
+  },
+  {
+   "index": 55,
+   "time_s": 660.0,
+   "file": "vdb/frame_00055.vdb",
+   "bytes": 30917
+  },
+  {
+   "index": 56,
+   "time_s": 672.0,
+   "file": "vdb/frame_00056.vdb",
+   "bytes": 31210
+  },
+  {
+   "index": 57,
+   "time_s": 684.0,
+   "file": "vdb/frame_00057.vdb",
+   "bytes": 31714
+  },
+  {
+   "index": 58,
+   "time_s": 696.0,
+   "file": "vdb/frame_00058.vdb",
+   "bytes": 32095
+  },
+  {
+   "index": 59,
+   "time_s": 708.0,
+   "file": "vdb/frame_00059.vdb",
+   "bytes": 32531
+  },
+  {
+   "index": 60,
+   "time_s": 720.0,
+   "file": "vdb/frame_00060.vdb",
+   "bytes": 32786
+  },
+  {
+   "index": 61,
+   "time_s": 732.0,
+   "file": "vdb/frame_00061.vdb",
+   "bytes": 34427
+  },
+  {
+   "index": 62,
+   "time_s": 744.0,
+   "file": "vdb/frame_00062.vdb",
+   "bytes": 34579
+  },
+  {
+   "index": 63,
+   "time_s": 756.0,
+   "file": "vdb/frame_00063.vdb",
+   "bytes": 34987
+  },
+  {
+   "index": 64,
+   "time_s": 768.0,
+   "file": "vdb/frame_00064.vdb",
+   "bytes": 35345
+  },
+  {
+   "index": 65,
+   "time_s": 780.0,
+   "file": "vdb/frame_00065.vdb",
+   "bytes": 34471
+  },
+  {
+   "index": 66,
+   "time_s": 792.0,
+   "file": "vdb/frame_00066.vdb",
+   "bytes": 34828
+  },
+  {
+   "index": 67,
+   "time_s": 804.0,
+   "file": "vdb/frame_00067.vdb",
+   "bytes": 35237
+  },
+  {
+   "index": 68,
+   "time_s": 816.0,
+   "file": "vdb/frame_00068.vdb",
+   "bytes": 35487
+  },
+  {
+   "index": 69,
+   "time_s": 828.0,
+   "file": "vdb/frame_00069.vdb",
+   "bytes": 35779
+  },
+  {
+   "index": 70,
+   "time_s": 840.0,
+   "file": "vdb/frame_00070.vdb",
+   "bytes": 36038
+  },
+  {
+   "index": 71,
+   "time_s": 852.0,
+   "file": "vdb/frame_00071.vdb",
+   "bytes": 36491
+  },
+  {
+   "index": 72,
+   "time_s": 864.0,
+   "file": "vdb/frame_00072.vdb",
+   "bytes": 36602
+  },
+  {
+   "index": 73,
+   "time_s": 876.0,
+   "file": "vdb/frame_00073.vdb",
+   "bytes": 37421
+  },
+  {
+   "index": 74,
+   "time_s": 888.0,
+   "file": "vdb/frame_00074.vdb",
+   "bytes": 37897
+  },
+  {
+   "index": 75,
+   "time_s": 900.0,
+   "file": "vdb/frame_00075.vdb",
+   "bytes": 38121
+  },
+  {
+   "index": 76,
+   "time_s": 912.0,
+   "file": "vdb/frame_00076.vdb",
+   "bytes": 38546
+  },
+  {
+   "index": 77,
+   "time_s": 924.0,
+   "file": "vdb/frame_00077.vdb",
+   "bytes": 38666
+  },
+  {
+   "index": 78,
+   "time_s": 936.0,
+   "file": "vdb/frame_00078.vdb",
+   "bytes": 39238
+  },
+  {
+   "index": 79,
+   "time_s": 948.0,
+   "file": "vdb/frame_00079.vdb",
+   "bytes": 39602
+  },
+  {
+   "index": 80,
+   "time_s": 960.0,
+   "file": "vdb/frame_00080.vdb",
+   "bytes": 39903
+  },
+  {
+   "index": 81,
+   "time_s": 972.0,
+   "file": "vdb/frame_00081.vdb",
+   "bytes": 40342
+  },
+  {
+   "index": 82,
+   "time_s": 984.0,
+   "file": "vdb/frame_00082.vdb",
+   "bytes": 40624
+  },
+  {
+   "index": 83,
+   "time_s": 996.0,
+   "file": "vdb/frame_00083.vdb",
+   "bytes": 42168
+  },
+  {
+   "index": 84,
+   "time_s": 1008.0,
+   "file": "vdb/frame_00084.vdb",
+   "bytes": 42524
+  },
+  {
+   "index": 85,
+   "time_s": 1020.0,
+   "file": "vdb/frame_00085.vdb",
+   "bytes": 42943
+  },
+  {
+   "index": 86,
+   "time_s": 1032.0,
+   "file": "vdb/frame_00086.vdb",
+   "bytes": 43266
+  },
+  {
+   "index": 87,
+   "time_s": 1044.0,
+   "file": "vdb/frame_00087.vdb",
+   "bytes": 53619
+  },
+  {
+   "index": 88,
+   "time_s": 1056.0,
+   "file": "vdb/frame_00088.vdb",
+   "bytes": 54411
+  },
+  {
+   "index": 89,
+   "time_s": 1068.0,
+   "file": "vdb/frame_00089.vdb",
+   "bytes": 55235
+  },
+  {
+   "index": 90,
+   "time_s": 1080.0,
+   "file": "vdb/frame_00090.vdb",
+   "bytes": 66578
+  },
+  {
+   "index": 91,
+   "time_s": 1092.0,
+   "file": "vdb/frame_00091.vdb",
+   "bytes": 67968
+  },
+  {
+   "index": 92,
+   "time_s": 1104.0,
+   "file": "vdb/frame_00092.vdb",
+   "bytes": 69544
+  },
+  {
+   "index": 93,
+   "time_s": 1116.0,
+   "file": "vdb/frame_00093.vdb",
+   "bytes": 71782
+  },
+  {
+   "index": 94,
+   "time_s": 1128.0,
+   "file": "vdb/frame_00094.vdb",
+   "bytes": 73356
+  },
+  {
+   "index": 95,
+   "time_s": 1140.0,
+   "file": "vdb/frame_00095.vdb",
+   "bytes": 75301
+  },
+  {
+   "index": 96,
+   "time_s": 1152.0,
+   "file": "vdb/frame_00096.vdb",
+   "bytes": 77663
+  },
+  {
+   "index": 97,
+   "time_s": 1164.0,
+   "file": "vdb/frame_00097.vdb",
+   "bytes": 81865
+  },
+  {
+   "index": 98,
+   "time_s": 1176.0,
+   "file": "vdb/frame_00098.vdb",
+   "bytes": 84722
+  },
+  {
+   "index": 99,
+   "time_s": 1188.0,
+   "file": "vdb/frame_00099.vdb",
+   "bytes": 88229
+  },
+  {
+   "index": 100,
+   "time_s": 1200.0,
+   "file": "vdb/frame_00100.vdb",
+   "bytes": 91496
+  },
+  {
+   "index": 101,
+   "time_s": 1212.0,
+   "file": "vdb/frame_00101.vdb",
+   "bytes": 97141
+  },
+  {
+   "index": 102,
+   "time_s": 1224.0,
+   "file": "vdb/frame_00102.vdb",
+   "bytes": 102358
+  },
+  {
+   "index": 103,
+   "time_s": 1236.0,
+   "file": "vdb/frame_00103.vdb",
+   "bytes": 106430
+  },
+  {
+   "index": 104,
+   "time_s": 1248.0,
+   "file": "vdb/frame_00104.vdb",
+   "bytes": 111928
+  },
+  {
+   "index": 105,
+   "time_s": 1260.0,
+   "file": "vdb/frame_00105.vdb",
+   "bytes": 119680
+  },
+  {
+   "index": 106,
+   "time_s": 1272.0,
+   "file": "vdb/frame_00106.vdb",
+   "bytes": 128166
+  },
+  {
+   "index": 107,
+   "time_s": 1284.0,
+   "file": "vdb/frame_00107.vdb",
+   "bytes": 161661
+  },
+  {
+   "index": 108,
+   "time_s": 1296.0,
+   "file": "vdb/frame_00108.vdb",
+   "bytes": 176369
+  },
+  {
+   "index": 109,
+   "time_s": 1308.0,
+   "file": "vdb/frame_00109.vdb",
+   "bytes": 193139
+  },
+  {
+   "index": 110,
+   "time_s": 1320.0,
+   "file": "vdb/frame_00110.vdb",
+   "bytes": 210641
+  },
+  {
+   "index": 111,
+   "time_s": 1332.0,
+   "file": "vdb/frame_00111.vdb",
+   "bytes": 232048
+  },
+  {
+   "index": 112,
+   "time_s": 1344.0,
+   "file": "vdb/frame_00112.vdb",
+   "bytes": 257016
+  },
+  {
+   "index": 113,
+   "time_s": 1356.0,
+   "file": "vdb/frame_00113.vdb",
+   "bytes": 283095
+  },
+  {
+   "index": 114,
+   "time_s": 1368.0,
+   "file": "vdb/frame_00114.vdb",
+   "bytes": 306904
+  },
+  {
+   "index": 115,
+   "time_s": 1380.0,
+   "file": "vdb/frame_00115.vdb",
+   "bytes": 329541
+  },
+  {
+   "index": 116,
+   "time_s": 1392.0,
+   "file": "vdb/frame_00116.vdb",
+   "bytes": 355059
+  },
+  {
+   "index": 117,
+   "time_s": 1404.0,
+   "file": "vdb/frame_00117.vdb",
+   "bytes": 382998
+  },
+  {
+   "index": 118,
+   "time_s": 1416.0,
+   "file": "vdb/frame_00118.vdb",
+   "bytes": 403252
+  },
+  {
+   "index": 119,
+   "time_s": 1428.0,
+   "file": "vdb/frame_00119.vdb",
+   "bytes": 427537
+  },
+  {
+   "index": 120,
+   "time_s": 1440.0,
+   "file": "vdb/frame_00120.vdb",
+   "bytes": 455918
+  },
+  {
+   "index": 121,
+   "time_s": 1452.0,
+   "file": "vdb/frame_00121.vdb",
+   "bytes": 475984
+  },
+  {
+   "index": 122,
+   "time_s": 1464.0,
+   "file": "vdb/frame_00122.vdb",
+   "bytes": 500279
+  },
+  {
+   "index": 123,
+   "time_s": 1476.0,
+   "file": "vdb/frame_00123.vdb",
+   "bytes": 523321
+  },
+  {
+   "index": 124,
+   "time_s": 1488.0,
+   "file": "vdb/frame_00124.vdb",
+   "bytes": 545835
+  },
+  {
+   "index": 125,
+   "time_s": 1500.0,
+   "file": "vdb/frame_00125.vdb",
+   "bytes": 571995
+  },
+  {
+   "index": 126,
+   "time_s": 1512.0,
+   "file": "vdb/frame_00126.vdb",
+   "bytes": 602897
+  },
+  {
+   "index": 127,
+   "time_s": 1524.0,
+   "file": "vdb/frame_00127.vdb",
+   "bytes": 643127
+  },
+  {
+   "index": 128,
+   "time_s": 1536.0,
+   "file": "vdb/frame_00128.vdb",
+   "bytes": 678186
+  },
+  {
+   "index": 129,
+   "time_s": 1548.0,
+   "file": "vdb/frame_00129.vdb",
+   "bytes": 707866
+  },
+  {
+   "index": 130,
+   "time_s": 1560.0,
+   "file": "vdb/frame_00130.vdb",
+   "bytes": 742566
+  },
+  {
+   "index": 131,
+   "time_s": 1572.0,
+   "file": "vdb/frame_00131.vdb",
+   "bytes": 777086
+  },
+  {
+   "index": 132,
+   "time_s": 1584.0,
+   "file": "vdb/frame_00132.vdb",
+   "bytes": 811650
+  },
+  {
+   "index": 133,
+   "time_s": 1596.0,
+   "file": "vdb/frame_00133.vdb",
+   "bytes": 842657
+  },
+  {
+   "index": 134,
+   "time_s": 1608.0,
+   "file": "vdb/frame_00134.vdb",
+   "bytes": 879706
+  },
+  {
+   "index": 135,
+   "time_s": 1620.0,
+   "file": "vdb/frame_00135.vdb",
+   "bytes": 915452
+  },
+  {
+   "index": 136,
+   "time_s": 1632.0,
+   "file": "vdb/frame_00136.vdb",
+   "bytes": 949155
+  },
+  {
+   "index": 137,
+   "time_s": 1644.0,
+   "file": "vdb/frame_00137.vdb",
+   "bytes": 987800
+  },
+  {
+   "index": 138,
+   "time_s": 1656.0,
+   "file": "vdb/frame_00138.vdb",
+   "bytes": 1022773
+  },
+  {
+   "index": 139,
+   "time_s": 1668.0,
+   "file": "vdb/frame_00139.vdb",
+   "bytes": 1056591
+  },
+  {
+   "index": 140,
+   "time_s": 1680.0,
+   "file": "vdb/frame_00140.vdb",
+   "bytes": 1084496
+  },
+  {
+   "index": 141,
+   "time_s": 1692.0,
+   "file": "vdb/frame_00141.vdb",
+   "bytes": 1119289
+  },
+  {
+   "index": 142,
+   "time_s": 1704.0,
+   "file": "vdb/frame_00142.vdb",
+   "bytes": 1147797
+  },
+  {
+   "index": 143,
+   "time_s": 1716.0,
+   "file": "vdb/frame_00143.vdb",
+   "bytes": 1187138
+  },
+  {
+   "index": 144,
+   "time_s": 1728.0,
+   "file": "vdb/frame_00144.vdb",
+   "bytes": 1218317
+  },
+  {
+   "index": 145,
+   "time_s": 1740.0,
+   "file": "vdb/frame_00145.vdb",
+   "bytes": 1251349
+  },
+  {
+   "index": 146,
+   "time_s": 1752.0,
+   "file": "vdb/frame_00146.vdb",
+   "bytes": 1283747
+  },
+  {
+   "index": 147,
+   "time_s": 1764.0,
+   "file": "vdb/frame_00147.vdb",
+   "bytes": 1315024
+  },
+  {
+   "index": 148,
+   "time_s": 1776.0,
+   "file": "vdb/frame_00148.vdb",
+   "bytes": 1345766
+  },
+  {
+   "index": 149,
+   "time_s": 1788.0,
+   "file": "vdb/frame_00149.vdb",
+   "bytes": 1376347
+  },
+  {
+   "index": 150,
+   "time_s": 1800.0,
+   "file": "vdb/frame_00150.vdb",
+   "bytes": 1404849
+  },
+  {
+   "index": 151,
+   "time_s": 1812.0,
+   "file": "vdb/frame_00151.vdb",
+   "bytes": 1434389
+  },
+  {
+   "index": 152,
+   "time_s": 1824.0,
+   "file": "vdb/frame_00152.vdb",
+   "bytes": 1467085
+  },
+  {
+   "index": 153,
+   "time_s": 1836.0,
+   "file": "vdb/frame_00153.vdb",
+   "bytes": 1501377
+  },
+  {
+   "index": 154,
+   "time_s": 1848.0,
+   "file": "vdb/frame_00154.vdb",
+   "bytes": 1527535
+  },
+  {
+   "index": 155,
+   "time_s": 1860.0,
+   "file": "vdb/frame_00155.vdb",
+   "bytes": 1561010
+  },
+  {
+   "index": 156,
+   "time_s": 1872.0,
+   "file": "vdb/frame_00156.vdb",
+   "bytes": 1590291
+  },
+  {
+   "index": 157,
+   "time_s": 1884.0,
+   "file": "vdb/frame_00157.vdb",
+   "bytes": 1622796
+  },
+  {
+   "index": 158,
+   "time_s": 1896.0,
+   "file": "vdb/frame_00158.vdb",
+   "bytes": 1658837
+  },
+  {
+   "index": 159,
+   "time_s": 1908.0,
+   "file": "vdb/frame_00159.vdb",
+   "bytes": 1681675
+  },
+  {
+   "index": 160,
+   "time_s": 1920.0,
+   "file": "vdb/frame_00160.vdb",
+   "bytes": 1709238
+  },
+  {
+   "index": 161,
+   "time_s": 1932.0,
+   "file": "vdb/frame_00161.vdb",
+   "bytes": 1737678
+  },
+  {
+   "index": 162,
+   "time_s": 1944.0,
+   "file": "vdb/frame_00162.vdb",
+   "bytes": 1766920
+  },
+  {
+   "index": 163,
+   "time_s": 1956.0,
+   "file": "vdb/frame_00163.vdb",
+   "bytes": 1796542
+  },
+  {
+   "index": 164,
+   "time_s": 1968.0,
+   "file": "vdb/frame_00164.vdb",
+   "bytes": 1821601
+  },
+  {
+   "index": 165,
+   "time_s": 1980.0,
+   "file": "vdb/frame_00165.vdb",
+   "bytes": 1850500
+  },
+  {
+   "index": 166,
+   "time_s": 1992.0,
+   "file": "vdb/frame_00166.vdb",
+   "bytes": 1877226
+  },
+  {
+   "index": 167,
+   "time_s": 2004.0,
+   "file": "vdb/frame_00167.vdb",
+   "bytes": 1908410
+  },
+  {
+   "index": 168,
+   "time_s": 2016.0,
+   "file": "vdb/frame_00168.vdb",
+   "bytes": 1931429
+  },
+  {
+   "index": 169,
+   "time_s": 2028.0,
+   "file": "vdb/frame_00169.vdb",
+   "bytes": 1956366
+  },
+  {
+   "index": 170,
+   "time_s": 2040.0,
+   "file": "vdb/frame_00170.vdb",
+   "bytes": 1983690
+  },
+  {
+   "index": 171,
+   "time_s": 2052.0,
+   "file": "vdb/frame_00171.vdb",
+   "bytes": 2006165
+  },
+  {
+   "index": 172,
+   "time_s": 2064.0,
+   "file": "vdb/frame_00172.vdb",
+   "bytes": 2033495
+  },
+  {
+   "index": 173,
+   "time_s": 2076.0,
+   "file": "vdb/frame_00173.vdb",
+   "bytes": 2060004
+  },
+  {
+   "index": 174,
+   "time_s": 2088.0,
+   "file": "vdb/frame_00174.vdb",
+   "bytes": 2083314
+  },
+  {
+   "index": 175,
+   "time_s": 2100.0,
+   "file": "vdb/frame_00175.vdb",
+   "bytes": 2104478
+  },
+  {
+   "index": 176,
+   "time_s": 2112.0,
+   "file": "vdb/frame_00176.vdb",
+   "bytes": 2124935
+  },
+  {
+   "index": 177,
+   "time_s": 2124.0,
+   "file": "vdb/frame_00177.vdb",
+   "bytes": 2142194
+  },
+  {
+   "index": 178,
+   "time_s": 2136.0,
+   "file": "vdb/frame_00178.vdb",
+   "bytes": 2156898
+  },
+  {
+   "index": 179,
+   "time_s": 2148.0,
+   "file": "vdb/frame_00179.vdb",
+   "bytes": 2173075
+  },
+  {
+   "index": 180,
+   "time_s": 2160.0,
+   "file": "vdb/frame_00180.vdb",
+   "bytes": 2193968
+  },
+  {
+   "index": 181,
+   "time_s": 2172.0,
+   "file": "vdb/frame_00181.vdb",
+   "bytes": 2209917
+  },
+  {
+   "index": 182,
+   "time_s": 2184.0,
+   "file": "vdb/frame_00182.vdb",
+   "bytes": 2232566
+  },
+  {
+   "index": 183,
+   "time_s": 2196.0,
+   "file": "vdb/frame_00183.vdb",
+   "bytes": 2252833
+  },
+  {
+   "index": 184,
+   "time_s": 2208.0,
+   "file": "vdb/frame_00184.vdb",
+   "bytes": 2267128
+  },
+  {
+   "index": 185,
+   "time_s": 2220.0,
+   "file": "vdb/frame_00185.vdb",
+   "bytes": 2292028
+  },
+  {
+   "index": 186,
+   "time_s": 2232.0,
+   "file": "vdb/frame_00186.vdb",
+   "bytes": 2312281
+  },
+  {
+   "index": 187,
+   "time_s": 2244.0,
+   "file": "vdb/frame_00187.vdb",
+   "bytes": 2332023
+  },
+  {
+   "index": 188,
+   "time_s": 2256.0,
+   "file": "vdb/frame_00188.vdb",
+   "bytes": 2350788
+  },
+  {
+   "index": 189,
+   "time_s": 2268.0,
+   "file": "vdb/frame_00189.vdb",
+   "bytes": 2368583
+  },
+  {
+   "index": 190,
+   "time_s": 2280.0,
+   "file": "vdb/frame_00190.vdb",
+   "bytes": 2383750
+  },
+  {
+   "index": 191,
+   "time_s": 2292.0,
+   "file": "vdb/frame_00191.vdb",
+   "bytes": 2401549
+  },
+  {
+   "index": 192,
+   "time_s": 2304.0,
+   "file": "vdb/frame_00192.vdb",
+   "bytes": 2415032
+  },
+  {
+   "index": 193,
+   "time_s": 2316.0,
+   "file": "vdb/frame_00193.vdb",
+   "bytes": 2432873
+  },
+  {
+   "index": 194,
+   "time_s": 2328.0,
+   "file": "vdb/frame_00194.vdb",
+   "bytes": 2450903
+  },
+  {
+   "index": 195,
+   "time_s": 2340.0,
+   "file": "vdb/frame_00195.vdb",
+   "bytes": 2467555
+  },
+  {
+   "index": 196,
+   "time_s": 2352.0,
+   "file": "vdb/frame_00196.vdb",
+   "bytes": 2484323
+  },
+  {
+   "index": 197,
+   "time_s": 2364.0,
+   "file": "vdb/frame_00197.vdb",
+   "bytes": 2500742
+  },
+  {
+   "index": 198,
+   "time_s": 2376.0,
+   "file": "vdb/frame_00198.vdb",
+   "bytes": 2517582
+  },
+  {
+   "index": 199,
+   "time_s": 2388.0,
+   "file": "vdb/frame_00199.vdb",
+   "bytes": 2531043
+  },
+  {
+   "index": 200,
+   "time_s": 2400.0,
+   "file": "vdb/frame_00200.vdb",
+   "bytes": 2549079
+  },
+  {
+   "index": 201,
+   "time_s": 2412.0,
+   "file": "vdb/frame_00201.vdb",
+   "bytes": 2570004
+  },
+  {
+   "index": 202,
+   "time_s": 2424.0,
+   "file": "vdb/frame_00202.vdb",
+   "bytes": 2591548
+  },
+  {
+   "index": 203,
+   "time_s": 2436.0,
+   "file": "vdb/frame_00203.vdb",
+   "bytes": 2610407
+  },
+  {
+   "index": 204,
+   "time_s": 2448.0,
+   "file": "vdb/frame_00204.vdb",
+   "bytes": 2625893
+  },
+  {
+   "index": 205,
+   "time_s": 2460.0,
+   "file": "vdb/frame_00205.vdb",
+   "bytes": 2643554
+  },
+  {
+   "index": 206,
+   "time_s": 2472.0,
+   "file": "vdb/frame_00206.vdb",
+   "bytes": 2660334
+  },
+  {
+   "index": 207,
+   "time_s": 2484.0,
+   "file": "vdb/frame_00207.vdb",
+   "bytes": 2678089
+  },
+  {
+   "index": 208,
+   "time_s": 2496.0,
+   "file": "vdb/frame_00208.vdb",
+   "bytes": 2697840
+  },
+  {
+   "index": 209,
+   "time_s": 2508.0,
+   "file": "vdb/frame_00209.vdb",
+   "bytes": 2717324
+  },
+  {
+   "index": 210,
+   "time_s": 2520.0,
+   "file": "vdb/frame_00210.vdb",
+   "bytes": 2741320
+  },
+  {
+   "index": 211,
+   "time_s": 2532.0,
+   "file": "vdb/frame_00211.vdb",
+   "bytes": 2758714
+  },
+  {
+   "index": 212,
+   "time_s": 2544.0,
+   "file": "vdb/frame_00212.vdb",
+   "bytes": 2776030
+  },
+  {
+   "index": 213,
+   "time_s": 2556.0,
+   "file": "vdb/frame_00213.vdb",
+   "bytes": 2803751
+  },
+  {
+   "index": 214,
+   "time_s": 2568.0,
+   "file": "vdb/frame_00214.vdb",
+   "bytes": 2827027
+  },
+  {
+   "index": 215,
+   "time_s": 2580.0,
+   "file": "vdb/frame_00215.vdb",
+   "bytes": 2847288
+  },
+  {
+   "index": 216,
+   "time_s": 2592.0,
+   "file": "vdb/frame_00216.vdb",
+   "bytes": 2870957
+  },
+  {
+   "index": 217,
+   "time_s": 2604.0,
+   "file": "vdb/frame_00217.vdb",
+   "bytes": 2888817
+  },
+  {
+   "index": 218,
+   "time_s": 2616.0,
+   "file": "vdb/frame_00218.vdb",
+   "bytes": 2909657
+  },
+  {
+   "index": 219,
+   "time_s": 2628.0,
+   "file": "vdb/frame_00219.vdb",
+   "bytes": 2928040
+  },
+  {
+   "index": 220,
+   "time_s": 2640.0,
+   "file": "vdb/frame_00220.vdb",
+   "bytes": 2952247
+  },
+  {
+   "index": 221,
+   "time_s": 2652.0,
+   "file": "vdb/frame_00221.vdb",
+   "bytes": 2983178
+  },
+  {
+   "index": 222,
+   "time_s": 2664.0,
+   "file": "vdb/frame_00222.vdb",
+   "bytes": 3008417
+  },
+  {
+   "index": 223,
+   "time_s": 2676.0,
+   "file": "vdb/frame_00223.vdb",
+   "bytes": 3033155
+  },
+  {
+   "index": 224,
+   "time_s": 2688.0,
+   "file": "vdb/frame_00224.vdb",
+   "bytes": 3054589
+  },
+  {
+   "index": 225,
+   "time_s": 2700.0,
+   "file": "vdb/frame_00225.vdb",
+   "bytes": 3074797
+  },
+  {
+   "index": 226,
+   "time_s": 2712.0,
+   "file": "vdb/frame_00226.vdb",
+   "bytes": 3098757
+  },
+  {
+   "index": 227,
+   "time_s": 2724.0,
+   "file": "vdb/frame_00227.vdb",
+   "bytes": 3121349
+  },
+  {
+   "index": 228,
+   "time_s": 2736.0,
+   "file": "vdb/frame_00228.vdb",
+   "bytes": 3143402
+  },
+  {
+   "index": 229,
+   "time_s": 2748.0,
+   "file": "vdb/frame_00229.vdb",
+   "bytes": 3167243
+  },
+  {
+   "index": 230,
+   "time_s": 2760.0,
+   "file": "vdb/frame_00230.vdb",
+   "bytes": 3188934
+  },
+  {
+   "index": 231,
+   "time_s": 2772.0,
+   "file": "vdb/frame_00231.vdb",
+   "bytes": 3202868
+  },
+  {
+   "index": 232,
+   "time_s": 2784.0,
+   "file": "vdb/frame_00232.vdb",
+   "bytes": 3220758
+  },
+  {
+   "index": 233,
+   "time_s": 2796.0,
+   "file": "vdb/frame_00233.vdb",
+   "bytes": 3236458
+  },
+  {
+   "index": 234,
+   "time_s": 2808.0,
+   "file": "vdb/frame_00234.vdb",
+   "bytes": 3249517
+  },
+  {
+   "index": 235,
+   "time_s": 2820.0,
+   "file": "vdb/frame_00235.vdb",
+   "bytes": 3263881
+  },
+  {
+   "index": 236,
+   "time_s": 2832.0,
+   "file": "vdb/frame_00236.vdb",
+   "bytes": 3282910
+  },
+  {
+   "index": 237,
+   "time_s": 2844.0,
+   "file": "vdb/frame_00237.vdb",
+   "bytes": 3299768
+  },
+  {
+   "index": 238,
+   "time_s": 2856.0,
+   "file": "vdb/frame_00238.vdb",
+   "bytes": 3312984
+  },
+  {
+   "index": 239,
+   "time_s": 2868.0,
+   "file": "vdb/frame_00239.vdb",
+   "bytes": 3331602
+  },
+  {
+   "index": 240,
+   "time_s": 2880.0,
+   "file": "vdb/frame_00240.vdb",
+   "bytes": 3345829
+  },
+  {
+   "index": 241,
+   "time_s": 2892.0,
+   "file": "vdb/frame_00241.vdb",
+   "bytes": 3356907
+  },
+  {
+   "index": 242,
+   "time_s": 2904.0,
+   "file": "vdb/frame_00242.vdb",
+   "bytes": 3375934
+  },
+  {
+   "index": 243,
+   "time_s": 2916.0,
+   "file": "vdb/frame_00243.vdb",
+   "bytes": 3394276
+  },
+  {
+   "index": 244,
+   "time_s": 2928.0,
+   "file": "vdb/frame_00244.vdb",
+   "bytes": 3402999
+  },
+  {
+   "index": 245,
+   "time_s": 2940.0,
+   "file": "vdb/frame_00245.vdb",
+   "bytes": 3419737
+  },
+  {
+   "index": 246,
+   "time_s": 2952.0,
+   "file": "vdb/frame_00246.vdb",
+   "bytes": 3434125
+  },
+  {
+   "index": 247,
+   "time_s": 2964.0,
+   "file": "vdb/frame_00247.vdb",
+   "bytes": 3446848
+  },
+  {
+   "index": 248,
+   "time_s": 2976.0,
+   "file": "vdb/frame_00248.vdb",
+   "bytes": 3454751
+  },
+  {
+   "index": 249,
+   "time_s": 2988.0,
+   "file": "vdb/frame_00249.vdb",
+   "bytes": 3470158
+  },
+  {
+   "index": 250,
+   "time_s": 3000.0,
+   "file": "vdb/frame_00250.vdb",
+   "bytes": 3481377
+  },
+  {
+   "index": 251,
+   "time_s": 3012.0,
+   "file": "vdb/frame_00251.vdb",
+   "bytes": 3491013
+  },
+  {
+   "index": 252,
+   "time_s": 3024.0,
+   "file": "vdb/frame_00252.vdb",
+   "bytes": 3501106
+  },
+  {
+   "index": 253,
+   "time_s": 3036.0,
+   "file": "vdb/frame_00253.vdb",
+   "bytes": 3503714
+  },
+  {
+   "index": 254,
+   "time_s": 3048.0,
+   "file": "vdb/frame_00254.vdb",
+   "bytes": 3508648
+  },
+  {
+   "index": 255,
+   "time_s": 3060.0,
+   "file": "vdb/frame_00255.vdb",
+   "bytes": 3511704
+  },
+  {
+   "index": 256,
+   "time_s": 3072.0,
+   "file": "vdb/frame_00256.vdb",
+   "bytes": 3511523
+  },
+  {
+   "index": 257,
+   "time_s": 3084.0,
+   "file": "vdb/frame_00257.vdb",
+   "bytes": 3506457
+  },
+  {
+   "index": 258,
+   "time_s": 3096.0,
+   "file": "vdb/frame_00258.vdb",
+   "bytes": 3506533
+  },
+  {
+   "index": 259,
+   "time_s": 3108.0,
+   "file": "vdb/frame_00259.vdb",
+   "bytes": 3495827
+  },
+  {
+   "index": 260,
+   "time_s": 3120.0,
+   "file": "vdb/frame_00260.vdb",
+   "bytes": 3499838
+  },
+  {
+   "index": 261,
+   "time_s": 3132.0,
+   "file": "vdb/frame_00261.vdb",
+   "bytes": 3494074
+  },
+  {
+   "index": 262,
+   "time_s": 3144.0,
+   "file": "vdb/frame_00262.vdb",
+   "bytes": 3484977
+  },
+  {
+   "index": 263,
+   "time_s": 3156.0,
+   "file": "vdb/frame_00263.vdb",
+   "bytes": 3487047
+  },
+  {
+   "index": 264,
+   "time_s": 3168.0,
+   "file": "vdb/frame_00264.vdb",
+   "bytes": 3482518
+  },
+  {
+   "index": 265,
+   "time_s": 3180.0,
+   "file": "vdb/frame_00265.vdb",
+   "bytes": 3477382
+  },
+  {
+   "index": 266,
+   "time_s": 3192.0,
+   "file": "vdb/frame_00266.vdb",
+   "bytes": 3467532
+  },
+  {
+   "index": 267,
+   "time_s": 3204.0,
+   "file": "vdb/frame_00267.vdb",
+   "bytes": 3455164
+  },
+  {
+   "index": 268,
+   "time_s": 3216.0,
+   "file": "vdb/frame_00268.vdb",
+   "bytes": 3441637
+  },
+  {
+   "index": 269,
+   "time_s": 3228.0,
+   "file": "vdb/frame_00269.vdb",
+   "bytes": 3421749
+  },
+  {
+   "index": 270,
+   "time_s": 3240.0,
+   "file": "vdb/frame_00270.vdb",
+   "bytes": 3406753
+  },
+  {
+   "index": 271,
+   "time_s": 3252.0,
+   "file": "vdb/frame_00271.vdb",
+   "bytes": 3386966
+  },
+  {
+   "index": 272,
+   "time_s": 3264.0,
+   "file": "vdb/frame_00272.vdb",
+   "bytes": 3372258
+  },
+  {
+   "index": 273,
+   "time_s": 3276.0,
+   "file": "vdb/frame_00273.vdb",
+   "bytes": 3355009
+  },
+  {
+   "index": 274,
+   "time_s": 3288.0,
+   "file": "vdb/frame_00274.vdb",
+   "bytes": 3333089
+  },
+  {
+   "index": 275,
+   "time_s": 3300.0,
+   "file": "vdb/frame_00275.vdb",
+   "bytes": 3314067
+  },
+  {
+   "index": 276,
+   "time_s": 3312.0,
+   "file": "vdb/frame_00276.vdb",
+   "bytes": 3299054
+  },
+  {
+   "index": 277,
+   "time_s": 3324.0,
+   "file": "vdb/frame_00277.vdb",
+   "bytes": 3285778
+  },
+  {
+   "index": 278,
+   "time_s": 3336.0,
+   "file": "vdb/frame_00278.vdb",
+   "bytes": 3274668
+  },
+  {
+   "index": 279,
+   "time_s": 3348.0,
+   "file": "vdb/frame_00279.vdb",
+   "bytes": 3263866
+  },
+  {
+   "index": 280,
+   "time_s": 3360.0,
+   "file": "vdb/frame_00280.vdb",
+   "bytes": 3259971
+  },
+  {
+   "index": 281,
+   "time_s": 3372.0,
+   "file": "vdb/frame_00281.vdb",
+   "bytes": 3245776
+  },
+  {
+   "index": 282,
+   "time_s": 3384.0,
+   "file": "vdb/frame_00282.vdb",
+   "bytes": 3234709
+  },
+  {
+   "index": 283,
+   "time_s": 3396.0,
+   "file": "vdb/frame_00283.vdb",
+   "bytes": 3221664
+  },
+  {
+   "index": 284,
+   "time_s": 3408.0,
+   "file": "vdb/frame_00284.vdb",
+   "bytes": 3211207
+  },
+  {
+   "index": 285,
+   "time_s": 3420.0,
+   "file": "vdb/frame_00285.vdb",
+   "bytes": 3209682
+  },
+  {
+   "index": 286,
+   "time_s": 3432.0,
+   "file": "vdb/frame_00286.vdb",
+   "bytes": 3204171
+  },
+  {
+   "index": 287,
+   "time_s": 3444.0,
+   "file": "vdb/frame_00287.vdb",
+   "bytes": 3204104
+  },
+  {
+   "index": 288,
+   "time_s": 3456.0,
+   "file": "vdb/frame_00288.vdb",
+   "bytes": 3197282
+  },
+  {
+   "index": 289,
+   "time_s": 3468.0,
+   "file": "vdb/frame_00289.vdb",
+   "bytes": 3201594
+  },
+  {
+   "index": 290,
+   "time_s": 3480.0,
+   "file": "vdb/frame_00290.vdb",
+   "bytes": 3201714
+  },
+  {
+   "index": 291,
+   "time_s": 3492.0,
+   "file": "vdb/frame_00291.vdb",
+   "bytes": 3204544
+  },
+  {
+   "index": 292,
+   "time_s": 3504.0,
+   "file": "vdb/frame_00292.vdb",
+   "bytes": 3202593
+  },
+  {
+   "index": 293,
+   "time_s": 3516.0,
+   "file": "vdb/frame_00293.vdb",
+   "bytes": 3200737
+  },
+  {
+   "index": 294,
+   "time_s": 3528.0,
+   "file": "vdb/frame_00294.vdb",
+   "bytes": 3193503
+  },
+  {
+   "index": 295,
+   "time_s": 3540.0,
+   "file": "vdb/frame_00295.vdb",
+   "bytes": 3195934
+  },
+  {
+   "index": 296,
+   "time_s": 3552.0,
+   "file": "vdb/frame_00296.vdb",
+   "bytes": 3199327
+  },
+  {
+   "index": 297,
+   "time_s": 3564.0,
+   "file": "vdb/frame_00297.vdb",
+   "bytes": 3196808
+  },
+  {
+   "index": 298,
+   "time_s": 3576.0,
+   "file": "vdb/frame_00298.vdb",
+   "bytes": 3200159
+  },
+  {
+   "index": 299,
+   "time_s": 3588.0,
+   "file": "vdb/frame_00299.vdb",
+   "bytes": 3205808
+  },
+  {
+   "index": 300,
+   "time_s": 3600.0,
+   "file": "vdb/frame_00300.vdb",
+   "bytes": 3212992
+  }
+ ]
+}

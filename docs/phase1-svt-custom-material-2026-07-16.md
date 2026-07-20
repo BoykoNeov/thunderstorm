@@ -125,4 +125,8 @@ Other MCP save/sandbox gotchas hit while getting here:
 
 - Per-species albedo/emissive (e.g. darker rain shafts, dbz-driven tinting) — same
   graph, more parameters; Phase 2/4 polish.
-- Rain/hail Niagara + lightning remain the open Phase 1 visual items.
+- Rain/hail Niagara + lightning are **Phase 4** items ("lightning, hail swaths,
+  rain/hail particles, polish"), not Phase 1. *(Corrected 2026-07-20: this line
+  originally called them "the open Phase 1 visual items", which would have made Phase 1
+  uncloseable against its own charter definition — a de-risking spike, not a finished
+  visual feature set. The charter is authoritative over session notes.)*

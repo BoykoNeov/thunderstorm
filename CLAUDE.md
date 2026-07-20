@@ -124,9 +124,18 @@ plots + event lists + manifest JSON) → scenarios/ → UE5 playback app (Window
   hash, compiler flags), rank count, and domain decomposition. Verify bitwise
   reproducibility once in Phase 0; if unachievable, the contract downgrades to
   statistical equivalence + recorded output checksums.
-- **Data/git policy:** raw netCDF is regenerable and never committed. Scenario
-  packages are multi-GB and live outside plain git history (LFS or out-of-repo —
-  decide before the first package ships). Nothing >10 MB in plain git.
+- **Data/git policy — RESOLVED 2026-07-20 (owner):** raw netCDF is regenerable and
+  never committed. Scenario packages live **in `scenarios/<name>/` inside the project
+  folder**, but their payload stays **out of git history** — and **no Git LFS anywhere
+  in this repo**. So "out of repo" means out of *history*, not out of the folder: the
+  repo, the diorama dev server (`diorama/vite.config.ts` resolves
+  `../scenarios/single_cell_500m/web`) and the UE project all see one path with no env
+  wiring. `manifest.json` **is tracked** (the `!scenarios/**/manifest.json` negation) —
+  it is the versioned contract UE checks `format_version` against, and a contract that
+  isn't version-controlled isn't a contract; ~48 KB per 301-frame package. Nothing
+  >10 MB in plain git. **Consequence, accepted:** packages are not backed up by git —
+  regeneration from `sim/` + `pipeline/` is the recovery path (7.5 min for the Phase 1
+  package). Rationale + layout: `scenarios/README.md`.
 
 ## Pinned versions
 
@@ -264,9 +273,19 @@ Do not start a phase without explicit go from the owner.
   reported `verdict = READY` over an unsaved level, a lightless scene, a non-persisting
   actor label, and a screenshot loop that wrote no files. Any future "SVT works" claim
   must come from a real RHI.
-  **Still open:** where multi-GB packages live (LFS vs out-of-repo — charter says decide
-  before the first ships; this one is 0.46 GB and regenerable in 7.5 min), and the Python
-  env lockfile.
+  **PHASE 1 CLOSED — 2026-07-20, docs/phase1-completion-2026-07-20.md.** Both former
+  "still open" items are resolved: the **package-storage decision** (owner, 2026-07-20 —
+  in-tree under `scenarios/`, payload out of git history, no LFS; see the Data/git policy
+  above) and the **Python env lockfile** (recorded 2026-07-15 — pipeline/ENVIRONMENT.md +
+  pipeline/env-vdb.yml; see Pinned versions). The Phase 1 spike package is consolidated in
+  `scenarios/single_cell_500m/` (525 MB) with its `manifest.json` tracked in git.
+  **Two owner-owed live checks are carried forward, NOT discharged** (both are
+  "Claude-verified on a real RHI / owner not yet signed off", the same class as the
+  diorama's): task 3's namesake **in-editor visual streaming playback** — the capability
+  is proven (07-15/07-16 render, streaming and material sessions all ran on a real RHI in
+  Simulate), but the owner has never formally signed it off; and the **diorama 5c pan
+  gestures**, driven only by synthetic PointerEvents (see the design doc's OWNER-OWED
+  note). Neither blocks Phase 2.
 - **Phase 2:** scenario system + selectable UI layers + radar view.
 - **Phase 3:** multicell/supercell scenarios + seed-driven outcome variation + terrain.
 - **Phase 4:** lightning, hail swaths, rain/hail particles, polish.

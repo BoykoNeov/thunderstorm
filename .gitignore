@@ -1,8 +1,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Thunderstorm Simulator — .gitignore
-# Policy (see CLAUDE.md): raw netCDF is regenerable and NEVER committed; scenario
-# packages are multi-GB and live outside plain git (LFS or out-of-repo — decided
-# before the first package ships). Nothing >10 MB in plain git.
+# Policy (see CLAUDE.md, scenarios/README.md): raw netCDF is regenerable and NEVER
+# committed. Scenario packages are multi-GB and live in scenarios/ INSIDE the project
+# folder, but their payload stays out of git HISTORY (resolved 2026-07-20 — no LFS
+# anywhere in this repo). manifest.json is the exception and IS tracked: it is the
+# versioned contract UE checks. Nothing >10 MB in plain git.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Simulation raw output (regenerable, disposable by design) ────────────────
@@ -17,7 +19,7 @@ sim/**/*.rst
 **/restart/
 **/rst/
 
-# ── VDB volumes & scenario packages (multi-GB, out-of-repo / LFS) ────────────
+# ── VDB volumes & scenario packages (multi-GB payload; in-tree, out of history) ──
 *.vdb
 # Dense-array fixtures the VDB writer consumes (regenerable; can be large):
 *.densevol

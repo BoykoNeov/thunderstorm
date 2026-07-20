@@ -504,6 +504,15 @@ src/island.ts and the shader palette block in src/shaders.ts.
 - **Placement: `diorama/` subfolder of this repo** (owner-confirmed). Code is
   committed; scenario data stays out of plain git per the data policy.
 - **No view export/recording feature** — screenshots are the owner's own business.
-- Still open: whether the web export ships inside the scenario package (`web/`
-  subfolder — recommended) or as a separate derived folder. Interacts with the
-  still-open LFS vs out-of-repo decision.
+- **RESOLVED 2026-07-20: the web export ships INSIDE the scenario package**, as the
+  `web/` subfolder — which is what the exporter already wrote and what
+  `diorama/vite.config.ts` already resolves (`../scenarios/single_cell_500m/web`), so
+  this ratifies the built behaviour rather than changing it. Settled together with the
+  storage decision it was waiting on (owner, same day): packages live in-tree under
+  `scenarios/`, payload out of git history, **no LFS**. One package = one folder =
+  `manifest.json` + `vdb/` + `web/`; the diorama and the UE app are then two dumb
+  players reading two renditions of one artifact, which is the point. The `web/` bricks
+  stay gitignored; `manifest.json` is tracked. See `scenarios/README.md`.
+  *Follow-up, Phase 2 (small):* `manifest.json` does not yet declare the `web/`
+  rendition — `web/web_manifest.json` stands alone. A `web` block in `pipeline/cm1post/
+  manifest.py` would make the package contract self-describing; no re-export needed.
