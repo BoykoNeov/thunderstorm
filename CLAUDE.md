@@ -563,6 +563,33 @@ Do not start a phase without explicit go from the owner.
   T9 **cref orientation test** (NOT the Y-flip, which stays UE-deferred). Real T1 work is the
   asymmetric/splitting export box (measured not matched). Tasks T1 supercell → T2 run/bbox
   gate → T3 cref orientation discharge → T4 seed → T5–T6 multicell → T7 close-out.
+  **T1 DONE — supercell config + run + measured box (2026-07-21).** The near-empty override
+  set landed as framed (keep template `iwnd=2`/`imove=1`; first POSITIVE exercise of the
+  deck generator's imove/Bunkers branch, previously negative-controls-only). **Domain sizing
+  was the real work and cost a re-run:** the plan's watch-item 1 — that Phase 0's 120 km
+  flat/imove containment holds — was FALSIFIED at 333 m/NSSL. Phase 0's 26 km clearance was
+  measured at 1 km/Morrison (ptype=5); the finer grid + true-hail NSSL grows a more
+  expansive storm, and on the first 360² run real low-level convection (|w| to 17 m/s, a
+  47 dBZ core) reached the open boundary in the last ~12 min. Owner call: re-run larger. The
+  **540² @ 333 m = 179.82 km** re-run PASSED the acceptance gate (`probe_edge.py`, the
+  criterion is the probe not "it finished"): dbz≥40 core never touches the wall (~40 km
+  clearance), the main |w|≥10 body holds ~40–45 km clearance steady through t=108–117 min;
+  the one marginal number, +65.8 km |w|≥10 (23.5 km clearance), is a 23-voxel/11.9 m/s
+  flanking cell at the TERMINAL frame (t=120=timax), 21 km downshear — real (100% low-level
+  per probe_wsurge.py) but a footnote with no un-simulated future to breach; advisor: PASS,
+  not marginal. **Measured box = FULL domain horizontally**: the anvil fills the domain
+  (union half-width 89.744 km == outermost cell; benign open-BC cirrus, first wall touch
+  frame 436), so the honest box is **540×540×54 @ 333 m** (crop_half_width_m=89910 → nx=540
+  native 1:1 pass-through; crop_z_top_m=17982 → nz=54, z-top set from the CONDENSATE top
+  17.750 km, NOT the |w| top which sits in the zd=15 km Rayleigh sponge); `_provisional`
+  dropped. Two side-dividends: **deck.py `OPTIONAL_KEYS` (Category 5) is validated end-to-end
+  on a real run** — the scenario's `rstfrq=3600` reached the deck AND fired hourly restarts
+  (Phase 3T's 15–30 h confidence; note CM1 restarts are `cm1rst_*.dat` multi-file binary,
+  NOT `.nc` — a glob that looks for `*rst*.nc` falsely reports "0 restarts"); and the
+  clean asymmetric split (L→(−11.3,+21.9), R→(+7.2,+13.4)) is the asset T3 needs to discharge
+  the cref orientation test. test_deck 15/15. **The measured box has not been re-run through
+  a full `export` yet** — that ships the package (T2/T3 territory); T1's deliverable is the
+  measured, validated box, and it is in `sim/scenarios/supercell_333m.json`.
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.
