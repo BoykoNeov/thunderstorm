@@ -156,6 +156,30 @@ def main():
 
     check("nx/dx propagate to tot_x_len and dx_inner", derived_tracks)
 
+    print("\n=== 7. optional run-control passthrough (rstfrq) ===")
+
+    def optional_absent_uses_template():
+        # single_cell_500m does NOT declare rstfrq -> the template default must stand.
+        # This is exactly why adding OPTIONAL_KEYS leaves the reproduction gate intact:
+        # scenarios that omit an optional key regenerate byte-for-byte.
+        if "rstfrq" in sc.namelist:
+            return False, "test setup: single_cell_500m unexpectedly declares rstfrq"
+        p = deck.parse(text)
+        return deck.values_equal(p.get("rstfrq"), -3600.0), \
+            f"absent -> template default rstfrq={p.get('rstfrq')} (not substituted)"
+
+    check("omitting an optional key keeps the template default (-3600)",
+          optional_absent_uses_template)
+
+    def optional_present_is_substituted():
+        t, _ = deck.generate(mutated(sc, rstfrq=3600.0))
+        p = deck.parse(t)
+        return deck.values_equal(p.get("rstfrq"), 3600.0), \
+            f"declared rstfrq=3600 -> deck rstfrq={p.get('rstfrq')}"
+
+    check("a declared optional key is substituted into the deck",
+          optional_present_is_substituted)
+
     passed = sum(_results)
     print(f"\n{'=' * 62}\n{passed} passed, {len(_results) - passed} failed")
     return 0 if passed == len(_results) else 1

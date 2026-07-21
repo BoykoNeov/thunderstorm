@@ -79,6 +79,18 @@ REQUIRED_OUTPUT_FLAGS = {
     "output_winterp": "updraft w on scalar points (selectable field)",
 }
 
+# Category 5. OPTIONAL run-control overrides -- substituted into the template when
+# the scenario declares them, otherwise the template value stands. Unlike
+# REQUIRED_KEYS these are NOT part of a scenario's identity: the same storm runs with
+# or without them; they tune run robustness, not physics. Each must already exist in
+# the template so line-anchored substitution has a line to replace.
+#   rstfrq -- restart-file cadence (s). The template default (-3600 = restarts off)
+#             is fine for the short Phase 1/2 runs, but the charter marks restarts
+#             "safely skippable only on short 2-3 h runs"; the Phase 3 (~4.5 h) and
+#             Phase 3T (15-30 h) runs set it positive so a mid-run crash costs time,
+#             not a full re-run.
+OPTIONAL_KEYS = ("rstfrq",)
+
 
 class DeckError(Exception):
     """A scenario that would produce a wrong or unrunnable deck."""
@@ -166,14 +178,22 @@ def build_overrides(sc):
             "NOT defaulted from the template -- see cm1post/deck.py.")
 
     unknown = [k for k in nml if not k.startswith("_") and k not in REQUIRED_KEYS
-               and k not in ("umove", "vmove")]
+               and k not in ("umove", "vmove") and k not in OPTIONAL_KEYS]
     if unknown:
         raise DeckError(
             f"{sc.source_path}: sim.namelist has unrecognised key(s): "
-            f"{', '.join(sorted(unknown))}. Add them to REQUIRED_KEYS deliberately "
-            "-- a typo here would otherwise be silently ignored.")
+            f"{', '.join(sorted(unknown))}. Add them to REQUIRED_KEYS (or "
+            "OPTIONAL_KEYS) deliberately -- a typo here would otherwise be "
+            "silently ignored.")
 
     ov = {k: nml[k] for k in REQUIRED_KEYS}
+
+    # Category 5 -- optional run-control passthrough (rstfrq, ...). Present -> the
+    # scenario's value wins; absent -> the template default stands untouched, so
+    # scenarios that omit these reproduce byte-for-byte (the T1c gate is unaffected).
+    for k in OPTIONAL_KEYS:
+        if k in nml:
+            ov[k] = float(nml[k])
 
     # Category 2 -- geometry-derived. Inert at stretch_x/y = 0, kept consistent.
     ov["dx_inner"] = float(nml["dx"])
