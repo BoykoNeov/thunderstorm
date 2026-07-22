@@ -1,6 +1,9 @@
 # Phase 3 T2 — supercell run health + bbox gate
 
-**Status: IN PROGRESS** (paused mid-session 2026-07-22; export-web running detached).
+**Status: IN PROGRESS** — all four analysis pieces DONE (deck gate, bbox, peak-|w|,
+run-health) and the **web export finished clean 2026-07-22 15:34** (1.557 GB, 601 frames).
+**Held at the package copy pending one owner decision: does a web-only package ship a
+top-level `manifest.json`?** (§6). Nothing is committed yet.
 Scenario `supercell_333m`, run `/home/boiko/thunderstorm/runs/supercell333` (601
 output frames + 10 hourly restarts).
 
@@ -53,35 +56,156 @@ The exported `w` field (`winterp`) must fit the fixed cross-scenario ±80 m/s sc
 scan (`scratch_peakw.py`): mature-phase maxima ~57–63 m/s, minima ~−40 to −53 m/s;
 sampled peak **wmax ≈ 62.64 @ frame 540 (t=108 min)**, **wmin ≈ −52.81 @ frame 390
 (t=78 min)** → **|w| ≈ 63 m/s, a 17 m/s margin under 80.** (The scan's summary line
-crashed on an f-string; the per-frame data is decisive. The **authoritative** exact
-range is `export-web` pass-1's `observed w:` line — record it here when the export
-finishes.)
+crashed on an f-string; the per-frame data is decisive.)
+
+**AUTHORITATIVE (export-web pass 1, all 601 frames, 2026-07-22):**
+**`w: observed −53.20 .. +66.33 m/s`** → **|w| = 66.33, margin 13.67 m/s under the
+±80 scale.** The pre-scan's 62.64 was a *sampled* peak and undershot the true maximum
+by 3.7 m/s — which is exactly why the gate is the exporter's own full sweep and not a
+scratch script: a sampled scan can only ever be a lower bound on a maximum.
+
+Two other pass-1 numbers worth keeping:
+- `qmax: cloud=0.009069  ice=0.009691  rain=0.0105  graupelhail=0.01731  dbz=75.44`
+- `cref: observed +0.00 .. +75.44 dBZ` — **identical to the `dbz` qmax (75.44)**, so
+  T5's standing per-scenario re-check of the `cref ≡ colmax(dbz)` identity passes on a
+  *supercell* (it was originally measured on the Phase 1 pulse cell). That identity is
+  what licenses the plan view borrowing the dbz channel's vmax and palette.
 
 This is same-family-consistent: Phase 0 (Morrison, 1 km) peaked 60.6 m/s; 333 m + NSSL
 sits in the same band (cf. single_cell 53→67.5 at 333 m).
 
-## 4. Run-health / same-FAMILY check — PENDING ⏳
+## 4. Run-health / same-FAMILY check — PASS ✅ (2026-07-22)
 
 **Qualitative verdict, NOT a numeric match** (NSSL/333 m legitimately exceeds Phase 0,
 so a numeric gate would false-fail). Signature to confirm: single core → two
-**separated** cores → **counter-rotating** pair.
+**separated** cores → **counter-rotating** pair. **All three confirmed.**
 
-- Analysis script **ready**: `/home/boiko/thunderstorm/scratch_health.py` (column-max
-  `winterp` connected components at t=45/60/75/90/105/120 min; per-core mid-level
-  `zvort` sign for cyclonic/anticyclonic; w-weighted centroids). Run **after** the
-  export finishes to avoid HDD thrash; writes `runs/supercell333/scratch_health.log`.
-- **Reference (Phase 0, docs/phase0-validation.md):** split underway ~40 min; two
-  separated cores (17.9 km apart) at 75 min; counter-rotating |ζ| ≈ 0.022–0.029 s⁻¹.
-- **T1 already observed** (config note): left mover NW-drifting, right mover near-centre,
-  Bunkers umove/vmove verified; cores +55 / −50 m/s.
-- **Capture the mover (x,y) LOCATIONS** — that asymmetric E-W/N-S placement is the asset
-  **T3** consumes to detect an x↔y transpose in the cref plan view. (T1 note had
-  L→(−11.3,+21.9), R→(+7.2,+13.4) km — confirm/record here.)
+Reference (Phase 0, docs/phase0-validation.md): split underway ~40 min; two separated
+cores 17.9 km apart at 75 min; counter-rotating |ζ| ≈ 0.022–0.029 s⁻¹.
 
-## 5. Web export — RUNNING ⏳ (detached, pid 501 at pause)
+### 4.1 Separation — PASS (`scratch_health.py`, log in `runs/supercell333/`)
 
+Column-max `winterp` ≥ 10 m/s connected components. Two strong cores, separation
+**monotonically increasing**, both movers staying vigorous for the full 2 h:
+
+| t (min) | 45 | 60 | 75 | 90 | 105 | 120 |
+|---|---|---|---|---|---|---|
+| separation (km) | 10.0 | 12.0 | 19.4 | 26.1 | 35.5 | 46.2 |
+| core 1 peak w | 54.4 | 60.4 | 58.9 | 57.0 | 60.5 | 57.1 |
+| core 2 peak w | 25.0 | 34.4 | 56.2 | 51.3 | 49.4 | 54.6 |
+
+19.4 km at 75 min vs Phase 0's 17.9 km — the same split at the same time.
+
+### 4.2 Rotation — the instrument had to be replaced (this is the finding)
+
+**`scratch_health.py`'s per-core sign flag is NOT trustworthy and its verdict line
+should be ignored.** It scores a core by the **mean** `zvort` over the whole component;
+a 2000-cell component contains both signs of the vorticity couplet, so the mean is a
+near-cancellation — it reports |ζ| ~0.002 s⁻¹ where the component **extrema** are
+±0.05–0.07 s⁻¹, a ~20× washout. It printed `counter-rotating: False` at t=60 and t=105.
+That flag is an artifact. Three statistics on the same components (mean,
+extremum-dominance, value at the peak-w column) **disagree with each other frame to
+frame** — which is itself the proof that no single statistic on a large blob settles
+the question.
+
+**CM1's own `uh` cannot settle it either:** measured `min(uh) = +0.0` over the entire
+domain in all 7 sampled frames — CM1's updraft helicity is **clipped at zero**, so it
+marks "rotating updraft present" but is blind to anticyclonic rotation. (Clipped, not
+magnitude: if it were |·| its t=45 max would be 2050.8, the |negative| peak; it is
+1552.1, the positive one.)
+
+**Instrument used instead — signed updraft helicity**, computed in
+`M:\claud_projects\temp\probe_uh_signed.py`:
+`SUH = ∫(2–5 km) w·ζ dz, w>0 only`. Weighting ζ by `w` is exactly what defeats the
+washout: surrounding air of opposite sign has no updraft, so it cannot cancel the core.
+**Self-validating:** its positive extremum reproduces CM1's `uh` maximum *to the printed
+digit* in 6 of 7 frames (1567.8 / 1552.1 / 1119.6 / 1215.1 / 1226.2 / 1882.1), which
+both confirms the implementation against CM1's own code and is what proves the clipping.
+
+**Result — a persistent ANTICYCLONIC centre, monotonically NW-drifting:**
+
+| t (min) | 30 | 45 | 60 | 75 | 90 | 105 | 120 |
+|---|---|---|---|---|---|---|---|
+| SUH min (m²/s²) | −1632 | −2051 | −1750 | −1134 | −1302 | −1288 | −1674 |
+| location (km) | (−8.5,+8.2) | (−10.2,+12.5) | (−14.2,+17.8) | (−16.8,+22.1) | (−22.5,+26.8) | (−26.5,+30.5) | (−26.1,+36.5) |
+
+Counter-rotation **confirmed**: a strong, coherent, continuously-tracked anticyclonic
+left mover alongside the cyclonic right mover. It also explains the t=60/75 confusion —
+the domain-wide *positive* SUH max sits at (−9.8,+14.5)/(−13.2,+18.2), i.e. on the left
+mover's **cyclonic flank**, the other half of its couplet, rather than at the right mover.
+
+### 4.3 Mover locations — the asset T3 consumes
+
+Left mover **NW-drifting** (−x, +y), right mover held near origin **because the domain
+moves with it** (`imove=1` at the Bunkers right-mover velocity — so "stays near centre"
+is the moving frame working, not the storm sitting still):
+
+| t (min) | left mover (km) | right mover (km) |
+|---|---|---|
+| 45 | (+4.2, +9.8) | (−5.7, +8.3) |
+| 75 | (−10.2, +21.2) | (−5.6, +2.4) |
+| 90 | (−12.6, +24.6) | (−5.4, −0.6) |
+| 105 | (−17.5, +28.5) | (−2.5, −3.6) |
+| 120 | (−14.4, +36.2) | (−0.7, −7.9) |
+
+Note the two instruments' centroids agree closely in **y** but differ by up to ~12 km in
+**x** at t=120 (winterp −14.4 vs SUH −26.1): an updraft centroid and a rotation centre
+are not the same point. The N–S separation is instrument-robust; the E–W one is soft.
+Which is why the asset below is measured in **neither** of these fields.
+
+### 4.4 T3 orientation asset — measured in `cref`, the field T3 renders
+
+The T3 test detects an **x↔y transpose** in the `cref` plan view. `cref` is unsigned
+reflectivity and a transpose is purely **spatial**, so rotation sign — however well
+established above — is *not* what T3 checks, and neither `w` nor `ζ` is the right place
+to characterise the asset (advisor). Measured directly in the shipped bricks
+(`M:\claud_projects\temp\probe_cref_asset.py`, gunzip → decode → `reshape(ny, nx)`, i.e.
+exactly the consumer path), cores ≥ 45 dBZ:
+
+| frame | t | cores ≥45 dBZ | Δx (km) | Δy (km) | Δy/Δx |
+|---|---|---|---|---|---|
+| 450 | 90 min | **1** (still merged) | — | — | — |
+| 525 | 105 min | 2 | 4.03 | 26.30 | **6.5** |
+| 600 | 120 min | 4 (2 dominant) | 7.54 | 34.24 | **4.5** |
+
+Frame 600 cores: **(+0.58, −1.17) km @ 74.3 dBZ** and **(−6.96, +33.07) km @ 69.1 dBZ**.
+
+**Usable for T3, with one constraint: use a LATE frame.** At t=90 the two cells are still
+one connected ≥45 dBZ mass — the split is visible in `w` long before it separates in
+reflectivity, so an orientation test run on frame 450 would have nothing to orient.
+Frames 525 and 600 both give a clean 4.5–6.5:1 N–S-dominant pair, which is what makes a
+transpose detectable by eye and by pixel test — the failure mode T9 could not test on a
+radially symmetric pulse cell. (Supersedes both the T1 note's L→(−11.3,+21.9),
+R→(+7.2,+13.4) and the §4.3 w-derived figures; those measure other fields.)
+
+Whole-field ≥45 dBZ spread is also y-dominant but only ~1.5:1 (std x 34.2 vs y 52.8
+cells at frame 600) — so T3 should test the **two-core separation**, not a bulk moment.
+
+## 5. Web export — DONE ✅ (2026-07-22 15:34 EEST, rc=0, 8004 s)
+
+**Result:** `/home/boiko/thunderstorm/export/supercell333/web` — **1.557 GB**, 601 frames
+× 4 files (`rgba`/`dbz`/`w`/`cref`, all 601 present) + `web_manifest.json` (151 641 B).
+**PEAK rgba = 4.24 MB @ frame 600.** (The SVT 30–50 MB/frame budget does not bind here —
+this is the web brick path, and the owner's web-only decision means no VDB ships this
+phase. The peak is recorded because it is the decimation-budget figure the manifest
+carries, and because frame 600 being the peak is consistent with the bbox gate's
+peak-active frame 600.)
+
+### Relaunch history (2026-07-22)
+
+- **Two earlier attempts were killed by the vjoy BSOD** (see `[[vjoy-driver-bsod-2026-07-22]]`;
+  unrelated to the export — a `find /` in another project). Both left an empty `web/`
+  and a log containing only the bash start line, with **no partial output to corrupt**,
+  so the relaunch is a clean slate.
+- **`python3 -u` added to the driver.** Without it python block-buffers stdout when
+  redirected to a file, so pass 1's every-60-frames progress line does not reach the log
+  for many minutes — a *healthy* run then looks byte-identical to one that died at
+  startup (start line + empty `web/`), which is exactly what made the killed attempts'
+  state unreadable. This is the difference between "verify existence" and "verify
+  progress"; only the latter distinguishes a live run from a dead one.
 - Driver: `M:\claud_projects\temp\run_exportweb_supercell.sh` (LF-clean), launched via
-  `Start-Process` so it survives the session.
+  `Start-Process` so it survives the session. Pass 1 confirmed progressing at
+  **0.77 s/frame** (~8 min for the 601-frame maxima scan).
 - Output → WSL ext4 `/home/boiko/thunderstorm/export/supercell333/web`; log
   `.../exportweb.log`. Two full 601-frame passes (maxima scan, then encode).
 - **When done:** copy the package to `scenarios/supercell_333m/web/`, then the
@@ -90,9 +214,12 @@ so a numeric gate would false-fail). Signature to confirm: single core → two
 
 ## 6. Remaining checklist to close T2
 
-- [ ] export-web finishes; record authoritative `observed w:` range + peak rgba MB/frame
-- [ ] run `scratch_health.py`; write the same-family verdict + mover locations above
+- [x] export-web finishes; record authoritative `observed w:` range + peak rgba MB/frame — §5
+- [x] run-health same-family verdict + mover locations — §4 **PASS** (note: `scratch_health.py`'s
+      own sign flag is unusable; the verdict rests on signed UH, §4.2)
+- [x] T3 orientation asset characterised in `cref` — §4.4 (use frame 525 or 600, not 450)
 - [ ] copy web package → `scenarios/supercell_333m/web/`; verify diorama picker lists it
+      **← BLOCKED on the manifest decision below** (the copy is what commits us to a layout)
 - [ ] run a full `export` (VDB) manifest? **NO** — web-only; but the package still needs
       a top-level `manifest.json`. Decide: does web-only ship `manifest.json` (tracked
       contract) or only `web_manifest.json`? (Check single_cell_333m — it has both; the
