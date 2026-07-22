@@ -1,9 +1,11 @@
 # Phase 3 T2 — supercell run health + bbox gate
 
-**Status: IN PROGRESS** — all four analysis pieces DONE (deck gate, bbox, peak-|w|,
-run-health) and the **web export finished clean 2026-07-22 15:34** (1.557 GB, 601 frames).
-**Held at the package copy pending one owner decision: does a web-only package ship a
-top-level `manifest.json`?** (§6). Nothing is committed yet.
+**Status: T2 COMPLETE** (2026-07-22). All four analysis pieces PASS (deck gate, bbox,
+peak-|w|, run-health), the web export finished clean at 15:34 (1.557 GB, 601 frames), and
+the package ships as the project's **first web-only package** — owner decision on the
+tracked contract taken and applied. Committed and pushed (`c898eb8`, `7200970`).
+Carried items in §7. **Next: T3** (cref orientation discharge) — needs the diorama on a
+real GPU; use frame 525 or 600, never 450 (§4.4).
 Scenario `supercell_333m`, run `/home/boiko/thunderstorm/runs/supercell333` (601
 output frames + 10 hourly restarts).
 
@@ -249,4 +251,38 @@ peak-active frame 600.)
       `git check-ignore`: manifests TRACKABLE, `f0000.rgba.gz` IGNORED.
       Side-effect, kept deliberately: the two `single_cell_*` packages' web manifests
       become tracked too, so all three packages get a versioned web contract.
-- [ ] commit + push (package manifest tracked, payload ignored)
+- [x] commit + push (package manifest tracked, payload ignored) — `c898eb8`, `7200970`
+
+## 7. Carried items out of T2
+
+**(a) The tracking-scope call, made deliberately.** The owner's decision was scoped to
+the *web-only* package, but git cannot express "track `web_manifest.json` only where
+`manifest.json` is absent" — a glob has no such predicate. The choice was a global rule
+or an explicit per-scenario negation (`!scenarios/supercell_333m/web/web_manifest.json`)
+that would need editing for every future scenario and would rot silently when someone
+forgot. **Kept global**, so all three packages get a versioned web contract and the rule
+has no per-scenario exceptions to maintain.
+
+**(b) `web_manifest.json` is tracked WITHOUT a reproduction gate — the real cost of (a).**
+`manifest.json` earned its tracking *because* `test_manifest.py` rebuilds it byte-for-byte
+from committed files alone; that is this project's stated principle — a tracked contract
+has a gate. The web manifest now rides in tracked with no equivalent, so a future
+`webvol.write_manifest` edit could silently stale all three tracked copies and no suite
+would fail. **This is a genuine asymmetry, not a nit.** It looks fixable by T2's own
+trick: feed `webvol.write_manifest` the shipped manifest's own `frames` list (the same
+way `test_manifest.py` feeds `manifest.build`) and demand byte-identity. **Carry to T7
+close-out** — not done here, and deliberately not started, because the ask was to restart
+the run and T2 is complete.
+
+**(c) Fresh-clone picker lists data-less scenarios.** The dev server enumerates any
+subdir carrying `web/web_manifest.json`; that file is now in git for all three while the
+bricks are not, so a fresh clone advertises three scenarios whose data 404s until
+re-export. **Mild, and partly pre-existing:** a fresh clone has no bricks for *any*
+package, so the viewer was already broken there without a re-export — the change turns
+"silently absent" into "listed, then 404". Arguably the better diagnostic; a friendly
+"package not exported yet" state in the picker is a viewer nicety for later, not a T2 fix.
+
+**(d) Manifest provenance gap (pre-existing, owner-pending).** This package, like both
+single-cell ones, omits inline CM1 sha256 / rank count / domain decomposition. The
+recovery path is nonetheless intact: `sim/scenarios/supercell_333m.json` and the deck
+generator *are* in git, and the deck is the sole scenario input at `isnd=5`.
