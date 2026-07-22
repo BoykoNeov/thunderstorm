@@ -133,7 +133,14 @@ plots + event lists + manifest JSON) → scenarios/ → UE5 playback app (Window
   wiring. `manifest.json` **is tracked** (the `!scenarios/**/manifest.json` negation) —
   it is the versioned contract UE checks `format_version` against, and a contract that
   isn't version-controlled isn't a contract; ~48 KB per 301-frame package. Nothing
-  >10 MB in plain git. **Consequence, accepted:** packages are not backed up by git —
+  >10 MB in plain git. **AMENDED 2026-07-22 (owner, Phase 3 T2): `web/web_manifest.json`
+  is tracked too.** A **web-only** package now exists (`supercell_333m` — no VDB, owner's
+  §4.2 call), and for it the web manifest is the *only* contract: `manifest.build()` is
+  SVT-shaped (per-VDB frame records, `SVT_TEXTURE_MAP`, `ue_placement_rule`), so building
+  one with no VDB would advertise an SVT payload that isn't there. The rule is
+  `scenarios/**/web/*` — **not** `scenarios/**/web/`, because git does not descend into
+  an excluded *directory* and the directory form makes the negation unreachable.
+  **Consequence, accepted:** packages are not backed up by git —
   regeneration from `sim/` + `pipeline/` is the recovery path (7.5 min for the Phase 1
   package). Rationale + layout: `scenarios/README.md`.
 

@@ -218,11 +218,35 @@ peak-active frame 600.)
 - [x] run-health same-family verdict + mover locations — §4 **PASS** (note: `scratch_health.py`'s
       own sign flag is unusable; the verdict rests on signed UH, §4.2)
 - [x] T3 orientation asset characterised in `cref` — §4.4 (use frame 525 or 600, not 450)
-- [ ] copy web package → `scenarios/supercell_333m/web/`; verify diorama picker lists it
-      **← BLOCKED on the manifest decision below** (the copy is what commits us to a layout)
-- [ ] run a full `export` (VDB) manifest? **NO** — web-only; but the package still needs
-      a top-level `manifest.json`. Decide: does web-only ship `manifest.json` (tracked
-      contract) or only `web_manifest.json`? (Check single_cell_333m — it has both; the
-      VDB `export` writes `manifest.json`. For web-only, confirm the tracked-contract
-      story.) **Owner-adjacent — resolve before committing the package.**
+- [x] copy web package → `scenarios/supercell_333m/web/`; diorama picker lists it.
+      **Copy verified, not assumed:** 2405 files (601 × `.rgba/.dbz/.w/.cref` + the
+      manifest), 1.45 GiB, and **5/5 sampled MD5s identical** to the WSL source across all
+      four field types. (`robocopy` exits **1** on success — "files were copied"; only
+      ≥8 is a failure. A harness that reads nonzero as failure will call a good copy bad,
+      which is why the check is hashes and counts rather than the exit code.)
+      **Served, not just present:** the dev server enumerated it as
+      `supercell_333m 540×540×54 @ 333 m, 601 frames` alongside the two single-cell
+      packages, and `/data/supercell_333m/f0600.{cref,rgba,w}.gz` all returned HTTP 200
+      with byte counts matching disk — `f0600.rgba.gz` at 4 239 411 B independently
+      confirming §5's 4.24 MB peak-rgba frame. (An actual *render* of this package is
+      T3's job, on a real GPU per the standing rule.)
+- [x] **web-only tracked-contract question — RESOLVED by the owner 2026-07-22:
+      track `web/web_manifest.json`.** A web-only package ships **no** top-level
+      `manifest.json`. Reason it is not merely "the cheap option": `manifest.build()` is
+      SVT-shaped — its `frames` list is per-**VDB**-file `{file, bytes}`, alongside
+      `SVT_TEXTURE_MAP` and `ue_placement_rule` — so synthesising one for a package with
+      no VDB would advertise an SVT payload that is not in the package. That is the same
+      class of error as T2's census-in-prose and T5's run-specific-numbers-in-a-generic-
+      builder: a contract file asserting something untrue about what ships. The web
+      manifest is already a real versioned contract (`web_format_version` 1.2) and the
+      diorama already refuses a newer major (`volume.ts SUPPORTED_MAJOR`), so tracking it
+      keeps "the contract is version-controlled" true without inventing anything.
+      **Ignore-rule mechanics (the part that bites):** the rule had to change from
+      `scenarios/**/web/` to `scenarios/**/web/*`. Git does **not descend into an excluded
+      directory**, so with the directory form a `!…/web/web_manifest.json` negation is
+      unreachable and the file is silently untrackable — it would have looked like the
+      policy was applied while nothing was actually tracked. Verified with
+      `git check-ignore`: manifests TRACKABLE, `f0000.rgba.gz` IGNORED.
+      Side-effect, kept deliberately: the two `single_cell_*` packages' web manifests
+      become tracked too, so all three packages get a versioned web contract.
 - [ ] commit + push (package manifest tracked, payload ignored)

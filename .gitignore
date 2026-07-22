@@ -29,10 +29,22 @@ scenarios/**/*.exr
 scenarios/**/*.png
 scenarios/**/*.jpg
 scenarios/**/frames/
-# Web-viewer bricks (diorama/): gzipped quantized volumes, regenerable
-scenarios/**/web/
+# Web-viewer bricks (diorama/): gzipped quantized volumes, regenerable.
+# NOTE the trailing /* rather than /: git does NOT descend into an excluded
+# DIRECTORY, so `scenarios/**/web/` would make the negation below unreachable and
+# web_manifest.json could never be tracked. Excluding the directory's CONTENTS
+# instead keeps it re-includable. (web/ is flat -- no subdirectories to miss.)
+scenarios/**/web/*
 # Keep scenario manifests/contracts and small docs tracked:
 !scenarios/**/manifest.json
+# web_manifest.json is the web package's contract, and for a WEB-ONLY package
+# (owner decision 2026-07-22, Phase 3 T2) it is the ONLY contract there is: the
+# diorama is the sole consumer this phase, it already checks web_format_version's
+# major, and no top-level manifest.json is written because manifest.build() is
+# SVT-shaped (per-VDB frame records, SVT_TEXTURE_MAP, ue_placement_rule) and no
+# VDB ships. Tracking it is what keeps "the contract is version-controlled" true
+# for supercell_333m. ~45-150 KB each; the multi-GB bricks stay ignored.
+!scenarios/**/web/web_manifest.json
 !scenarios/**/*.md
 
 # ── Diorama web viewer (diorama/) ────────────────────────────────────────────
