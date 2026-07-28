@@ -597,6 +597,40 @@ Do not start a phase without explicit go from the owner.
   the cref orientation test. test_deck 15/15. **The measured box has not been re-run through
   a full `export` yet** — that ships the package (T2/T3 territory); T1's deliverable is the
   measured, validated box, and it is in `sim/scenarios/supercell_333m.json`.
+  **T3 DONE — cref orientation test DISCHARGED (2026-07-28, docs/phase3-t3-orientation.md).**
+  The Phase 2 T9 carried note is paid: the plan view is verified un-transposed **end to end**.
+  The design decision came first and killed the obvious test — cref's shader `fuv` IS the
+  volume's own `(p-boxMin)/(boxMax-boxMin)` expression, so *any* viewer-vs-viewer check
+  ("echo sits under the core", "agrees with the dbz MIP") is transpose-consistent by
+  construction and **cannot fail**; the reference must be EXTERNAL. Two links, both measured.
+  **(A) CM1 netCDF → brick:** truth read from CM1's own `cref` + `xh`/`yh`, cores matched to
+  **13–47 m**, and the discriminator is the core-to-core SEPARATION VECTOR — error **0.032–0.043
+  km** vs **42.9–59.1 km** under transpose. **A core near the origin cannot discriminate** (it
+  sits on the mirror line; it moves only 2.5–3.1 km under transpose), which is why the first
+  criterion — "both cores must move" — reported FAIL on correct data. The netCDF axis check is
+  on **dimension NAMES, not lengths**: the domain is 540×540, so a shape check would pass a
+  transposed file silently — the symmetric-storm blindness one level up. **(B) brick → real-GPU
+  pixels:** predicted through the viewer's OWN `mat.ts`/`camera.ts`/`scene.ts` (the 5c scale-bar
+  trick), measured as magenta/white ≥65 dBZ blobs in headless-Chrome captures at **two frames ×
+  two azimuths** (az=45 makes a transpose exactly a horizontal mirror, so az=20 is the general
+  case), with the screen basis pinned by **chirality** (three projected world points — two points
+  give one vector and cannot separate a reflection from a 90° rotation). Residual **0.6–2.7 px
+  (≤0.63 km on a 179.8 km domain)** where a transpose lands **284–331 px** away. Both sides are
+  clustered before matching: two truth cores 5 km apart merge into one rendered blob, and the
+  naive match reported an 18.5 px "error" that was a **matching artifact, not a placement error**.
+  **The committed half** is `pipeline/tests/test_orientation_t3.py` **8/8** — links A and B are
+  one-shots (218 GB run dir, 1.5 GB package, neither in git), so what is gated permanently is the
+  *write convention*: a hot cell at CM1 (x_i,y_j) must write flat byte `j*nx+i` through the
+  PRODUCTION query builder → resample → encode → `write_frame` → gunzip (the assertion is the
+  FLAT BYTE INDEX, since the viewer uploads bytes into a width-`nx` texture — an array that reads
+  right in numpy but ravels the other way still renders transposed), plus plan-and-volume
+  recovering the same `(i,j)`, which is what licenses the shared `fuv`. **The fixture is 7×5
+  off-diagonal and a control PROVES that matters**: on a square fixture with a diagonal feature
+  the transposed array is byte-identical and the transpose control stops firing — T9's own trap
+  reproduced at test scale, so a future tidy-up cannot silently defang the file. The Y-flip
+  (Phase 1 #1) is **NOT** discharged and stays deferred with the UE app. The node-side prediction
+  probe was deleted on purpose: its measured-pixel inputs are constants, so committing it would
+  add a test that passes no matter what the viewer later does.
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.
