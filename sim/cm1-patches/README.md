@@ -104,3 +104,19 @@ sha256sum ../run/cm1.exe                 # must equal the forked hash above
 `make`'s `.F.o` rule regenerates `$*.f90` from `$*.F` on every build, so the cpp
 artifact cannot go stale against the patched source. Do not edit `init3d.f90`
 directly — it is a build product and is overwritten.
+
+## Which binary a run actually uses
+
+`sim/run_scenario.sh` runs `/home/boiko/thunderstorm/runs/cm1.exe`, which is a
+**symlink** to `build/cm1r21.1/run/cm1.exe`. So rebuilding CM1 silently changes the
+binary every subsequent run uses — there is no separate "blessed" copy to promote.
+
+That is a live hazard for any claim of the form "this scenario was produced by the
+Phase 0 binary", and the safety net is per-run rather than global: `run_scenario.sh`
+copies the binary into the run directory and records
+`cm1_binary_sha256` in `run_meta.txt` from **the copy it is about to execute**. So
+every run says which binary produced it, even though the symlink target moves. When
+attributing a result to a binary, read that field — never assume the pin.
+
+The stock binary is kept at `run/cm1.exe.phase0-stock` (not on the symlink path) so
+a pre-fork comparison is still possible.
