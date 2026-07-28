@@ -208,8 +208,56 @@ does.
 
 ### 5.2 Supercell regime — the number the package decision turns on
 
-*(§5.2 measured separately at 1 km / 179.82 km domain / 2 h, the same domain and
-window as `supercell_333m`, with `iwnd=2`/`imove=1` — see §7.)*
+Measured on a **sheared, splitting** storm: `iwnd=2`, `imove=1`, NSSL `ptype=27`,
+the same 179.82 km domain and 2 h window as `supercell_333m`, but at 1 km / `dtl=6`
+— roughly 27× less work (~13 min per run instead of ~4.5 h), and the resolution
+Phase 0 validated the WK supercell at. `irandp=1`, seed 0 vs seed 1.
+
+**The two answers point in opposite directions, and both matter.**
+
+**Intensity is robust.** After the first ~40 min the storms agree closely:
+
+| metric | seed 0 | seed 1 | Δ |
+|---|---|---|---|
+| peak w over the run | 55.64 | 57.62 m/s | **3.6 %** |
+| max dbz @ t=110 | 70.2 | 66.7 dBZ | 3.5 dB |
+| peak w, t=40…120 | — | — | mostly within ±5 %, worst −11 % |
+
+This is the shear doing its job: the environment sets the storm's *class*, and the
+0.25 K noise cannot move it. Physically right, and worth saying out loud — it is the
+opposite of the pulse cell in §5.1, where noise moved peak w by 35 %.
+
+**Structure and placement diverge steadily.** Measured with metrics that need no
+cell identification (pattern correlation of composite reflectivity over the echo
+union; IoU of the ≥40 dBZ area; displacement of the ≥40 dBZ centroid):
+
+| t (min) | corr | IoU@40 dBZ | centroid offset | ≥40 dBZ area (0 / 1) |
+|---|---|---|---|---|
+| 50 | 0.810 | 0.736 | 1.6 km | 323 / 316 |
+| 70 | 0.722 | 0.657 | 12.0 km | 777 / 744 |
+| 90 | 0.511 | 0.516 | 15.7 km | 1592 / 1325 |
+| 120 | **0.397** | **0.417** | **18.7 km** | 3160 / 2451 (**−29 %**) |
+
+Plus: peak w at t=30 differs by **+60 %** (26.2 vs 41.9 m/s) — the *timing* of
+initial intensification is highly seed-sensitive even though the mature intensity is
+not — and peak hail `qhl` differs by 40–80 % frame to frame (0.77 vs 1.37 g/kg at
+t=70). Final-frame field divergence: mean |Δw| 0.80 m/s, **16.9 %** of voxels differ
+by >1 m/s.
+
+**So the character is: same storm type, same intensity class, genuinely different
+individual storm** — different position, different size, different hail, different
+split geometry. That is a better teaching story than "one supercells and one
+doesn't" would have been: it is the honest forecast→outcome lesson the charter's
+principle 2 asks for. The environment is predictable; the individual storm is not.
+
+**Caveats, stated rather than buried.** (a) This is 1 km, not 333 m. At 333 m the
+divergence would most likely be *larger* — finer grids carry more degrees of freedom,
+and T6 already found the 333 m cell more vigorous than its 500 m twin — but that is
+an expectation, not a measurement. (b) `sc_spread.py`'s per-mover tracker (argmax
+within a y-half) jumps between cells and its separation column is **not** trustworthy;
+the table above deliberately uses only identification-free metrics. (c) These runs use
+`irandp=1`, whereas the shipped `supercell_333m` runs `irandp=0` — a seeded variant is
+a new config, not a re-run of the shipped one.
 
 ## 6. What is gated permanently vs measured once
 
@@ -239,4 +287,27 @@ Full suite after T4: `test_deck` 15/15, `test_manifest` 17/17,
 
 ## 7. Open: does T4 ship packages?
 
-Deferred to the owner by design (§ header). Pending on §5.2.
+Deferred to the owner by design, pending §5.2. **§5.2 now exists, so the decision is
+due.** The evidence, stated neutrally:
+
+**For shipping two 333 m seeded supercells.** At t=120 the two storms sit ~19 km
+apart with only 42 % echo overlap and 29 % different storm area, while both remain
+unmistakably supercells — visibly different in the diorama picker, which is exactly
+the A/B a "seed-driven variation" teaching asset wants. The mechanism, the box
+discipline and the export path all already exist; nothing new has to be built.
+
+**Against.** ~9 h of overnight runs plus an export cycle, for an asset whose *value*
+is a side-by-side comparison the diorama cannot currently show side by side — the
+Phase 2 T7 picker switches by page reload, one scenario at a time. And a seeded
+supercell needs a new config (`irandp=1`, a measured box of its own) plus its own
+bbox/run-health gate, which is T1/T2-shaped work, not a re-export.
+
+**A cheaper middle option exists:** seed the *single cell* instead. `single_cell_333m`
+is far quicker to run, and §5.1 shows the pulse cell is where seed sensitivity is
+most dramatic (35 % peak-w swings, wholly different cells) — arguably the *better*
+teaching demo of "same setup, different outcome", precisely because a supercell's
+intensity is seed-robust.
+
+Recommendation: **the single-cell pair**, unless the supercell split geometry is
+specifically what you want to teach with. Owner's call either way — this is why T4
+stopped here rather than guessing.
