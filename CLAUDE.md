@@ -147,7 +147,19 @@ plots + event lists + manifest JSON) → scenarios/ → UE5 playback app (Window
 ## Pinned versions
 
 Keep current — SVT behavior shifts between UE releases. Filled through Phase 0:
-- **CM1:** cm1r21.1 (binary sha256 in docs/phase0-cm1-build.md).
+- **CM1:** cm1r21.1 **+ project fork, as of Phase 3 T4** (`sim/cm1-patches/`).
+  Upstream tarball sha256 `dc49fe84…`; stock Phase 0 binary `5da2c2aa…`
+  (docs/phase0-cm1-build.md); **forked binary `5fc93016…`**. The fork is a nine-line
+  uncomment of CM1's **own** commented-out seed hook, because stock cm1r21.1 has **no
+  seed knob at all**: `use_truly_random_pert` is a `logical, parameter` (init3d.F:168),
+  so `irandp=1` draws the *identical* perturbation field every run, and the amplitude
+  (0.25 K) and bubble geometry are hardcoded. `var7` (an **existing** `&param8` key)
+  now advances the PRNG stream, so **"the namelist is CM1's sole scenario input" still
+  holds** — only "the binary is the Phase 0 binary" moved, which is what
+  `sim/cm1-patches/README.md` and each run's `run_meta.txt` `cm1_binary_sha256` record.
+  Verified bitwise-neutral vs stock at seed 0 **with `irandp=1`** (not just `irandp=0`,
+  which would not exercise the patched block). Rebuild recipe in the patches README;
+  never edit `init3d.f90` — it is a cpp build product.
 - **WSL/toolchain:** Ubuntu 24.04, gfortran 13, OpenMPI 4.1.6, netCDF C+Fortran
   (system libs). MPI, single node.
 - **Python env lockfile:** **RECORDED — pipeline/ENVIRONMENT.md + pipeline/env-vdb.yml
@@ -639,6 +651,48 @@ Do not start a phase without explicit go from the owner.
   (Phase 1 #1) is **NOT** discharged and stays deferred with the UE app. The node-side prediction
   probe was deleted on purpose: its measured-pixel inputs are constants, so committing it would
   add a test that passes no matter what the viewer later does.
+  **T4 DONE — seed-driven variation; CM1 IS NOW FORKED (2026-07-28,
+  docs/phase3-t4-seed.md).** The plan's §4.3 premise was **falsified by reading the source
+  before writing code**: stock cm1r21.1 has **no seed knob at all**. `use_truly_random_pert`
+  is a `logical, parameter = .false.` (`init3d.F:168`) — a *compile-time constant* — so
+  `irandp=1` draws the **identical** perturbation field every run; no `namelist /paramN/`
+  holds a seed or amplitude key; amplitude (0.25 K) and bubble geometry are hardcoded, and
+  `centerx`/`centery` are module variables from domain geometry, not namelist keys. Stock CM1
+  offers only *reproducible-with-zero-variation* or *wall-clock-seeded-and-irreproducible*,
+  and **nothing in a namelist moves between them** — so §2.3's modified-binary consequence
+  arrived at T4 instead of T5. That is an argument for doing it FIRST: the fork-provenance
+  mechanics get built exactly once, better on a **nine-line uncomment of CM1's own
+  commented-out hook** than alongside novel multi-bubble physics; T5 inherits them.
+  **The fork costs less than §2.3 feared, and the two halves are separable:** `var7` is an
+  **existing** `&param8` key, so *"the namelist is CM1's sole scenario input"* **survives**
+  — only *"the binary is the Phase 0 binary"* moved (`sim/cm1-patches/`, upstream tarball
+  `dc49fe84…`, stock `5da2c2aa…` **verified against docs/phase0-cm1-build.md BEFORE
+  patching**, fork `5fc93016…`). It is a **stream OFFSET, not a re-seed** — different seeds
+  get a shifted reuse of one stream, decorrelated per grid point but not independently drawn;
+  sufficient for "same environment, divergent trajectory", upgradeable to `random_seed(put=)`
+  on the already-forked binary. **Banked: the perturbation field is
+  decomposition-independent** (the loop walks the global domain on every rank, each applying
+  only its own points), which is what licensed verifying at 500 m/np=4 instead of 333 m/np=8;
+  it does NOT make a run rank-independent, so "same seed ⇒ bitwise" holds at fixed rank count.
+  **Four run gates on real CM1, both binaries, decks through the production generator:**
+  neutrality IDENTICAL at `irandp=0` **and at `irandp=1`/seed 0** (the latter is the real
+  claim — `irandp=0` never enters the patched block), positive DIFFERENT, same-seed repro
+  IDENTICAL. **Gate 2 is load-bearing beyond the science:** `init3d.f90` is the cpp artifact
+  of `init3d.F`, so an unregenerated `.f90` leaves the binary silently unchanged — which
+  **passes neutrality trivially**; only the positive gate catches it (Makefile's `.F.o` rule
+  covers it structurally too — never edit the `.f90`). `seed` is a **REQUIRED semantic key**
+  emitted as `var7` (a raw `"var7": 3.0` would tell a future reader nothing and carries no
+  name into provenance); making it REQUIRED looked like churn for three scenarios and was
+  none — `seed=0` substitutes `0.0` over a template line already reading `0.0`, so all three
+  decks are **byte-identical** (refs via `git archive`) and T1c/T6 don't move; only T6's
+  override count changed 28→29. **Three silent-aliasing guards, each of which would otherwise
+  run for hours and return the wrong ensemble member:** negative seed (`do n=1,nint(-5.0)` is
+  **zero-trip** → silently aliases to seed 0), non-integer (`nint` rounds 1.4 and 0.6 to 1),
+  and `seed>0` with `irandp=0` (advance is inside `IF(irandp.eq.1)` — the trap of building an
+  ensemble by copying an unseeded scenario); `seed=0`/`irandp=0` stays legal as the honest
+  "unseeded" declaration. `test_seed_t4.py` **15/15**, and **all four mutations of
+  `_seed_to_var7` were CAUGHT** — the guards are known to fire, not merely to pass.
+  **Owner scope call: mechanism only; the package decision rides on the measured spread.**
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.
