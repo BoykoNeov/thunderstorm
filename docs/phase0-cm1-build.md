@@ -42,7 +42,17 @@ divides cleanly by 2/3/4/6/8 → 4/6/8-rank benchmarks all decompose without rem
 
 ## Binary
 
+> ⚠ **SUPERSEDED AS "the binary in use" — 2026-07-28, Phase 3 T4.** CM1 is now
+> **forked** (`sim/cm1-patches/`), and `runs/cm1.exe` is a **symlink** into the build
+> tree, so it resolves to the fork, not to the hash below. This document still
+> records the Phase 0 *stock* build faithfully — that build is preserved at
+> `run/cm1.exe.phase0-stock` and the hash below was re-verified against it
+> immediately before patching. **`sim/cm1-patches/README.md` is the authority for
+> which binary hash is current**; for any individual run, read that run's own
+> `run_meta.txt` `cm1_binary_sha256`. Why the fork exists: `docs/phase3-t4-seed.md` §1.
+
 - **`run/cm1.exe` sha256 = `5da2c2aa49b9f226cedb5c833219d915dca71c4f328923e47cdbf596bab016bd`**
+  (the **stock Phase 0** binary; see the note above)
 - `ldd` confirms dynamic linkage of `libnetcdff.so.7`, `libnetcdf.so.19`,
   `libmpi_mpifh.so.40`, `libmpi.so.40`.
 - `run/onefile.F` archive retained alongside the binary (Bryan's recommended

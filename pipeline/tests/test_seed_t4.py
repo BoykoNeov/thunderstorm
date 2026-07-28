@@ -22,6 +22,7 @@ Reads only committed files -- no CM1 output, no WSL, no network.
 """
 import copy
 import os
+import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -68,6 +69,48 @@ def expect_error(fn, needle):
 
 def deck_value(text, key):
     return deck.parse(text).get(key)
+
+
+# --- the single-source-of-truth check for binary hashes ---------------------
+# sim/cm1-patches/README.md is the AUTHORITY. Every other tracked file that quotes
+# a CM1 binary hash is checked against it rather than trusted, because a rebuild
+# updates one file and silently staleness the rest.
+
+PATCH_README = os.path.join(REPO, "sim", "cm1-patches", "README.md")
+CHARTER = os.path.join(REPO, "CLAUDE.md")
+TASK_DOC = os.path.join(REPO, "docs", "phase3-t4-seed.md")
+
+
+def authoritative_hashes():
+    """The full sha256s declared in the patches README's provenance table."""
+    body = open(PATCH_README, encoding="utf-8").read()
+    return set(re.findall(r"`([0-9a-f]{64})`", body))
+
+
+def _slice(text, start_pat, end_pat):
+    m = re.search(start_pat, text, re.M)
+    if not m:
+        return ""
+    rest = text[m.start():]
+    e = re.search(end_pat, rest[1:], re.M)
+    return rest[:e.start() + 1] if e else rest
+
+
+def dependent_regions():
+    """(label, path, text) for each region that quotes hashes, scoped tightly.
+
+    Scoped rather than whole-file: CLAUDE.md carries unrelated hex (a WSL distro
+    GUID, openvdb versions), and a whole-file scan would either false-positive on
+    those or have to be loosened until it caught nothing.
+    """
+    charter = open(CHARTER, encoding="utf-8").read()
+    doc = open(TASK_DOC, encoding="utf-8").read()
+    return [
+        ("CLAUDE.md CM1 pin", CHARTER,
+         _slice(charter, r"^- \*\*CM1:\*\*", r"^- \*\*")),
+        ("phase3-t4-seed.md §2.1", TASK_DOC,
+         _slice(doc, r"^\| Artifact \| sha256 \|", r"^\s*$\n^[A-Za-z]")),
+    ]
 
 
 def main():
@@ -225,6 +268,46 @@ def main():
 
     check("deck.py's SEED_NAMELIST_KEY and the patch agree on which key carries it",
           patch_targets_var7)
+
+    print("\n=== 6. the binary hashes have ONE source of truth ===")
+    print("      T2's lesson, one level over: a COPY needs a consistency check.")
+    print("      The fork hash is quoted in three tracked files; rebuild CM1 (T5")
+    print("      almost certainly will) and two of them go stale SILENTLY.")
+
+    def hashes_agree():
+        auth = authoritative_hashes()
+        if len(auth) != 3:
+            return False, (f"expected 3 hashes in the patches README table, "
+                           f"found {len(auth)}: {sorted(auth)}")
+        problems, seen_any = [], {}
+        for label, path, region in dependent_regions():
+            toks = set(re.findall(r"\b[0-9a-f]{8,64}\b", region))
+            seen_any[label] = len(toks)
+            for t in toks:
+                if not any(h.startswith(t) for h in auth):
+                    problems.append(f"{label}: {t[:12]}… matches no hash in the "
+                                    f"patches README (stale copy?)")
+            missing = {h[:8] for h in auth} - {t[:8] for t in toks}
+            if missing:
+                problems.append(f"{label}: does not mention {sorted(missing)}")
+        if problems:
+            return False, "; ".join(problems)
+        return True, (f"all hashes in {', '.join(f'{k} ({v} tokens)' for k, v in seen_any.items())} "
+                      f"agree with sim/cm1-patches/README.md, the single authority")
+
+    check("CLAUDE.md and the task doc quote only hashes the patches README declares",
+          hashes_agree)
+
+    def gate_is_not_vacuous():
+        # Prove the gate can fail: a plausible stale hash must be rejected.
+        auth = authoritative_hashes()
+        stale = "5fc93017"           # one hex digit off the real fork hash
+        return not any(h.startswith(stale) for h in auth), (
+            f"a one-digit-off hash ({stale}…) matches none of the {len(auth)} "
+            "authoritative hashes -- so a stale copy really would be caught")
+
+    check("...and a one-digit-off hash would be rejected (gate is not vacuous)",
+          gate_is_not_vacuous)
 
     print("\n" + "=" * 62)
     ok, bad = _results.count(True), _results.count(False)

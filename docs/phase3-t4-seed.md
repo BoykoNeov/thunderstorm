@@ -130,6 +130,15 @@ So T1c's reproduction gate and T6's differential gate do not move. The only test
 change needed anywhere was T6's hardcoded override count, 28 → 29 (`REQUIRED_KEYS`
 gained `seed`, which is popped and re-emitted as `var7`).
 
+**`scenario.SCHEMA_VERSION` deliberately stays `1.0`.** Written down because this
+repo has spent effort on version-bump questions twice already (T3 bumped then
+reverted; T4/T5 of Phase 2 bumped deliberately). Adding a REQUIRED key *looks* like
+a schema change, but the requirement is enforced in `deck.py`, not in the loader:
+`scenario.load` neither reads nor validates `seed`, so **no 1.0-era reader breaks**,
+and a 1.0 config missing `seed` fails at deck generation with a precise message
+rather than silently. The version describes what the *loader* contracts for; it did
+not move.
+
 ### 3.1 Three ways a seed is silently ignored — all refused
 
 Each of these generates a valid deck, runs for hours, and returns the **wrong
@@ -174,6 +183,29 @@ every build, so the trap is structurally covered too; verified directly —
 `init3d.f90:1468` carries the live loop.)
 
 **Gate 3 is bitwise at fixed rank count** (np=4), per §2.2.
+
+### 4.1 Gate 1a is quietly holding up the charter's recovery path
+
+Worth making explicit, because it is the first question a future reader should ask.
+The charter's data policy accepts that *"packages are not backed up by git —
+regeneration from `sim/` + `pipeline/` is the recovery path."* T4 changed the binary
+that recovery path runs (`runs/cm1.exe` is a symlink into the build tree, so it now
+resolves to the fork — see `sim/cm1-patches/README.md`).
+
+The reason that is still fine is **gate 1a**: all three shipped scenarios declare
+`irandp=0`, and stock ≡ fork bitwise there. Regenerating any shipped package on the
+forked binary therefore reproduces it.
+
+**Scoped honestly:** gate 1a was measured at **one** configuration (500 m, 60×60,
+np=4). The patched block is unreachable at `irandp=0`, so generality is *expected* —
+but the patch adds 35 lines to a source file, and in principle that can move compiler
+decisions in the enclosing routine. So *"the fork is bitwise-neutral for every
+`irandp=0` run at any grid and rank count"* is an **extrapolation from one datum, not
+a measurement**, and is recorded here as such.
+
+**What would settle it:** regenerate one shipped package on the forked binary and
+compare against that run's recorded output checksums. That is a real check, not an
+argument — carried to T7 rather than asserted here.
 
 Note the plan's stated gate — *"same seed ⇒ identical deck"* — is nearly
 tautological (deterministic text substitution on identical input). It is kept as

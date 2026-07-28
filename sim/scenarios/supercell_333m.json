@@ -9,7 +9,7 @@
     "run_dir": "/home/boiko/thunderstorm/runs/supercell333",
 
     "namelist": {
-      "_note": "Deltas FROM single_cell_333m (which is the zero-shear baseline): iwnd 0->2 (WK unidirectional shear), imove 0->1 (Bunkers moving frame) with umove/vmove now REQUIRED and non-zero, and the domain grows to 360x360 to hold the split. ptype=27 and the vertical grid are unchanged from the baseline. Every REQUIRED_KEY is declared explicitly (deck.py does NOT default them) even where the value matches the template -- that is the design: generating the scenario must exercise every override, never silently inherit.",
+      "_note": "Deltas FROM single_cell_333m (which is the zero-shear baseline): iwnd 0->2 (WK unidirectional shear), imove 0->1 (Bunkers moving frame) with umove/vmove now REQUIRED and non-zero, and the domain grows to 540x540 to hold the split (see _domain_note: 360 was the FIRST T1 run, which the containment probe failed; the enlargement to 540 is the shipped geometry). ptype=27 and the vertical grid are unchanged from the baseline. Every REQUIRED_KEY is declared explicitly (deck.py does NOT default them) even where the value matches the template -- that is the design: generating the scenario must exercise every override, never silently inherit.",
 
       "nx": 540,
       "ny": 540,
