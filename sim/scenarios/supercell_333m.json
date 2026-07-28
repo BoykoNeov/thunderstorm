@@ -34,9 +34,12 @@
       "iwnd": 2,
       "iinit": 1,
       "irandp": 0,
+      "seed": 0,
       "icor": 0,
       "imove": 1,
       "iorigin": 2,
+
+      "_seed_note": "UNSEEDED. Phase 3 T4 made `seed` a REQUIRED key, emitted as CM1's var7 (sim/cm1-patches/README.md). This scenario runs irandp=0 -- no random perturbations at all -- so it has no stochastic component to seed, and seed=0 declares that explicitly rather than leaving it to a default. deck.py REFUSES a positive seed at irandp=0: the seed advance lives inside `IF( irandp.eq.1 )THEN`, so it would be read, broadcast and silently ignored. seed=0 substitutes 0.0 into a template line that already reads 0.0, so this scenario's generated deck is byte-identical to its pre-T4 deck -- verified, docs/phase3-t4-seed.md.",
 
       "_storm_note": "isnd=5 WK analytic sounding; iwnd=2 the WK unidirectional shear profile that makes a supercell (the single defining change from the pulse cell); iinit=1 single warm bubble (irandp=0 -- so two diverging cores can ONLY be a split, not independent cells, exactly as Phase 0 argued); icor=0 (the canonical WK case runs Coriolis-off); imove=1 Bunkers moving frame; iorigin=2 centred coordinates. Output x/y are in the MOVING frame, so the domain stays centred at (0,0) and the symmetric-about-origin export box (the only mode the pipeline supports) is exactly right: the right mover sits near (0,0), the left mover's NW drift becomes the box's asymmetric bulge, and the box CENTRE stays static at (0,0) -- the SVT constraint, satisfied for free.",
 

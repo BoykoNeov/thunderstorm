@@ -78,7 +78,9 @@ def main():
     def generates():
         text, ov = deck.generate(sc333)
         flags = deck.check_output_flags(text)
-        return len(text) > 4000 and len(ov) == 28, (
+        # 28 before Phase 3 T4, 29 after: REQUIRED_KEYS gained the semantic `seed`,
+        # which build_overrides pops and re-emits as CM1's var7 (net +1).
+        return len(text) > 4000 and len(ov) == 29, (
             f"{len(text)} bytes, {len(ov)} overrides, output flags on: "
             f"{', '.join(flags)}")
 

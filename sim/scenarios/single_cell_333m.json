@@ -31,9 +31,12 @@
       "iwnd": 0,
       "iinit": 1,
       "irandp": 0,
+      "seed": 0,
       "icor": 0,
       "imove": 0,
       "iorigin": 2,
+
+      "_seed_note": "UNSEEDED (irandp=0, no random perturbations). `seed` became a REQUIRED key in Phase 3 T4, emitted as CM1's var7 -- see sim/cm1-patches/README.md. seed=0 substitutes 0.0 over a template line that already reads 0.0, so this deck is byte-identical to its pre-T4 deck; T6's differential gate (exactly 9 of 344 keys differ from single_cell_500m) is unaffected because BOTH sides gain the same seed=0.",
 
       "_motion_note": "imove stays 0. 10.5 lists imove=1 as a free variant, but Bunkers storm motion is ~0 with no mean wind (iwnd=0), and a non-zero umove would need shear -- which is Phase 3 content. The moving-domain branch stays exercised only by its negative controls until a sheared scenario exists.",
 

@@ -29,6 +29,12 @@ Four key CATEGORIES, and only the first lives in the scenario JSON
      sounding/shear/initiation. Required rather than template-defaulted so that
      generating a scenario genuinely exercises every override instead of silently
      inheriting the template's value.
+
+     One of these is SEMANTIC: the scenario declares `seed`, which is substituted
+     into CM1's `var7`. The indirection is deliberate -- a raw `"var7": 3.0` in a
+     scenario file tells a future reader nothing, and the seed has to carry a real
+     name into provenance. See `_seed_to_var7` for why the mapping validates rather
+     than just casts.
   2. GEOMETRY-DERIVED (computed here) -- dx_inner/tot_x_len/dy_inner/tot_y_len follow
      from nx/dx/ny/dy. Inert while stretch_x/stretch_y are 0, but kept consistent so
      they are not a landmine for the first stretched-grid scenario.
@@ -63,6 +69,8 @@ REQUIRED_KEYS = [
     "timax", "tapfrq", "dtl", "adapt_dt",
     # storm design: sounding, shear, initiation, rotation, domain motion
     "isnd", "iwnd", "iinit", "irandp", "icor", "imove", "iorigin",
+    # seed-driven outcome variation (Phase 3 T4) -- semantic name, emitted as var7
+    "seed",
     # microphysics
     "ptype", "ihail",
     # terrain / vertical grid mode
@@ -163,6 +171,62 @@ def values_equal(a, b, tol=1e-9):
     return a == b
 
 
+# --- the seed (Category 1, semantic) ----------------------------------------
+
+# The CM1 namelist key that carries the seed. See sim/cm1-patches/README.md: stock
+# cm1r21.1 has NO seed knob at all (`use_truly_random_pert` is a compile-time
+# `logical, parameter`), so `irandp=1` draws the SAME perturbation field every run.
+# The project's fork enables CM1's own commented-out hook, in which `var7` advances
+# the PRNG stream by nint(var7)*nk*(ny+2)*(nx+2) draws before the perturbations are
+# drawn. `var7` is an EXISTING CM1 key (&param8), which is what keeps "the namelist
+# is the sole scenario input" true across the fork.
+SEED_NAMELIST_KEY = "var7"
+
+
+def _seed_to_var7(seed, irandp, path):
+    """Validate a scenario's `seed` and render it as CM1's var7 value.
+
+    Three rejections, each of which would otherwise be SILENT -- the deck would
+    generate, CM1 would run for hours, and the result would not be the ensemble
+    member that was asked for:
+
+      * NEGATIVE seed -- `do n=1,nint(-5.0)` is a zero-trip loop, so seed -5 does
+        not error in CM1, it silently ALIASES to seed 0. Two "different" members
+        would come back bitwise identical.
+      * NON-INTEGER seed -- `nint()` rounds, so 1.4 and 0.6 both alias to 1.
+      * seed > 0 while irandp = 0 -- the advance loop lives inside
+        `IF( irandp.eq.1 )THEN`, so with random perturbations switched off the seed
+        is read, broadcast, and ignored. This is the trap most likely to be hit in
+        practice: copying a seeded scenario from an unseeded one and changing only
+        the seed produces N identical storms.
+    """
+    if isinstance(seed, bool) or not isinstance(seed, (int, float)):
+        raise DeckError(
+            f"{path}: seed must be a non-negative integer, got {seed!r} "
+            f"({type(seed).__name__}).")
+    if float(seed) != int(seed):
+        raise DeckError(
+            f"{path}: seed={seed} is not an integer. CM1 applies nint() to it, so "
+            "1.4 and 0.6 would both alias to seed 1 -- two scenarios that read as "
+            "distinct would produce the same storm.")
+    s = int(seed)
+    if s < 0:
+        raise DeckError(
+            f"{path}: seed={s} is negative. The CM1 advance is `do n=1,nint(var7)`, "
+            "which is ZERO-TRIP for a negative value -- this would not fail, it "
+            "would silently alias to seed 0.")
+    if s > 0 and int(irandp) == 0:
+        raise DeckError(
+            f"{path}: seed={s} with irandp=0. The seed advance lives inside "
+            "`IF( irandp.eq.1 )THEN`, so with random perturbations off the seed is "
+            "silently ignored and every 'variant' reproduces the same storm. Set "
+            "irandp=1 to vary outcomes, or seed=0 to declare this run unseeded.")
+    # float, never int: the template line reads `var7 = 0.0,` and format_value(0)
+    # emits "0" -- an int here would rewrite the line and break the byte-identity
+    # gates for every existing scenario. Same trap the OPTIONAL_KEYS cast avoids.
+    return float(s)
+
+
 # --- override assembly ------------------------------------------------------
 
 def build_overrides(sc):
@@ -187,6 +251,11 @@ def build_overrides(sc):
             "silently ignored.")
 
     ov = {k: nml[k] for k in REQUIRED_KEYS}
+
+    # Category 1, semantic -- `seed` is declared by name and emitted as var7. Popped
+    # rather than left in place: there is no `seed =` line in the template, so a
+    # stray `seed` override would trip the hits != 1 guard in generate().
+    ov[SEED_NAMELIST_KEY] = _seed_to_var7(ov.pop("seed"), nml["irandp"], sc.source_path)
 
     # Category 5 -- optional run-control passthrough (rstfrq, ...). Present -> the
     # scenario's value wins; absent -> the template default stands untouched, so

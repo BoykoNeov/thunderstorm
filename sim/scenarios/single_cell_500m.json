@@ -27,9 +27,12 @@
       "iwnd": 0,
       "iinit": 1,
       "irandp": 0,
+      "seed": 0,
       "icor": 0,
       "imove": 0,
       "iorigin": 2,
+
+      "_seed_note": "UNSEEDED (irandp=0, no random perturbations). `seed` became a REQUIRED key in Phase 3 T4, emitted as CM1's var7 -- see sim/cm1-patches/README.md. seed=0 substitutes 0.0 over a template line that already reads 0.0, so this scenario's deck is byte-identical to its pre-T4 deck and the T1c/T6 differential gates do not move.",
 
       "ptype": 27,
       "ihail": 1,

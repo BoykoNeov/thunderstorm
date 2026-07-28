@@ -1,0 +1,53 @@
+--- a/src/init3d.F
++++ b/src/init3d.F
+@@ -1445,16 +1445,40 @@
+ 
+       IF( irandp.eq.1 )THEN
+ 
+-!        do n=1,nint(var7)
+-!          if(myid.eq.0) print *,'  pert loop = ',n
+-!        do k=1,nk
+-!          do jj = 0,ny+1
+-!          do ii = 0,nx+1
+-!            call random_number(rand)
+-!          enddo
+-!          enddo
+-!        enddo
+-!        enddo
++!---- THUNDERSTORM PROJECT FORK: namelist-driven seed for irandp ------!
++! Stock CM1 r21.1 has NO seed knob.  use_truly_random_pert is a
++! `logical, parameter` = .false. (init3d.F ~line 168), so irandp=1 always
++! draws from ONE hardcoded seed and every run produces the IDENTICAL
++! perturbation field -- reproducible, but with zero outcome variation.
++! The loop below is CM1's OWN hook for this, shipped commented-out by
++! the author; this fork does nothing but enable it.
++!
++! Semantics: var7 (namelist &param8 -- an EXISTING CM1 key, so the
++! namelist remains the sole scenario input) advances the PRNG stream by
++! nint(var7)*nk*(ny+2)*(nx+2) draws before the perturbations are drawn.
++! It is a STREAM OFFSET, not a re-seed: different seeds get a shifted
++! reuse of one stream -- decorrelated at every grid point, but not
++! independently drawn.  That is sufficient for "same environment,
++! divergent trajectory", and is upgradeable to a true random_seed(put=)
++! on this same fork if independence is ever required.  The advance
++! stride here deliberately differs from the consumption stride below
++! (which draws twice over 0..nx+2 / 0..ny+2), so no feature aliases.
++!
++! var7 = 0 is a zero-trip loop => bitwise identical to stock CM1.
++! nint() makes a NEGATIVE var7 zero-trip too, which would silently alias
++! to seed 0; pipeline/cm1post/deck.py rejects negative and non-integer
++! seeds so that collision can never reach a deck.
++!----------------------------------------------------------------------!
++        do n=1,nint(var7)
++          if(myid.eq.0) print *,'  pert loop = ',n
++        do k=1,nk
++          do jj = 0,ny+1
++          do ii = 0,nx+1
++            call random_number(rand)
++          enddo
++          enddo
++        enddo
++        enddo
+ 
+       IF( testcase.eq.0 )THEN
+         ! not a pre-configured test case: 
