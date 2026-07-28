@@ -611,14 +611,14 @@ Do not start a phase without explicit go from the owner.
   on **dimension NAMES, not lengths**: the domain is 540×540, so a shape check would pass a
   transposed file silently — the symmetric-storm blindness one level up. **(B) brick → real-GPU
   pixels:** predicted through the viewer's OWN `mat.ts`/`camera.ts`/`scene.ts` (the 5c scale-bar
-  trick), measured as magenta/white ≥65 dBZ blobs in headless-Chrome captures at **two frames ×
-  two azimuths** (az=45 makes a transpose exactly a horizontal mirror, so az=20 is the general
-  case), with the screen basis pinned by **chirality** (three projected world points — two points
+  trick), measured as magenta/white ≥65 dBZ blobs in **two** headless-Chrome captures —
+  f600@az=45 and f525@az=20 (az=45 makes a transpose exactly a horizontal mirror, so az=20 is
+  the general case), with the screen basis pinned by **chirality** (three projected world points — two points
   give one vector and cannot separate a reflection from a 90° rotation). Residual **0.6–2.7 px
   (≤0.63 km on a 179.8 km domain)** where a transpose lands **284–331 px** away. Both sides are
   clustered before matching: two truth cores 5 km apart merge into one rendered blob, and the
   naive match reported an 18.5 px "error" that was a **matching artifact, not a placement error**.
-  **The committed half** is `pipeline/tests/test_orientation_t3.py` **8/8** — links A and B are
+  **The committed half** is `pipeline/tests/test_orientation_t3.py` **11/11** — links A and B are
   one-shots (218 GB run dir, 1.5 GB package, neither in git), so what is gated permanently is the
   *write convention*: a hot cell at CM1 (x_i,y_j) must write flat byte `j*nx+i` through the
   PRODUCTION query builder → resample → encode → `write_frame` → gunzip (the assertion is the
@@ -627,7 +627,15 @@ Do not start a phase without explicit go from the owner.
   recovering the same `(i,j)`, which is what licenses the shared `fuv`. **The fixture is 7×5
   off-diagonal and a control PROVES that matters**: on a square fixture with a diagonal feature
   the transposed array is byte-identical and the transpose control stops firing — T9's own trap
-  reproduced at test scale, so a future tidy-up cannot silently defang the file. The Y-flip
+  reproduced at test scale, so a future tidy-up cannot silently defang the file. **The manifest
+  gate acts on the machine-readable `dims` key, NOT the layout prose** (advisor, post-commit): an
+  `"x fastest" in layout` substring test fires only if the phrase goes MISSING, so it passes on a
+  contract that drifted from the code — T2 carried item (b)'s exact hazard. And the prose it
+  checked is itself ambiguous: cref's `(NX, NY)` is texture (width, height) but reads as the
+  transpose of the `reshape(ny, nx)` every consumer does, silent on a 540×540 package. A fifth
+  gate pins the shipped orientation fields to `build_manifest`'s output (carried item (b)'s
+  reproduction gate in miniature — **narrowed, not closed**); rewording the tuple would stale all
+  three tracked web manifests, so it rides to T7 with (b). The Y-flip
   (Phase 1 #1) is **NOT** discharged and stays deferred with the UE app. The node-side prediction
   probe was deleted on purpose: its measured-pixel inputs are constants, so committing it would
   add a test that passes no matter what the viewer later does.

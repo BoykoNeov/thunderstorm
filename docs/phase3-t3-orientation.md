@@ -154,14 +154,14 @@ the separation east–west. This anchor routes through neither the pipeline nor 
 viewer and would survive the raw run being deleted — but it is a 4.5:1 dominance, not a
 sign test, so it corroborates A and B rather than replacing them.
 
-## 4. The committed half — `pipeline/tests/test_orientation_t3.py` (8/8)
+## 4. The committed half — `pipeline/tests/test_orientation_t3.py` (11/11)
 
 Links A and B are **one-shots**: they read a 218 GB run directory and a 1.5 GB web
 package, neither in git. What *can* be committed is the thing T9's argument was
 actually about — the write convention — exercised through the production functions on
 a fixture that fits in a test file.
 
-Four gates, four negative controls:
+Five gates, six negative controls:
 
 - **plan brick**: a hot cell at CM1 (x_i, y_j) writes flat byte index `j*nx + i`, via
   `regrid.build_query_2d` → `resample_dbz_2d` → `encode_linear_u8` → `write_frame` →
@@ -176,16 +176,41 @@ Four gates, four negative controls:
   cref plane and the volume. If the two bricks ever diverged, the plan view would be
   transposed relative to the cloud drawn above it and nothing in the viewer would
   notice.
-- **the shipped manifest states the convention** — reads the tracked
-  `supercell_333m/web/web_manifest.json`. A convention the pipeline honours but the
-  contract does not state is one the next consumer has to guess. (A small dividend of
-  T2's tracked-web-manifest decision: a committed test can now read a real contract
-  file.)
+- **the manifest's `dims` key matches the bytes actually written** — reads the tracked
+  `supercell_333m/web/web_manifest.json` (a dividend of T2's tracked-web-manifest
+  decision: a committed test can now read a real contract file), derives the axis order
+  from where the hot byte landed, and requires the declaration to equal it.
+- **the tracked contract is still what the code emits** — rebuilds the orientation
+  fields with `webvol.build_manifest` (a pure function of scenario/frames/qmax, so T2's
+  feed-the-shipped-numbers-back trick applies) and demands equality with the shipped
+  file.
+
+**Why the fourth gate checks `dims` and not the layout prose** (advisor, post-commit —
+the first version asserted `"x fastest" in layout`). That form fires only if the phrase
+goes *missing*: flip the pipeline to y-fastest and forget to update the string, and it
+passes on a stale contract — the precise hazard T2 carried as item (b). Worse, the prose
+it was checking is itself ambiguous:
+
+```
+plan_fields.cref.layout = 'uint8 R, x fastest then y -- a (NX, NY) 2D plane...'
+```
+
+`(NX, NY)` is the texture's (width, height), which is how the viewer uploads it — but
+read as an **array shape** it is the transpose of the `reshape(ny, nx)` that every
+consumer actually performs, and on a 540×540 package a misread produces no crash, just a
+silently transposed map. The volume block carries no tuple at all, and the asymmetry
+between the two strings is the smell. The block already carries the unambiguous,
+machine-readable `"dims": ["y", "x"]`, so **that** is what the gate acts on, with the
+fifth gate pinning the prose to its generator so it cannot drift unnoticed. Rewording
+the tuple itself would stale all three tracked web manifests with no regeneration path
+inside T3's budget — it belongs with T2 carried item (b) at T7, and is recorded there.
 
 Controls: a transposed plane, a y-flipped plane (same shape, same ravel order, mirrored
-map — nothing about file size or channel count reveals it), and a query built x-major
-(the realistic upstream mistake — `build_query_2d`'s meshgrid order is one word away
-from producing (x, y) pairs against a (y, x) field).
+map — nothing about file size or channel count reveals it), a query built x-major (the
+realistic upstream mistake — `build_query_2d`'s meshgrid order is one word away from
+producing (x, y) pairs against a (y, x) field), a one-word drift between code and
+shipped contract, and a transposed `dims` declaration (which the substring form would
+have waved through, since `"x fastest"` is still present in it).
 
 **The fourth control is about the fixture itself.** The fixture is **7×5 with the hot
 cell off-diagonal**, and the control demonstrates why: on a square grid with a diagonal
@@ -208,9 +233,13 @@ has a permanent gate.
   never going to discharge it, and did not.
 - The owner-owed **UE SVT visual streaming sign-off** and the **diorama 5c pan-gesture
   sign-off** are untouched.
-- **T2 carried item (b)** — `web_manifest.json` tracked without a reproduction gate —
-  is untouched and still due at T7. The manifest gate added here checks a *layout
-  string*, not that the file reproduces.
+- **T2 carried item (b)** — `web_manifest.json` tracked without a *full* reproduction
+  gate — is **narrowed, not closed**, and still due at T7. What T3 added is that gate in
+  miniature: the fields that declare orientation are now pinned to `build_manifest`'s
+  output. The rest of the document still has no gate.
+- **The `(NX, NY)` prose tuple in the cref layout string** is left as-is, deliberately
+  (§4): rewording it stales all three tracked web manifests, and the regeneration path
+  that would fix it *is* carried item (b). Carried to T7 with it.
 
 **Scope note on Link B's mask:** the render comparison is made at ≥65 dBZ, because
 magenta→white is the only colour on the platter that a threshold can isolate
@@ -235,6 +264,12 @@ task and was **deleted**, deliberately: its measured-pixel inputs are constants 
 past capture, so committing it would add a test that passes no matter what the viewer
 later does — a gate that cannot fail is worse than none.
 
-Suites after T3: pipeline **8 files green** (test_deck 15, test_manifest 17,
-test_orientation_t3 8, test_regrid_cref 13, test_regrid_dbz, test_regrid_w 10,
-test_scenario_t6 11, test_supercell_t2 10); diorama **128/128**, `tsc --noEmit` clean.
+Suites after T3: pipeline **8 files, all exit 0** — checked on the **exit code**, not on
+each file's self-reported tally, because `python3 "$t" | tail -1` discards the status and
+a file that dies part-way can still print a cheerful last line (advisor). test_deck 15,
+test_manifest 17, test_orientation_t3 11, test_regrid_cref 13, test_regrid_dbz 3,
+test_regrid_w 10, test_scenario_t6 11, test_supercell_t2 10. **One documented skip:**
+`test_regrid_dbz.py` runs 3 synthetic gates by default and prints
+`real-frame gates SKIPPED (pass --run-dir to run them)` — the 10/10 the charter records
+for Phase 2 T3 is the `--run-dir` figure, so "3/3" here is the skip, not a regression.
+Diorama **128/128**, `tsc --noEmit` clean.

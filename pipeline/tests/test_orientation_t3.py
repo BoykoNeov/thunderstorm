@@ -195,21 +195,74 @@ def gate_plan_and_volume_agree_on_the_same_storm_feature():
                 f"-- {'same cell' if ok else 'DIFFERENT cells: the shared fuv mapping is unsafe'}")
 
 
-def gate_shipped_manifest_declares_x_fastest():
-    """The tracked web manifest states the convention the viewer codes against.
-
-    Reads the committed `supercell_333m` web manifest -- the first package whose
-    contract file is in git (Phase 3 T2). A convention the pipeline honours but the
-    contract does not state is a convention the next consumer has to guess.
-    """
+def _shipped_manifest():
     import json
     path = os.path.join(REPO, "scenarios", "supercell_333m", "web", "web_manifest.json")
-    man = json.load(open(path, encoding="utf-8"))
-    vol_layout = man["volume"]["layout"]
-    cref_layout = man["plan_fields"]["cref"].get("layout", "")
-    ok = "x fastest" in vol_layout and "x fastest" in cref_layout
-    return ok, (f"volume.layout = {vol_layout!r}; plan_fields.cref.layout = "
-                f"{cref_layout!r}")
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def gate_manifest_dims_key_matches_the_written_bytes():
+    """The contract's MACHINE-READABLE axis order equals the order actually written.
+
+    Deliberately gates `plan_fields.cref.dims`, not the layout prose. The prose says
+    "x fastest then y -- a (NX, NY) 2D plane"; the tuple is texture dimensions
+    (width, height), which is how the viewer uploads it, but read as an array shape
+    it is the transpose of the `reshape(ny, nx)` every consumer performs. On a
+    540x540 package a consumer who reads it the wrong way gets no crash -- just a
+    silently transposed map, the exact failure T3 exists to exclude. `dims` states
+    it unambiguously and is what a program can act on, so `dims` is what is gated.
+    (An "x fastest" substring test would only have fired if the phrase went MISSING;
+    it could not see a contract that had gone stale against the code.)
+    """
+    sc = _scenario()
+    xs, ys, _ = _cm1_axes(sc)
+    out = regrid.resample_dbz_2d(sc, _hot_plan_field(), xs, ys, regrid.build_query_2d(sc))
+    enc = webvol.encode_linear_u8(out, THR, VMAX)
+    raw = _written_bytes(_full_channels(enc, np.zeros((NZ, NY, NX), dtype=np.uint8)), "cref")
+    idx = int(np.argmax(raw))
+    if idx == HOT_J * NX + HOT_I:
+        derived = ["y", "x"]                     # last axis varies with x
+    elif idx == HOT_I * NY + HOT_J:
+        derived = ["x", "y"]
+    else:
+        derived = ["?"]
+
+    declared = _shipped_manifest()["plan_fields"]["cref"].get("dims")
+    ok = declared == derived == ["y", "x"]
+    return ok, (f"bytes imply dims {derived}; shipped manifest declares {declared}")
+
+
+def gate_contract_prose_is_generated_by_the_code_that_ships_it():
+    """The tracked manifest's orientation fields still equal what `build_manifest`
+    emits -- so an edit to webvol's strings cannot silently stale the contract.
+
+    `build_manifest` is a pure function of (scenario, frames, qmax), which is what
+    makes this checkable at all (T2's trick: feed the shipped manifest's own numbers
+    back in). Narrow on purpose -- it compares the fields that DECLARE ORIENTATION,
+    not the whole document. The full byte-for-byte reproduction gate for
+    `web_manifest.json` is T2 carried item (b), still open and still due at T7; this
+    is that gate in miniature for the one field T3 is about.
+    """
+    man = _shipped_manifest()
+    g = man["grid"]
+    sc = FakeScenario(g["nx"], g["ny"], g["nz"], g["voxel_m"], tuple(g["origin_m"]))
+    sc.run_dir = man["source_run"]
+    qmax = {c["name"]: c["qmax"] for c in man["volume"]["channels"]}
+    qmax["dbz"] = man["dbz"]["vmax"]
+    built = webvol.build_manifest(sc, [], qmax)
+
+    pairs = [
+        ("volume.layout", built["volume"]["layout"], man["volume"]["layout"]),
+        ("plan_fields.cref.layout",
+         built["plan_fields"]["cref"]["layout"], man["plan_fields"]["cref"]["layout"]),
+        ("plan_fields.cref.dims",
+         built["plan_fields"]["cref"]["dims"], man["plan_fields"]["cref"]["dims"]),
+    ]
+    bad = [n for n, b, s in pairs if b != s]
+    return not bad, ("code and shipped contract agree on "
+                     f"{', '.join(n for n, _, _ in pairs)}" if not bad
+                     else f"STALE: {bad} differ between webvol and the tracked manifest")
 
 
 # --- negative controls -------------------------------------------------------
@@ -274,6 +327,29 @@ def negative_controls():
             f"gate blind. The real fixture is {NX}x{NY} with the hot cell at "
             f"i={HOT_I}, j={HOT_J} precisely to avoid this")
 
+    # 5. The staleness gate must actually detect staleness. Mutating the string on
+    #    ONE side is what "someone edited webvol and did not re-export" looks like.
+    man = _shipped_manifest()
+    g = man["grid"]
+    sq_sc = FakeScenario(g["nx"], g["ny"], g["nz"], g["voxel_m"], tuple(g["origin_m"]))
+    sq_sc.run_dir = man["source_run"]
+    qm = {c["name"]: c["qmax"] for c in man["volume"]["channels"]}
+    qm["dbz"] = man["dbz"]["vmax"]
+    built = webvol.build_manifest(sq_sc, [], qm)
+    tampered = built["plan_fields"]["cref"]["layout"].replace("x fastest", "y fastest")
+    control("the staleness gate rejects a contract that drifted from the code",
+            tampered != man["plan_fields"]["cref"]["layout"],
+            "a one-word edit on either side makes code != shipped, which is the "
+            "whole failure mode: T2 carried item (b) is that web_manifest.json is "
+            "tracked with no reproduction gate")
+
+    # 6. And the dims gate must be sensitive to the axis order, not merely present.
+    control("the dims gate would reject the transposed declaration",
+            ["x", "y"] != man["plan_fields"]["cref"]["dims"],
+            f"shipped dims {man['plan_fields']['cref']['dims']} != ['x', 'y']; the "
+            f"gate compares the declaration against bytes, so declaring the "
+            f"transpose fails even though the string 'x fastest' is still present")
+
     return outs
 
 
@@ -286,8 +362,10 @@ def main():
           gate_volume_byte_lands_at_the_same_x_fastest_index)
     check("plan and volume recover the SAME (i, j)",
           gate_plan_and_volume_agree_on_the_same_storm_feature)
-    check("the shipped manifest states the convention",
-          gate_shipped_manifest_declares_x_fastest)
+    check("manifest `dims` matches the bytes actually written",
+          gate_manifest_dims_key_matches_the_written_bytes)
+    check("the tracked contract is still what the code emits",
+          gate_contract_prose_is_generated_by_the_code_that_ships_it)
     _results.extend(negative_controls())
     n_ok = sum(1 for r in _results if r)
     print(f"\n{n_ok}/{len(_results)} checks passed")
