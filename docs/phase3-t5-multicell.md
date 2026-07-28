@@ -259,6 +259,61 @@ What `iinit=8` *is* sensitive to is whether `irandp=1` at all, since that is
 what seeds the generator in the first place. Recorded because it is the kind of
 thing that would otherwise be assumed in either direction.
 
+## 6.2 One correction made BEFORE the probes ran, and why it is not tuning
+
+Recorded here, between the pre-registration and the results, because the
+distinction matters: this changed a **candidate's configuration** in response to
+a confound found in *T4's* existing run, before any T5 probe had produced data.
+It did not change a metric, a threshold, or the decision rule — those are still
+exactly as committed in de40eb1.
+
+The classifier was smoke-tested on `t4gate_sc/seed0` (a T4 supercell run) purely
+to check its code paths before an hour of runs. That test showed something
+unrelated to plumbing:
+
+| t (min) | ≥40 dBZ cells | of which >40 km from the storm | where |
+|---|---|---|---|
+| 60 | 1 | 0 | (−0.5, 10.5) — the storm |
+| 90 | 5 | 4 | x ≈ +77…+81 km |
+| 120 | 6 | 4 | x ≈ +75…+79 km |
+
+Those far cells sit **4–14 km from the east wall** on a domain of half-width
+90 km, appear only after t≈70 min, and multiply. `irandp` perturbations are
+**initial conditions** — ±0.25 K over the *entire* domain at t=0 — and the WK
+analytic sounding carries little CIN (the charter already flags CIN as an
+unsolved design task), so that noise eventually grows secondary convection
+domain-wide, preferentially away from the storm's own subsidence.
+
+**Consequence for candidate C.** C was drafted with `irandp=1`, on the reasoning
+that `random_seed(put=…)` sits inside `IF(irandp.eq.1)` and is therefore what
+seeds the generator `iinit=8` draws from. That reasoning is true and
+**irrelevant**: gfortran's `random_number` is deterministically seeded without
+that call, so `iinit=8` gets its noise either way — while `irandp=1` *also* buys
+the domain-wide field above. C would then have shown many simultaneous cells and
+could have been classified MULTICELL, with the classifier **right about the
+count and wrong about the storm**. C now runs `irandp=0`, matching every other
+probe; its deck differs from the SC control's in exactly 4 keys
+(`iinit`, `iwnd`, `umove`, `vmove`). Charter principle 1 is the real argument:
+multicellularity has to come from the initiation and the environment, never from
+noise triggering convection everywhere.
+
+**Consequence for the classifier.** A per-frame **descriptor** was added —
+count of ≥40 dBZ components whose centroid lies within 15 km of any open wall.
+It feeds nothing in §3.2. All five probes run `irandp=0`, so it should read 0
+throughout; printing it is what makes that an observation rather than an
+assumption.
+
+**Consequence for T4 §5.2, stated because it is unflattering.** Those spread
+metrics (pattern correlation, IoU, ≥40 dBZ centroid offset, storm area) were
+computed over the *echo union* of `irandp=1` runs, so they included these
+boundary cells. The qualitative conclusion — intensity robust, structure
+divergent — is unaffected and if anything overdetermined, but the specific
+numbers are contaminated: part of the measured "divergence" is two different
+noise fields growing different boundary junk, not two storms evolving
+differently. The shipped scenarios all run `irandp=0` and are unaffected. §5.2's
+numbers should be read with this caveat; they are not re-measured here because
+T4's package decision (ship nothing) does not turn on them.
+
 ## 7. Results
 
 *Empty by design. Filled after the probe runs, which do not exist at the time
