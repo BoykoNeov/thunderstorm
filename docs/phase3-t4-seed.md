@@ -317,10 +317,17 @@ Full suite after T4: `test_deck` 15/15, `test_manifest` 17/17,
 `test_regrid_w` 10/10, `test_scenario_t6` 11/11, `test_supercell_t2` 10/10,
 `test_seed_t4` 15/15.
 
-## 7. Open: does T4 ship packages?
+## 7. Does T4 ship packages? — RESOLVED: no (owner, 2026-07-28)
 
-Deferred to the owner by design, pending §5.2. **§5.2 now exists, so the decision is
-due.** The evidence, stated neutrally:
+**Owner's call: ship nothing; proceed to T5.** T4 stands as *mechanism plus a
+measured spread* — the fork, the `seed` key, the guards, and §5.2's numbers. No
+seeded package is produced now; the machinery is in place to produce one at any
+later point (the decision is reversible, and cheaply so for the single cell).
+
+Recorded here because the deferral was itself a documented decision — leaving §7
+reading "due" would misstate the state of the phase.
+
+The evidence the call was made on, kept for the record, stated neutrally:
 
 **For shipping two 333 m seeded supercells.** At t=120 the two storms sit ~19 km
 apart with only 42 % echo overlap and 29 % different storm area, while both remain
@@ -340,6 +347,6 @@ most dramatic (35 % peak-w swings, wholly different cells) — arguably the *bet
 teaching demo of "same setup, different outcome", precisely because a supercell's
 intensity is seed-robust.
 
-Recommendation: **the single-cell pair**, unless the supercell split geometry is
-specifically what you want to teach with. Owner's call either way — this is why T4
-stopped here rather than guessing.
+Recommendation at the time: **the single-cell pair**, unless the supercell split
+geometry is specifically what you want to teach with. The owner chose neither —
+see the resolution at the head of this section.

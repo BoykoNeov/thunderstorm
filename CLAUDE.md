@@ -692,7 +692,16 @@ Do not start a phase without explicit go from the owner.
   ensemble by copying an unseeded scenario); `seed=0`/`irandp=0` stays legal as the honest
   "unseeded" declaration. `test_seed_t4.py` **15/15**, and **all four mutations of
   `_seed_to_var7` were CAUGHT** — the guards are known to fire, not merely to pass.
-  **Owner scope call: mechanism only; the package decision rides on the measured spread.**
+  **Spread MEASURED on a sheared/splitting storm** (1 km proxy, seed 0 vs 1, docs §5.2), and
+  the two answers point opposite ways: **intensity is seed-ROBUST** (peak w within 3.6 %, both
+  unmistakably supercells — the shear sets the class and 0.25 K of noise cannot move it) while
+  **structure and placement diverge steadily** (t=120: cref pattern corr **0.397**, IoU@40 dBZ
+  **0.417**, ≥40 dBZ centroid **18.7 km** apart, storm area **−29 %**; initial-intensification
+  *timing* swings +60 %). Same environment, same storm class, genuinely different individual
+  storm — the honest forecast→outcome lesson. Metrics are deliberately identification-free
+  (pattern correlation / IoU / centroid), because the per-mover tracker jumps between cells and
+  its separation column is not trustworthy. **Owner call 2026-07-28: SHIP NOTHING** — T4 stands
+  as mechanism + measured spread; a seeded package stays cheap to produce later (§7).
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.
