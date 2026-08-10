@@ -616,8 +616,7 @@ at the floor. Without the under-band, `B → SINGLE CELL` would be ambiguous bet
 nothing on the page would let a reader tell which. A one-sided band is a thumb on
 the scale toward the negative result.
 
-And
-if PC returns MULTICELL a second time, criterion 2′ is wrong too, and the honest
+And if PC returns MULTICELL a second time, criterion 2′ is wrong too, and the honest
 conclusion is that this classifier cannot separate the regimes at 1 km — which
 would be a real answer about the probe design, not a failure to be patched a
 third time.
@@ -658,3 +657,142 @@ floors*. So the floors are not generous thresholds that anything organised clear
 they are set at roughly "more organised than a supercell's flank scatter". SC's
 label does not depend on this (criterion 1 catches it first, §8.3), which is what
 makes the number usable as calibration rather than as a result.
+
+---
+
+## 9. Results — candidates scored under §8
+
+### 9.1 The re-armed abort condition PASSED
+
+| control | label | median `R` | median `E` | near a floor? |
+|---|---|---|---|---|
+| SC | **SUPERCELL** (crit 1, as forced) | 0.485 | 1.84 | both, but crit 1 decides first |
+| PC | **SINGLE CELL** ✔ | **0.006** | **1.000 in every frame** | no |
+
+PC — the run that produced the §7 abort — now lands SINGLE CELL and lands it
+*decisively*, nowhere near the §8.6 band. Criterion 2′ did to the ring exactly what
+it was designed to do, and only then were the candidates scored.
+
+### 9.2 The candidates
+
+All figures over mature frames (t ≥ 40 min). `uh` is CM1's standard **integrated
+2–5 km AGL updraft helicity** — read from the file's own metadata, not assumed.
+
+| run | median `max\|uh\|` | frac rotating | peak w | median cells | median updrafts | median `R` | median `E` | **label** |
+|---|---|---|---|---|---|---|---|---|
+| SC (control) | 678.7 | 1.00 | 60.7 | 1 | 4 | 0.485 | 1.84 | SUPERCELL |
+| PC (control) | 22.0 | 0.00 | 61.6 | 1 | 4 | 0.005 | 1.00 | SINGLE CELL |
+| **A** `iwnd=4` WK82 "multicell" | **1132.4** | 1.00 | 52.9 | 1 | 2 | 0.506 | 2.30 | **SUPERCELL** |
+| **B** `iwnd=1` RKW88 | 349.9 | 1.00 | 56.2 | 1 | 2 | 0.192 | 3.14 | **SUPERCELL** |
+| **C** `iinit=8` line thermal | 271.5 | 0.94 | 46.7 | 3 | **15** | 0.125 | **20.76** | **SUPERCELL — but VOID, §9.5** |
+
+**No candidate returned MULTICELL.** That is §6's third row, whose consequence is
+pre-committed. Before it is acted on, three things have to go on the page.
+
+### 9.3 §2.1's prediction is CONFIRMED — by a bigger margin than predicted
+
+§2.1 predicted, from shear arithmetic alone and before any run existed, that
+*candidate A will not be multicellular despite CM1's label*. It is not. A is a
+**supercell that out-rotates the supercell control** — median `max|uh|` **1132**
+against SC's 679, peaking at 1605 — a single sustained cell whose echo centroid
+tracks steadily southwest. `iwnd=4` carries 33.5 m/s of 0–6 km bulk shear against
+`iwnd=2`'s 31.8, and the extra shear did what extra shear does. The label in
+`README.namelist` is not a prediction about the storm; it is a name on a wind
+profile. The cheap half of §2.2's argument is now empirical: both cited profiles
+above 30 m/s make supercells.
+
+### 9.4 B is a rotating cell, not a cluster
+
+Candidate B — the one §2.1 called "the more likely multicell" — is a **single
+rotating updraft** for its whole mature life: `n_cells` = 1 in 16 of 17 mature
+frames, 1–4 updraft components, median `R` 0.192 (no flank preference). Its
+rotation is real and sustained (`max|uh|` 236–562, never below the bar) but sits
+**2.4× below** the SC control. It does elongate late (`E` 2.5–3.2 after t=105) —
+organised multiplicity by criterion 2′ — but criterion 1 decides first (§8.3).
+
+The honest reading: at 10 m/s of bulk shear with this WK sounding, one warm bubble
+gives a **marginal rotating cell**, not the cold-pool-driven cluster the weak-shear
+regime was supposed to produce. Whether "supercell" is the right word for it is
+exactly what §9.6 is about.
+
+### 9.5 C is VOID — structurally, not because a storm escaped
+
+C trips **both** validity checks, and neither is about drift:
+
+- §5 containment: clearance **0.00 km in every mature frame** → void.
+- §6.2's boundary descriptor: **17 frames** with cells near a wall, against a
+  predicted 0 at `irandp=0`.
+
+The cause is `iinit=8` itself. Verified in the netCDF rather than inferred: C's
+≥40 dBZ echo occupies **all 180 y rows, wall to wall, in every frame** (x extent
+−5.5…+11.5 km at t=45). §2 chose `iinit=8` precisely *because* it is
+domain-agnostic — "x-centred, no y term in its `beta`, so it spans the full y
+extent" — and that same property makes it **structurally incapable of satisfying a
+containment criterion written for a compact storm**. §6.2's prediction is not
+falsified here; it is inapplicable to a domain-spanning line.
+
+**So C is unevaluable as run** — and its numbers are the most interesting on the
+page: 15 simultaneous updraft components, 3 cells, `E` = **20.8** against the 2.0
+floor and PC's 1.00. Criterion 2′ says *organised multiplicity* as loudly as it can.
+C is a squall line, by construction and by measurement. It is denied MULTICELL by
+criterion 1 — not by criterion 2′, and not by its void.
+
+### 9.6 The sensitivity that qualifies all of the above
+
+Criterion 1's factor — 0.25 — was pre-registered before any data and is **not**
+being changed. But its influence must be reported, because it is what decides B
+and C. Fraction of mature frames at or above `k ×` SC's median:
+
+| k → | 0.15 | **0.25** | 0.40 | 0.50 | 0.75 | 1.00 |
+|---|---|---|---|---|---|---|
+| SC | 1.00 | **1.00** | 1.00 | 1.00 | 1.00 | 0.47 |
+| PC | 0.06 | **0.00** | 0.00 | 0.00 | 0.00 | 0.00 |
+| A | 1.00 | **1.00** | 1.00 | 1.00 | 1.00 | 1.00 |
+| B | 1.00 | **1.00** | 0.94 | 0.53 | 0.12 | 0.00 |
+| C | 1.00 | **0.94** | 0.53 | 0.18 | 0.12 | 0.00 |
+
+Three readings, in descending order of confidence:
+
+1. **PC's separation is robust and A's label is unconditional.** PC never rotates
+   at any bar the controls permit; A rotates at *every* bar, including k=1.0.
+   Neither result depends on the factor.
+2. **B's and C's labels turn entirely on it.** At k=0.5, C stops being a supercell
+   (0.18) and B is on the knife edge (0.53); at k=0.75 both are comfortably
+   not-supercells — which, with `E` 3.14 and 20.8, would make both **MULTICELL**.
+3. **And the bar cannot simply be raised.** At k=1.0 the SC control itself falls to
+   0.47 and would classify not-supercell, breaking the control. The whole question
+   sits in **k ∈ [0.4, 0.75]** — a range the controls do not resolve, because PC is
+   silent throughout it and SC is saturated throughout it.
+
+That is a real limit of this probe design, found by running it. **Moving the factor
+now, having seen this table, would be the exact post-hoc move §7 and §8 exist to
+prevent.**
+
+### 9.7 What criterion 2′ earned
+
+Independent of the labels, §8's replacement did its job on real data: it fired on
+neither control, it annihilated the ring that caused the abort (`E` = 1.000 in
+every PC frame, `R` = 0.006), and it separated that ring from a genuine line by a
+factor of **20** on the same statistic. Validated in the field, not only on
+fixtures.
+
+### 9.8 The §6 branch that fires, and what the owner is asked
+
+By the letter of §6, row 3 fires — all three candidates classify SUPERCELL → the
+§2.2 shear gap is real → propose the `0002-` patch, priced, and do not write it
+without a go. The price stands as §6 stated it: **a third binary hash, a new row in
+`sim/cm1-patches/README.md`, and moving the charter's CM1 pin that `d427ff2` just
+consolidated into one source of truth.**
+
+But §9.5 and §9.6 mean that row is not the only live option, and presenting it as
+the automatic next step would be dishonest. Three, priced rather than chosen:
+
+| Option | What it buys | What it costs | Honest risk |
+|---|---|---|---|
+| **(i) `0002-` shear patch** — §6's pre-committed branch | Reaches the 10–31.8 m/s gap where the multicell regime is generally placed | Third binary hash; patches-README row; charter pin moves; a second fork to carry forever | The gap is *inferred* from three profiles, not measured. If B at k=0.75 is really a multicell, the gap may already be reachable and the patch unnecessary |
+| **(ii) Re-run C contained** — same `iinit=8` line, in a form the domain can hold, so containment and §6.2 mean something | C is already the strongest organised-multiplicity signal on the page (`E` 20.8, 15 updrafts). Making it evaluable could answer T5 with no patch at all | One 13-min probe run, plus a source read on whether `iinit=8`'s y-extent is reachable without a patch | It may not be: §1's caveat is that parameters *inside* an option are hardcoded. If so this collapses into (i) — a patch, just a different one |
+| **(iii) Re-pre-register criterion 1** | k ∈ [0.4, 0.75] is the real blocker for B and C. A discriminator separating *supercellular* rotation from ordinary updraft tilting (e.g. requiring rotation to persist at a fixed storm-relative position) would settle both with no new runs | A third pre-registration round, written against the controls with the candidates re-blinded | Doing this *after* §9.6's table is precisely the post-hoc hazard. It needs a discriminator justified independently — not one chosen because it moves B and C |
+
+**Recommendation: (ii) first.** It is one 13-minute run, it targets the candidate
+that already shows the multicell signature, and it needs neither a moved threshold
+nor a second fork. (i) and (iii) stay open; neither starts without an owner go.
