@@ -702,12 +702,14 @@ Do not start a phase without explicit go from the owner.
   (pattern correlation / IoU / centroid), because the per-mover tracker jumps between cells and
   its separation column is not trustworthy. **Owner call 2026-07-28: SHIP NOTHING** — T4 stands
   as mechanism + measured spread; a seeded package stays cheap to produce later (§7).
-  **T5 — BLOCKED ON AN OWNER DECISION; the pre-registered ABORT CONDITION FIRED
-  (2026-08-10, docs/phase3-t5-multicell.md §7).** ⚠ **A, B and C are DELIBERATELY
-  UNSCORED. Do not run the classifier over any candidate until the replacement for
-  criterion 2 is agreed with the owner** — the abort's entire value is that the rule was
-  fixed and found unfit *before* anyone saw the answers, and scoring them now spends that
-  for nothing. Plan §2.3's premise was falsified in the **cheap** direction (again by
+  **T5 — SCORED; no candidate is a multicell. BLOCKED ON AN OWNER DECISION between
+  §9.8's three options (2026-08-10, docs/phase3-t5-multicell.md §§7–9).** The earlier
+  "candidates deliberately unscored" instruction is **DISCHARGED**: the abort fired (§7),
+  the owner chose §7.6 option (A), criterion 2 was re-pre-registered as an **organisation**
+  test and committed before scoring (§8, commit 797b78b), the re-armed abort **passed**
+  (PC → SINGLE CELL, decisively: median `R` 0.006, `E` 1.000 in every frame), and only then
+  were A/B/C read (§9, commit 002b395). **All three classify SUPERCELL**, so §6's row 3
+  fires. Plan §2.3's premise was falsified in the **cheap** direction (again by
   reading the source first): CM1 reaches multicell candidates through **namelist
   integers** (`iwnd`/`iinit`), no `init3d.F` edit and so no second fork patch — though
   only the *option selection* is namelist; every parameter *inside* an option is a
@@ -743,12 +745,47 @@ Do not start a phase without explicit go from the owner.
   **30.8×**, §6.2's boundary descriptor read **0 in all 50 control frames** as predicted at
   `irandp=0`, and §5's containment/drift check voided neither run (SC's measured drift
   implies `vmove` 5.1 vs the 3.0 given — a 2 m/s Bunkers error over 2 h, inside 45 km of
-  clearance). §7.6 prices three ways forward without choosing; the recommendation is to
-  **replace the count with an ORGANISATION test** (preferred-flank regeneration / system
-  propagation while cells cycle — a symmetric ring fails it by construction),
-  re-pre-registered against the controls and committed before any candidate is read.
-  Re-scoring the five existing runs costs minutes: **this is a design decision, not a
-  compute one.**
+  clearance).
+  **The §8 replacement, and what it found.** Criterion 2′ = **organised** multiplicity:
+  `R`, the area-weighted circular resultant of updraft components about the *echo* centroid
+  (an independent anchor — the components' own mean would force `R ≡ 0`), plus `E`, the
+  elongation of the updraft **mask's voxels**. `E` is deliberately NOT the covariance of
+  component centroids: under an isotropic null a 3-point ellipse has median `E` **3.72**
+  with **79.7 %** of triples clearing 2.0, and PC could never have caught that bias since
+  its ring gives `E ≈ 1` either way. `E` exists at all because of candidate C — a squall
+  line's cells sit symmetrically about the centroid, so `R ≈ 0`, the same answer as the
+  ring; without a second moment the canonical multicell is a false negative *by
+  construction*. Floors are geometric and fixed a priori (`R` ≥ 0.5, `E` ≥ 2.0) with a
+  **two-sided** §8.6 band — thresholding at PC's own p95 was rejected because a median can
+  never exceed its own p95, which would have made **both** controls tautologies and left
+  the abort with nothing live. **Results:** A (`iwnd=4`, CM1's own "multicell" label)
+  **out-rotates the control** (median `max|uh|` 1132 vs 679) — §2.1's pre-registered
+  prediction CONFIRMED, the README label is a name on a wind profile, not a claim about the
+  storm; B (`iwnd=1`, 10 m/s) is a single **rotating** cell (1 cell in 16 of 17 mature
+  frames, `R` 0.192), not the cold-pool cluster the weak-shear regime was supposed to give;
+  C (`iinit=8`) is **VOID structurally** — its echo spans **all 180 y rows wall-to-wall in
+  every frame**, because §2 picked `iinit=8` precisely for being domain-agnostic, so it
+  *cannot* satisfy a containment criterion written for a compact storm (§6.2's 17
+  boundary frames are that same geometry, not `irandp` noise). C is nonetheless the
+  strongest signal on the page (`E` **20.8**, 15 simultaneous updrafts) — a squall line
+  denied MULTICELL by criterion **1**, not by 2′ and not by its void.
+  ⚠ **The open question is criterion 1's 0.25 factor, and it is NOT to be moved
+  post-hoc.** It decides B and C: at k=0.5 C stops being a supercell (0.18) and B is on the
+  knife edge (0.53); at k=0.75 both would be MULTICELL on their `E`. An earlier draft
+  claimed the SC control caps k at 0.75 — **wrong twice**: 0.47 was a rounding artifact (the
+  script hardcoded the printed median 678.7 vs the exact 678.6939, dropping the median frame
+  from its own comparison; the true value is 0.529), and for odd *n* the fraction at or
+  above the median is (n+1)/2n > 0.5 *by definition*, so SC cannot fail at any k ≤ 1.0 —
+  §7.2's self-reference recurring one section later. The controls therefore place **no**
+  ceiling; the unresolved range is k ∈ [0.4, 1.0], PC flat at 0.00 throughout.
+  **§9.8 prices three options without choosing: (i)** the pre-committed `0002-` shear patch
+  (third binary hash, patches-README row, charter pin moves), **(ii)** re-run C contained —
+  one 13-min run at the candidate that already shows the signature, *recommended first* —
+  **(iii)** re-pre-register criterion 1 with a **different discriminator, not a different k**
+  (rotation persisting at a fixed storm-relative position). Criterion 2′ itself is validated
+  in the field: it fired on neither control, annihilated the ring, and separated ring from
+  line by **20×** on one statistic. Re-scoring the five existing runs costs minutes —
+  **this is a design decision, not a compute one.**
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.

@@ -745,7 +745,7 @@ and C. Fraction of mature frames at or above `k ×` SC's median:
 
 | k → | 0.15 | **0.25** | 0.40 | 0.50 | 0.75 | 1.00 |
 |---|---|---|---|---|---|---|
-| SC | 1.00 | **1.00** | 1.00 | 1.00 | 1.00 | 0.47 |
+| SC | 1.00 | **1.00** | 1.00 | 1.00 | 1.00 | 0.53 |
 | PC | 0.06 | **0.00** | 0.00 | 0.00 | 0.00 | 0.00 |
 | A | 1.00 | **1.00** | 1.00 | 1.00 | 1.00 | 1.00 |
 | B | 1.00 | **1.00** | 0.94 | 0.53 | 0.12 | 0.00 |
@@ -759,14 +759,26 @@ Three readings, in descending order of confidence:
 2. **B's and C's labels turn entirely on it.** At k=0.5, C stops being a supercell
    (0.18) and B is on the knife edge (0.53); at k=0.75 both are comfortably
    not-supercells — which, with `E` 3.14 and 20.8, would make both **MULTICELL**.
-3. **And the bar cannot simply be raised.** At k=1.0 the SC control itself falls to
-   0.47 and would classify not-supercell, breaking the control. The whole question
-   sits in **k ∈ [0.4, 0.75]** — a range the controls do not resolve, because PC is
-   silent throughout it and SC is saturated throughout it.
+3. **The controls place no ceiling on the bar — and the tautology is why.** An
+   earlier draft of this paragraph claimed SC falls to 0.47 at k=1.0 and so
+   "breaks the control", boxing the question into k ∈ [0.4, 0.75]. **Both halves
+   were wrong.** The 0.47 was a rounding artifact: the analysis script hardcoded
+   the printed median `678.7` while the exact median is `678.6939…`, so the median
+   frame itself dropped out of its own comparison. Against the exact value SC reads
+   **0.529**. And it could not have read otherwise: for odd *n* the fraction of
+   frames at or above the median is always (n+1)/2n — here 9/17 — which **exceeds
+   0.5 by definition**. SC cannot fail criterion 1 at any k ≤ 1.0.
+
+   That is **§7.2's self-reference recurring one section later**, unnoticed until
+   the number looked wrong. It means the honest range is **k ∈ [0.4, 1.0]**, over
+   which PC stays flat at 0.00 and SC is arithmetically safe throughout — so
+   nothing in the control design rules out a higher bar, and §9.8's option (iii)
+   is *less* fenced off than the earlier draft implied.
 
 That is a real limit of this probe design, found by running it. **Moving the factor
-now, having seen this table, would be the exact post-hoc move §7 and §8 exist to
-prevent.**
+now, having seen this table, would still be the exact post-hoc move §7 and §8 exist
+to prevent** — the point of correcting the arithmetic is to describe the option
+honestly, not to take it.
 
 ### 9.7 What criterion 2′ earned
 
@@ -791,8 +803,13 @@ the automatic next step would be dishonest. Three, priced rather than chosen:
 |---|---|---|---|
 | **(i) `0002-` shear patch** — §6's pre-committed branch | Reaches the 10–31.8 m/s gap where the multicell regime is generally placed | Third binary hash; patches-README row; charter pin moves; a second fork to carry forever | The gap is *inferred* from three profiles, not measured. If B at k=0.75 is really a multicell, the gap may already be reachable and the patch unnecessary |
 | **(ii) Re-run C contained** — same `iinit=8` line, in a form the domain can hold, so containment and §6.2 mean something | C is already the strongest organised-multiplicity signal on the page (`E` 20.8, 15 updrafts). Making it evaluable could answer T5 with no patch at all | One 13-min probe run, plus a source read on whether `iinit=8`'s y-extent is reachable without a patch | It may not be: §1's caveat is that parameters *inside* an option are hardcoded. If so this collapses into (i) — a patch, just a different one |
-| **(iii) Re-pre-register criterion 1** | k ∈ [0.4, 0.75] is the real blocker for B and C. A discriminator separating *supercellular* rotation from ordinary updraft tilting (e.g. requiring rotation to persist at a fixed storm-relative position) would settle both with no new runs | A third pre-registration round, written against the controls with the candidates re-blinded | Doing this *after* §9.6's table is precisely the post-hoc hazard. It needs a discriminator justified independently — not one chosen because it moves B and C |
+| **(iii) Re-pre-register criterion 1** | Criterion 1 is the real blocker for B and C, and §9.6's corrected reading shows the controls do not fence it off. The fix worth making is **a different discriminator, not a different k** — requiring rotation to *persist at a fixed storm-relative position*, which is what actually distinguishes a mesocyclone from an ordinarily tilted updraft. Settles both candidates with no new runs | A third pre-registration round, written against the controls with the candidates re-blinded | Doing this *after* §9.6's table is the post-hoc hazard in its purest form. It is only defensible for a discriminator justified on physical grounds independently of which way it moves B and C — and *tuning k* would not qualify |
 
-**Recommendation: (ii) first.** It is one 13-minute run, it targets the candidate
-that already shows the multicell signature, and it needs neither a moved threshold
-nor a second fork. (i) and (iii) stay open; neither starts without an owner go.
+**Recommendation: (ii) first, with (iii) close behind.** (ii) is one 13-minute run
+against the candidate that already shows the multicell signature, and it needs
+neither a moved threshold nor a second fork. (iii) is the principled fix — and it
+is stronger than the first draft of §9.6 made it look, since the controls turn out
+to permit the whole range — but it is also the one with the post-hoc hazard, so it
+should follow (ii) rather than pre-empt it. (i) stays last: it is the most
+expensive, and its premise weakens if (ii) or (iii) turns up a multicell in an
+environment the namelist already reaches. None starts without an owner go.
