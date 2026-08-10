@@ -702,8 +702,10 @@ Do not start a phase without explicit go from the owner.
   (pattern correlation / IoU / centroid), because the per-mover tracker jumps between cells and
   its separation column is not trustworthy. **Owner call 2026-07-28: SHIP NOTHING** — T4 stands
   as mechanism + measured spread; a seeded package stays cheap to produce later (§7).
-  **T5 — SCORED; no candidate is a multicell. BLOCKED ON AN OWNER DECISION between
-  §9.8's three options (2026-08-10, docs/phase3-t5-multicell.md §§7–9).** The earlier
+  **T5 — SCORED; no candidate is a multicell. Option (ii) SPENT and it delivered;
+  the blocker is now isolated to criterion 1 and the pre-committed next step is
+  §9.8's (iii) — NOT STARTED, needs an owner go (2026-08-10,
+  docs/phase3-t5-multicell.md §§7–11).** The earlier
   "candidates deliberately unscored" instruction is **DISCHARGED**: the abort fired (§7),
   the owner chose §7.6 option (A), criterion 2 was re-pre-registered as an **organisation**
   test and committed before scoring (§8, commit 797b78b), the re-armed abort **passed**
@@ -777,15 +779,50 @@ Do not start a phase without explicit go from the owner.
   from its own comparison; the true value is 0.529), and for odd *n* the fraction at or
   above the median is (n+1)/2n > 0.5 *by definition*, so SC cannot fail at any k ≤ 1.0 —
   §7.2's self-reference recurring one section later. The controls therefore place **no**
-  ceiling; the unresolved range is k ∈ [0.4, 1.0], PC flat at 0.00 throughout.
-  **§9.8 prices three options without choosing: (i)** the pre-committed `0002-` shear patch
-  (third binary hash, patches-README row, charter pin moves), **(ii)** re-run C contained —
-  one 13-min run at the candidate that already shows the signature, *recommended first* —
-  **(iii)** re-pre-register criterion 1 with a **different discriminator, not a different k**
-  (rotation persisting at a fixed storm-relative position). Criterion 2′ itself is validated
-  in the field: it fired on neither control, annihilated the ring, and separated ring from
-  line by **20×** on one statistic. Re-scoring the five existing runs costs minutes —
-  **this is a design decision, not a compute one.**
+  ceiling; the unresolved range is k ∈ [0.4, 1.0], PC flat at 0.00 throughout. **§11.4
+  supersedes the framing** — the question is not *which k* but that k parameterises a median
+  test; the defect is in kind, not in the number.
+  **§9.8 priced three options; the owner chose (ii) and §10 pre-registered it before the
+  run.** **§11 — C2 IS SCORED, and §10.4's prediction is CONFIRMED: SUPERCELL**, so the
+  pre-committed branch fires — **the answer is (iii), the criterion-1 discriminator, NOT
+  (i)**. Buying a second fork to widen the shear range would be paying for the wrong thing.
+  **The containment fix worked exactly as the source read predicted** (§10.1: `iinit=8`'s
+  `beta` has *no y term*, so the line is infinite in y by construction and the fix is the
+  BOUNDARY, not the line): 17 boundary-cell frames → **0**, clearance **0.00 → 69.93 km**,
+  namelist-only, no patch, no third hash, the CM1 pin did not move; C2's deck differs from
+  C's in exactly **2 of 413 lines**, both boundary keys. **What (ii) bought is a clean
+  isolation: C2 is the FIRST NON-VOID run with crit2′ ∧ crit3 ∧ ¬crit1** (median `E` 19.04 =
+  7.9× the banded floor; C had the signature but was voided; SC/PC/B fail crit2′; A fails
+  crit1 at every k). **THE FINDING (§11.4), earned from data already collected: criterion 1
+  is a MEDIAN COMPARISON.** Every run's k-flip point equals its own `median(mature max|uh|) ÷
+  SC's median` to 1e-12, all six — because with `UH_FRAC_FRAMES=0.5` and an odd frame count,
+  "rotating for less than half its mature life" **is** the median. So criterion 1 is a scalar
+  magnitude ratio supplying **no temporal robustness at all**: 8 frames at 2000 is not a
+  supercell and 9 is; one frame at 10⁶ is not, while 17 flat frames at 200 is. That is the
+  **same root cause as §7.2 and §9.6, stated once instead of twice**. Tested not argued —
+  12 000 comparisons over six real runs × a dense k grid, 0 disagreements, plus five
+  adversarial synthetic series; the run-data-free half is now a **permanent gate**
+  (`test_classifier_t5.py` **57/57**) carrying its own vacuity control (at
+  `UH_FRAC_FRAMES=0.25` the two rules *do* come apart) and holding at every k, so the
+  property belongs to the fraction, not to 0.25. **k is NOT moved:** C2's margin is reported
+  as a ratio (**1.16×** the threshold) not as "0.04 in k" — the same fact dressed as a reason
+  to move it — and the real argument is **stability, not margin**: a boundary-condition-only
+  edit moved this candidate's flip point **0.11 in k, 2.7× the distance from 0.25 to the flip
+  point**. §7.4's tuning trap with a candidate as victim instead of a control. **§11.6 fixes
+  (iii)'s constraints and deliberately does NOT state its conclusion** — nothing about
+  rotation *position or persistence* has been measured: a different discriminator not a
+  different k; **scale-free with no control normalisation** (any candidate÷control statistic
+  reinstates §7.2's self-reference, which has bitten twice); thresholds fixed a priori from
+  geometry/duration, validated on SC+PC only, committed, *then* re-scored. Criterion 2′ is
+  validated in the field: it fired on neither control, annihilated the ring, and separated
+  ring from line by **20×**. Re-scoring the six existing runs costs minutes — **this is a
+  design decision, not a compute one.** **§11.7 carried consequence, flagged not acted on:** a
+  periodic-y domain has **no finite condensate extent in y**, so if C2 ever becomes the T6
+  asset the crop-box measurement / `require_measured_box` inherits §9.5's error one level up,
+  in the *export* path. **The six probe configs are now TRACKED** (`sim/probes/configs/`,
+  ~15 KB) — the namelist is CM1's sole scenario input, so config + `pipeline/` + the pinned
+  fork binary is the whole recovery path for every number in §§7/9/11; all six verified to
+  regenerate **byte-identical** to the deck their run actually used.
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.
