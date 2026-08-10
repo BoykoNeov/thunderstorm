@@ -805,7 +805,10 @@ the automatic next step would be dishonest. Three, priced rather than chosen:
 | **(ii) Re-run C contained** — same `iinit=8` line, in a form the domain can hold, so containment and §6.2 mean something | C is already the strongest organised-multiplicity signal on the page (`E` 20.8, 15 updrafts). Making it evaluable could answer T5 with no patch at all | One 13-min probe run, plus a source read on whether `iinit=8`'s y-extent is reachable without a patch | It may not be: §1's caveat is that parameters *inside* an option are hardcoded. If so this collapses into (i) — a patch, just a different one |
 | **(iii) Re-pre-register criterion 1** | Criterion 1 is the real blocker for B and C, and §9.6's corrected reading shows the controls do not fence it off. The fix worth making is **a different discriminator, not a different k** — requiring rotation to *persist at a fixed storm-relative position*, which is what actually distinguishes a mesocyclone from an ordinarily tilted updraft. Settles both candidates with no new runs | A third pre-registration round, written against the controls with the candidates re-blinded | Doing this *after* §9.6's table is the post-hoc hazard in its purest form. It is only defensible for a discriminator justified on physical grounds independently of which way it moves B and C — and *tuning k* would not qualify |
 
-**Recommendation: (ii) first, with (iii) close behind.** (ii) is one 13-minute run
+**Owner call, 2026-08-10: option (ii).** Design and prediction in §10, written
+before the run.
+
+**Recommendation as given at the time: (ii) first, with (iii) close behind.** (ii) is one 13-minute run
 against the candidate that already shows the multicell signature, and it needs
 neither a moved threshold nor a second fork. (iii) is the principled fix — and it
 is stronger than the first draft of §9.6 made it look, since the controls turn out
@@ -813,3 +816,85 @@ to permit the whole range — but it is also the one with the post-hoc hazard, s
 should follow (ii) rather than pre-empt it. (i) stays last: it is the most
 expensive, and its premise weakens if (ii) or (iii) turns up a multicell in an
 environment the namelist already reaches. None starts without an owner go.
+
+---
+
+## 10. PRE-REGISTRATION of the contained-C re-run (option ii)
+
+Written before the run exists, like §§1–6 and §8.
+
+### 10.1 The source read that came first — and changed the plan
+
+§9.8's option (ii) was framed as "same `iinit=8` line, in a form the domain can
+hold". **That form does not exist.** `init3d.F` at the `iinit=8` branch sets its
+entire geometry as hardcoded locals — `ric = centerx`, `bhrad = 10000.0`,
+`bvrad = 1500.0`, `bptpert = 2.0`, `amplitude = 0.20` — and its `beta` is
+
+```
+beta = sqrt( ((xh(i)-ric)/bhrad)**2 + ((zh(i,j,k)-zc)/bvrad)**2 )
+```
+
+with **no y term at all**. The line is not "long"; it is *infinite in y* by
+construction, and there is no parameter — namelist or otherwise — that shortens
+it. §1's caveat lands exactly as written: the option selection is namelist, the
+parameters inside it are Fortran.
+
+**So the fix is not the line. It is the boundary.** A domain-spanning line with
+**periodic** y walls is the standard along-line configuration for squall-line
+simulations, and CM1 exposes it as a namelist integer: `sbc`/`nbc` = 1 (`1 =
+periodic`, `2 = open-radiative`, `README.namelist` line 569). The template runs 2
+on all four sides, which is right for a compact storm and wrong for a line. Under
+periodic y the same line stops being a containment failure and becomes the
+intended setup — **no patch, no third binary hash, and the CM1 pin does not move.**
+
+### 10.2 The criterion change this forces, and why it is not a loophole
+
+§5's containment check and §6.2's descriptor both ask *"is the storm leaving the
+window?"* **A periodic boundary is not a window.** Measuring clearance to it is
+the §9.5 error stated positively rather than negatively: not "C failed
+containment" but "containment was the wrong question in that direction".
+
+Both are therefore now measured **against open boundaries only**, read from the
+run's own `sbc`/`nbc`/`wbc`/`ebc` rather than assumed. Three guards against this
+becoming a way to make an inconvenient void disappear:
+
+1. **The x direction is still checked, and it is the one that matters** — a squall
+   line propagates across-line, so the direction it can actually escape through
+   stays open and stays measured. A test asserts a wall-touch in x still fires
+   under periodic y.
+2. **Absent keys default to open**, so every run made before this change scores
+   exactly as it did. Verified, not asserted: re-scoring SC, PC and C reproduces
+   0.4854/1.84, 0.0055/1.00 and 0.1247/20.757 to the digit, and **C stays VOID**.
+3. **A fully periodic domain reports no clearance at all** rather than a
+   reassuring number.
+
+### 10.3 The run
+
+`t5probe_c2`: candidate C's deck with `sbc = nbc = 1`, everything else byte-identical
+(`iwnd=1`, `iinit=8`, `irandp=0`, `seed=0`, `umove=8`, 180² @ 999 m, `tapfrq=300`,
+2 h, fork binary `5fc93016…`). One 13-minute run at 4 ranks. Scored by the
+**unchanged** §8 rule — no threshold, floor, band or factor moves.
+
+### 10.4 A prediction, recorded so the run can falsify it
+
+**I predict C2 will still classify SUPERCELL, and that option (ii) will therefore
+hand back "the blocker is criterion 1, not containment".**
+
+The reasoning is on the page already: C was denied MULTICELL by criterion 1
+(`frac_rot` 0.94), not by criterion 2′ (`E` 20.8, far past its floor) and not by
+its void. Making the run evaluable removes the void, but nothing about periodic y
+obviously removes 2–5 km rotation from a line of vigorous 1 km updrafts. Periodic
+walls will change the flow near the old y edges and may lower `max|uh|` somewhat —
+if that drop is large enough to push `frac_rot` below 0.5, C2 is a MULTICELL and
+this paragraph is wrong on the page.
+
+Two consequences fixed in advance, so neither is a judgement call made after
+seeing the number:
+
+- **If C2 → MULTICELL:** T5 is answered namelist-only. The multicell scenario is
+  `iwnd=1` + `iinit=8` + periodic y, §2.3's premise is corrected in the cheap
+  direction, no fork, and T5 becomes a T1-shaped task (config, run, measured box).
+- **If C2 → SUPERCELL:** option (ii) is spent and the answer is §9.8's (iii) — the
+  criterion-1 discriminator — *not* (i). Rotation, not shear reach, is then the
+  demonstrated blocker, and buying a second CM1 fork to widen the shear range
+  would be paying for the wrong thing.

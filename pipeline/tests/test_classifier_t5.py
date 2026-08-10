@@ -332,5 +332,62 @@ check("clearly_under_the_R_floor_is_SINGLE_CELL",
       C.classify_v2(band_run(0.15), SC_MEDIAN)[0] == "SINGLE CELL",
       C.classify_v2(band_run(0.15), SC_MEDIAN)[0])
 
+print("--- section 10: containment measured against OPEN boundaries only ---")
+
+XH = np.arange(-89.0, 90.0, 1.0)           # a 180 km domain, like the probes
+BOTH = {"x": True, "y": True}
+X_ONLY = {"x": True, "y": False}           # periodic y: the squall-line setup
+
+
+def linemask():
+    """A line spanning the full y extent, narrow in x -- candidate C's geometry."""
+    m = np.zeros((len(XH), len(XH)), bool)
+    m[:, 85:95] = True
+    return m
+
+
+c_both = C._containment(linemask(), XH, XH, "cell", BOTH)
+c_xonly = C._containment(linemask(), XH, XH, "cell", X_ONLY)
+check("domain_spanning_line_is_uncontained_with_open_y",
+      c_both["cell_clearance_km"] == 0.0, c_both["cell_clearance_km"])
+check("same_line_is_contained_when_y_is_periodic",
+      c_xonly["cell_clearance_km"] > 80.0, c_xonly["cell_clearance_km"])
+# The x-direction must STILL be checked -- periodic y is not a licence to ignore
+# the direction the system actually propagates in.
+wide = np.zeros((len(XH), len(XH)), bool)
+wide[:, 2:178] = True
+check("periodic_y_does_not_excuse_an_x_wall_touch",
+      C._containment(wide, XH, XH, "cell", X_ONLY)["cell_clearance_km"] < 5.0,
+      C._containment(wide, XH, XH, "cell", X_ONLY)["cell_clearance_km"])
+# No open side at all: there is no containment question, and a number would be a
+# section 9.5 error in reverse.
+check("fully_periodic_domain_reports_no_clearance",
+      C._containment(linemask(), XH, XH, "cell",
+                     {"x": False, "y": False})["cell_clearance_km"] is None)
+
+# The section 6.2 descriptor follows the same rule.
+lab_mask = np.zeros((len(XH), len(XH)), bool)
+lab_mask[3:9, 85:95] = True                # a blob hard against the y=-89 wall
+check("boundary_descriptor_counts_a_cell_on_an_OPEN_wall",
+      C._boundary_components(lab_mask, XH, XH, 1.0, 10.0, BOTH) == 1,
+      C._boundary_components(lab_mask, XH, XH, 1.0, 10.0, BOTH))
+check("boundary_descriptor_ignores_a_cell_on_a_PERIODIC_wall",
+      C._boundary_components(lab_mask, XH, XH, 1.0, 10.0, X_ONLY) == 0,
+      C._boundary_components(lab_mask, XH, XH, 1.0, 10.0, X_ONLY))
+
+# Absent bc keys must behave exactly as before this change: open on all sides.
+import json as _json  # noqa: E402
+import tempfile  # noqa: E402
+
+_tmp = tempfile.mkdtemp()
+with open(os.path.join(_tmp, "scenario.json"), "w") as fh:
+    _json.dump({"sim": {"namelist": {"nx": 10}}}, fh)
+check("missing_bc_keys_default_to_open_both_ways",
+      C.open_sides(_tmp) == {"x": True, "y": True}, C.open_sides(_tmp))
+with open(os.path.join(_tmp, "scenario.json"), "w") as fh:
+    _json.dump({"sim": {"namelist": {"sbc": 1, "nbc": 1}}}, fh)
+check("periodic_sbc_nbc_are_read_as_a_closed_y",
+      C.open_sides(_tmp) == {"x": True, "y": False}, C.open_sides(_tmp))
+
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

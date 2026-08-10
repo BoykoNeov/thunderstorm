@@ -97,7 +97,17 @@ REQUIRED_OUTPUT_FLAGS = {
 #             "safely skippable only on short 2-3 h runs"; the Phase 3 (~4.5 h) and
 #             Phase 3T (15-30 h) runs set it positive so a mid-run crash costs time,
 #             not a full re-run.
-OPTIONAL_KEYS = ("rstfrq",)
+#   sbc, nbc -- south/north lateral boundary condition (1=periodic, 2=open-radiative,
+#             3/4=rigid). The template runs 2 on all four sides, which is right for a
+#             compact storm. It is WRONG for a line: CM1's iinit=8 line thermal has no
+#             y term in its `beta` and no y-extent parameter anywhere (the geometry is
+#             hardcoded in init3d.F), so the line necessarily spans the whole domain in
+#             y. With open y boundaries its ends are an artifact and no containment
+#             criterion can be satisfied; periodic y is the standard along-line
+#             configuration for squall-line simulations and makes the same line the
+#             INTENDED setup. Category 5 rather than 5-with-physics because it changes
+#             the domain's topology, not the storm's environment.
+OPTIONAL_KEYS = ("rstfrq", "sbc", "nbc")
 
 
 class DeckError(Exception):

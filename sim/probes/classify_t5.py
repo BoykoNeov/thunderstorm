@@ -103,7 +103,33 @@ R_BAND = 0.10            # section 8.6 two-sided INDETERMINATE band
 E_BAND_FACTOR = 1.20     # ditto, multiplicative: 2.00/1.2 = 1.67 under, 2.40 over
 
 
-def frame_metrics(path):
+def open_sides(run_dir):
+    """Which lateral boundaries are OPEN, read from the run's own config.
+
+    Section 5's containment check and section 6.2's boundary descriptor both ask
+    "is the storm leaving the window". A PERIODIC boundary is not a window: there
+    is nothing to leave and nothing to lose. Candidate C's line necessarily spans
+    the domain in y (iinit=8 has no y-extent parameter at all -- the geometry is
+    hardcoded in init3d.F), so with open y walls it can never satisfy containment
+    and with periodic y walls the question does not arise. Applying a criterion
+    written for a compact storm to a periodic direction is what voided C in
+    section 9.5; this reads the boundary type instead of assuming it.
+
+    CM1: 1 = periodic, 2 = open-radiative, 3/4 = rigid wall. Absent keys default
+    to the template's value, 2 -- so a run that predates this function is treated
+    exactly as before.
+    """
+    try:
+        with open(os.path.join(run_dir, "scenario.json")) as f:
+            nml = json.load(f)["sim"]["namelist"]
+    except (OSError, KeyError, ValueError):
+        nml = {}
+    return {"x": int(nml.get("wbc", 2)) == 2 or int(nml.get("ebc", 2)) == 2,
+            "y": int(nml.get("sbc", 2)) == 2 or int(nml.get("nbc", 2)) == 2}
+
+
+def frame_metrics(path, opens=None):
+    opens = opens if opens is not None else {"x": True, "y": True}
     d = netCDF4.Dataset(path)
     t = float(d.variables["time"][0])
     xh = np.asarray(d.variables["xh"][:], dtype=float)   # km
@@ -132,7 +158,7 @@ def frame_metrics(path):
     # the number and wrong about the storm. Every T5 probe runs irandp=0 so this
     # should read 0 throughout -- which is exactly why it is worth printing.
     m["n_boundary_cells"] = _boundary_components(
-        cref >= DBZ_CELL, xh, yh, cell_km2, DBZ_MIN_AREA_KM2)
+        cref >= DBZ_CELL, xh, yh, cell_km2, DBZ_MIN_AREA_KM2, opens)
 
     # M3 -- simultaneous updraft count (column-max w components) + their peaks
     colmax_w = w.max(axis=0)
@@ -153,9 +179,10 @@ def frame_metrics(path):
     m["coldpool_area_km2"] = float(cold.sum() * cell_km2)
     m["min_thpert_sfc"] = float(np.min(thpert_sfc))
 
-    # M6 -- containment + drift (validity check, docs section 5)
-    m.update(_containment(cref >= DBZ_CELL, xh, yh, "cell"))
-    m.update(_containment(np.abs(w).max(axis=0) >= W_UPDRAFT, xh, yh, "w"))
+    # M6 -- containment + drift (validity check, docs section 5), measured against
+    # the OPEN boundaries only
+    m.update(_containment(cref >= DBZ_CELL, xh, yh, "cell", opens))
+    m.update(_containment(np.abs(w).max(axis=0) >= W_UPDRAFT, xh, yh, "w", opens))
     m["cell_centroid_x_km"], m["cell_centroid_y_km"] = _centroid(
         cref >= DBZ_CELL, xh, yh)
 
@@ -262,8 +289,8 @@ def _component_peaks(mask, field, cell_km2, min_area_km2):
                    if s * cell_km2 >= min_area_km2), reverse=True)
 
 
-def _boundary_components(mask, xh, yh, cell_km2, min_area_km2):
-    """Components whose centroid lies within BOUNDARY_KM of any open wall."""
+def _boundary_components(mask, xh, yh, cell_km2, min_area_km2, opens):
+    """Components whose centroid lies within BOUNDARY_KM of any OPEN wall."""
     if not mask.any():
         return 0
     lab, n = ndimage.label(mask, structure=np.ones((3, 3)))
@@ -278,20 +305,34 @@ def _boundary_components(mask, xh, yh, cell_km2, min_area_km2):
     for cy, cx in ndimage.center_of_mass(mask, lab, index=keep):
         x = xh[int(round(cx))]
         y = yh[int(round(cy))]
-        if min(x - xh[0], xh[-1] - x, y - yh[0], yh[-1] - y) <= BOUNDARY_KM:
+        d = []
+        if opens["x"]:
+            d += [x - xh[0], xh[-1] - x]
+        if opens["y"]:
+            d += [y - yh[0], yh[-1] - y]
+        if d and min(d) <= BOUNDARY_KM:
             near += 1
     return near
 
 
-def _containment(mask, xh, yh, tag):
-    """Clearance (km) from the mask to each open boundary."""
+def _containment(mask, xh, yh, tag, opens):
+    """Clearance (km) from the mask to each OPEN boundary.
+
+    None when the mask is empty OR when no boundary is open -- in the second case
+    there is no containment question to answer, and reporting a number would
+    invite the section 9.5 error in reverse.
+    """
     if not mask.any():
         return {f"{tag}_clearance_km": None, f"{tag}_extent_km": None}
     jj, ii = np.nonzero(mask)
     x0, x1 = xh[ii.min()], xh[ii.max()]
     y0, y1 = yh[jj.min()], yh[jj.max()]
-    clear = min(x0 - xh[0], xh[-1] - x1, y0 - yh[0], yh[-1] - y1)
-    return {f"{tag}_clearance_km": round(float(clear), 2),
+    d = []
+    if opens["x"]:
+        d += [x0 - xh[0], xh[-1] - x1]
+    if opens["y"]:
+        d += [y0 - yh[0], yh[-1] - y1]
+    return {f"{tag}_clearance_km": round(float(min(d)), 2) if d else None,
             f"{tag}_extent_km": [round(float(v), 2) for v in (x0, x1, y0, y1)]}
 
 
@@ -307,9 +348,11 @@ def run_metrics(name, runs=DEFAULT_RUNS):
     files = sorted(glob.glob(os.path.join(run_dir, "cm1out_0*.nc")))
     if not files:
         raise SystemExit(f"{name}: no cm1out_*.nc in {run_dir}")
+    opens = open_sides(run_dir)
     return {"name": name, "n_frames": len(files),
             "declared_motion": _declared_motion(run_dir),
-            "frames": [frame_metrics(f) for f in files]}
+            "open_sides": opens,
+            "frames": [frame_metrics(f, opens) for f in files]}
 
 
 def _declared_motion(run_dir):
@@ -526,7 +569,9 @@ def main():
 
     for name, d in data.items():
         print(f"\n=== {name}  ({d['n_frames']} frames, "
-              f"declared umove/vmove {d['declared_motion']}) ===")
+              f"declared umove/vmove {d['declared_motion']}, "
+              f"open sides {'x' if d['open_sides']['x'] else ''}"
+              f"{'y' if d['open_sides']['y'] else ''} ) ===")
         print(f"{'t_min':>6} {'max|uh|':>9} {'cells':>5} {'bdry':>4} "
               f"{'updrafts':>8} {'max_w':>7} {'min_w':>7} {'w@(x,y)km':>14} "
               f"{'echoC(x,y)':>14} {'R':>6} {'E':>6} {'anch':>5} "
