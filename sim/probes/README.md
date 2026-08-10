@@ -9,10 +9,16 @@ config in there would be a config that `export_scenario.py` cannot honour.
 `docs/phase3-t5-multicell.md` §§7, 9 and 11 rest on six 1 km runs. Per the T4
 finding, **the namelist is CM1's sole scenario input** (`isnd=5` computes the WK
 sounding internally), and these configs are the sole input to the namelist
-generator — so config + `pipeline/` + the pinned fork binary is the whole recovery
-path for every number in those sections. The run directories are large and
-disposable; these six files are ~15 KB and are what makes the record reproducible.
-That is the same argument the charter's data policy makes for scenario packages.
+generator. The run directories are large and disposable; these six files are ~15 KB
+and are what makes the record reproducible — the same argument the charter's data
+policy makes for scenario packages.
+
+**Measured claim, stated exactly:** config + `pipeline/` reproduces **the deck each
+run used, byte-for-byte** (verified on all six). Reproducing the *run* additionally
+needs the pinned fork binary `5fc93016…` **and the rank count**, because T4 banked
+"same seed ⇒ bitwise identical" only *at fixed rank count* — and `nranks` is not a
+config key. All six T5 probes ran at **`-np 4`**; each run's own `run_meta.txt`
+records it, and that file is not tracked, so the number is written here.
 
 | config | §2 role | key overrides |
 |---|---|---|

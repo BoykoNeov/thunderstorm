@@ -461,5 +461,16 @@ for _k in (0.1, 0.25, 0.5, 0.9, 1.5):
 THRESH = C.UH_FRACTION_OF_CONTROL * SC_MEDIAN
 check("the_equivalence_holds_at_every_k", not _ks, f"disagree: {_ks}")
 
+# Both blocks above mutate module state (C.UH_FRAC_FRAMES, C.UH_FRACTION_OF_CONTROL
+# and this file's THRESH) and restore it. Make the restore self-checking rather
+# than order-dependent: without this, a gate added between the k-loop and its
+# restore -- or added after a block that raised -- would silently score against
+# k=1.5 and still print PASS.
+check("module_state_is_restored_after_the_sensitivity_blocks",
+      THRESH == 100.0 and C.UH_FRACTION_OF_CONTROL == 0.25
+      and C.UH_FRAC_FRAMES == 0.5,
+      f"THRESH={THRESH} k={C.UH_FRACTION_OF_CONTROL} "
+      f"frac={C.UH_FRAC_FRAMES}")
+
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

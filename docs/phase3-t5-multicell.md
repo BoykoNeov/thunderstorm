@@ -955,8 +955,7 @@ of 2.40 — the sustained-system criterion passes, containment is clean, and the
 dissenting voice is criterion 1. That is a measurement of where the blocker is, not
 a reading of one.
 
-### 11.4 The finding: criterion 1 is a median comparison, and "half its mature
-life" supplies no temporal robustness
+### 11.4 The finding: criterion 1 is a median comparison, and supplies no temporal robustness
 
 The k-sweep produced a column it was not built to produce. Every run's flip point
 — the k above which `frac_rot` drops below 0.5 — is **exactly** its own
