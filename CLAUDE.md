@@ -823,6 +823,57 @@ Do not start a phase without explicit go from the owner.
   ~15 KB) — the namelist is CM1's sole scenario input, so config + `pipeline/` + the pinned
   fork binary is the whole recovery path for every number in §§7/9/11; all six verified to
   regenerate **byte-identical** to the deck their run actually used.
+  **T5 — OPTION (iii) IS SPENT. T5 has no multicell under TWO independent criterion-1
+  designs, and the classifier's reach is now measured (2026-08-10, §§12–13).** Owner go
+  for §9.8's (iii); §12 pre-registered a replacement and was **committed before any
+  candidate was re-scored** (63c9f3d), §8's sequence for the third time. Criterion 1′ =
+  **P1, the longest same-sign displacement-limited chain of rotation centres** — a
+  **LINKER, NOT A TRACKER** (T4's argmax tracker hops to whatever is brightest and cannot
+  fail to produce a track; this refuses to hop, and a broken chain IS the measurement).
+  **The load-bearing design decision was the magnitude floor, and it is the one place the
+  whole thing could have collapsed:** §11.4's medians were already known, so *any* floor in
+  150–400 reproduces the retired median comparison with a new constant and a citation
+  stapled on — including the respectable ζ≥10⁻² × w≥10 × 3 km construction, which lands at
+  **~300** and would have killed C and C2 on magnitude alone. `UH_FLOOR=10` is set **19.7×
+  below the lowest candidate median** so it *cannot* discriminate, and the control run
+  proved the property rather than asserting it: **PC clears the floor and is rejected by
+  PERSISTENCE** (5 min vs a 25-min band edge), where at floor 25+ it forms no components at
+  all. **BOTH HALVES OF THE ABORT WERE LIVE FOR THE FIRST TIME SINCE §3** — removing control
+  normalisation (gated *structurally*: `classify_v3` takes no `sc_uh_median`) removed §7.2's
+  arithmetic forcing, and SC returned SUPERCELL on a measurement (80 min, 17/17 frames,
+  largest component 0.42 % of domain — nothing chained by covering the map). **RESULT: all
+  four candidates SUPERCELL again, P1 = 80 min each — identical to SC.** §12.8's
+  non-discrimination bullet fires: P1 separates single-cell from storm **16×** and separates
+  multicell from supercell **not at all**. **THE HEADLINE — the defect was real in KIND and
+  null in OUTCOME:** magnitude and persistence are independent constructions and agree on all
+  six runs, so "all supercells" now rests on two independent rotation criteria instead of one
+  known-broken one. **THE FINDING THAT CLOSES THE FLOOR QUESTION FOREVER: the floor sweep IS
+  the median test, measured** — ranking runs by the highest floor at which P1 still banks a
+  supercell (PC 0, C2 25, C 50, B 100, SC 200, A 200) is **IDENTICAL, run for run, to
+  ranking them by median max|uh|**, so raising the floor stops measuring persistence and
+  starts measuring magnitude. The §12.3 escape hatch is retired as measured-impossible, not
+  merely unused. **`P2` (net/path 0.28–0.80) and chain continuity APPEAR to separate and are
+  DELIBERATELY NOT PROMOTED** — §7.4's trap with a candidate as beneficiary, in the round
+  whose justification was implementing a pre-commitment — and the honest reason is also the
+  data: the two descriptors **rank the candidates differently** (B is mid-pack by net/path
+  and the most discontinuous run on the page by area/peak jump). §12.6's promise discharged:
+  C2's `E` **19.04 → 18.06** wrap-aware (`R` 0.129 → 0.108), sign unchanged, C bit-identical
+  as gated — but qualified, since C2's mask fills a **median 0.778** of the periodic y axis,
+  so an elongation measured along an axis the feature nearly wraps is not comparable with
+  C's open-axis 20.76. Also measured, and it falsifies a §3.1 rationale: **CM1's `uh` is
+  NON-NEGATIVE** (`min == 0.0` in all 50 control frames), so `max|·|` was always identity —
+  no number moves, but a **left-moving supercell carries no signal in this field at all**.
+  `test_classifier_t5.py` **57 → 111**, incl. §12.9's anti-collapse gate (series where chain
+  duration and every magnitude-only statistic disagree, both directions) with a vacuity
+  control. **Three fixtures had to be repaired before they could fail** — a couplet with a
+  one-cell gap, a seam line whose blobs merged early, and *symmetric* no-op fixtures that
+  passed a change which silently moved published `R` on five runs (reverted; the grid-snap
+  imprecision is left as a known defect rather than fixed post-scoring). **§11.8's case
+  against option (i) NO LONGER HOLDS** — it rested on "C2 is denied only by a rotation test
+  whose defect is now measured", and the defect is now *fixed* while C2 is *still* denied.
+  Price restated, not taken: third binary hash, patches-README row, charter CM1 pin moves.
+  **Owner call needed; nothing here takes it.** NOT recommended: moving the floor, promoting
+  `P2`, or a fifth criterion-1 round.
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.

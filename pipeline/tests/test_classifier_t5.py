@@ -716,6 +716,102 @@ check("UH_FLOOR_stays_inside_the_declared_noise_gate_band",
 check("UH_MIN_AREA_is_the_reused_constant_not_a_new_one",
       C.UH_MIN_AREA_KM2 == C.W_MIN_AREA_KM2)
 
+# --- section 12.6: organisation is wrap-aware too, and it must be a NO-OP ------
+# Section 12.6 promised C2's banked E would be recomputed wrap-aware. That is only
+# safe to do if the change cannot touch the runs already published in sections 9
+# and 11 -- SC, PC, A, B and C are all fully open. So the FIRST gate is that
+# nothing moves without a periodic axis.
+for _name, _cent in (("ring4", RING4), ("line", LINE), ("flank", FLANK)):
+    _cw, _cr = field(_cent, echo_at=[(0, 0)])
+    _open = C.organisation(_cw, _cr, KM, KM, 1.0, OPEN2)
+    _dflt = C.organisation(_cw, _cr, KM, KM, 1.0)
+    check(f"organisation_is_unchanged_without_a_periodic_axis_{_name}",
+          all(_open[k] == _dflt[k] for k in ("R", "E", "org_ncomp")),
+          (_open, _dflt))
+
+# The gate above is NOT enough on its own, and finding that out cost a real
+# regression: the first wrap-aware draft replaced the grid-snapped component
+# centroid with an exact mean, which moved R on all five OPEN runs (SC 0.4854 ->
+# 0.4821, A 0.5064 -> 0.5211) -- and every fixture above still passed, because
+# blobs on symmetric integer centres snap to themselves. Same defanging as T3's
+# square grid and the couplet's one-cell gap. So the centroid is pinned directly,
+# on components whose true mean is deliberately NOT on a grid point.
+from scipy import ndimage as _nd  # noqa: E402
+
+
+def _published_R(cw, cr, cents):
+    """Section 8.2's R, recomputed INDEPENDENTLY from the given component centres.
+
+    Deliberately a second implementation rather than a call into `organisation`:
+    it pins the published formula (echo-centroid anchor, area-weighted unit
+    vectors) so a refactor of the real one has something external to disagree with.
+    """
+    lab, n = _nd.label(cw >= C.W_UPDRAFT, structure=np.ones((3, 3)))
+    keep = np.arange(1, n + 1)
+    areas = _nd.sum(cw >= C.W_UPDRAFT, lab, index=keep)
+    jj, ii = np.nonzero(cr >= C.DBZ_CELL)
+    ax, ay = KM[ii].mean(), KM[jj].mean()
+    num, den = np.zeros(2), 0.0
+    for (gx, gy), a in zip(cents, areas):
+        d = np.array([gx - ax, gy - ay])
+        r = float(np.hypot(*d))
+        if r == 0.0:
+            continue
+        num += a * d / r
+        den += a
+    return float(np.hypot(*num) / den)
+
+
+_asym = [(-11.5, 3.5), (17.5, -8.5), (4.5, 21.5)]
+_cw, _cr = field(_asym, radius_km=2.5, echo_at=[(0, 0)])
+_lab, _n = _nd.label(_cw >= C.W_UPDRAFT, structure=np.ones((3, 3)))
+_keep = np.arange(1, _n + 1)
+_snap = [(float(KM[int(round(cx))]), float(KM[int(round(cy))]))
+         for cy, cx in _nd.center_of_mass(_cw >= C.W_UPDRAFT, _lab, index=_keep)]
+_exact = [(float(KM[np.nonzero(_lab == c)[1]].mean()),
+           float(KM[np.nonzero(_lab == c)[0]].mean())) for c in _keep]
+check("CONTROL_an_asymmetric_component_distinguishes_snap_from_exact_mean",
+      any(abs(s[0] - e[0]) > 0.2 or abs(s[1] - e[1]) > 0.2
+          for s, e in zip(_snap, _exact)), list(zip(_snap, _exact)))
+_Rreal = C.organisation(_cw, _cr, KM, KM, 1.0, OPEN2)["R"]
+check("organisation_still_uses_the_PUBLISHED_snapped_centroid_on_open_axes",
+      abs(_Rreal - _published_R(_cw, _cr, _snap)) < 5e-5,
+      (_Rreal, _published_R(_cw, _cr, _snap)))
+check("CONTROL_the_exact_mean_would_have_given_a_DIFFERENT_R",
+      abs(_published_R(_cw, _cr, _exact) - _published_R(_cw, _cr, _snap)) > 1e-4,
+      (_published_R(_cw, _cr, _exact), _published_R(_cw, _cr, _snap)))
+
+# A cluster with ONE member straddling the y seam. The two seam pieces must sit at
+# +-60 -- one cell apart across the wrap -- or they never touch and the fixture
+# stops testing the merge; and there must still be >=3 components in BOTH readings
+# or E is None on one side and the control cannot compare. Without wrap-awareness
+# the cluster's y-variance spans the whole domain: it reads as MORE elongated
+# purely from wrapping, which is the artifact being gated.
+_seamline = [(0, -60), (0, 60), (0, -50), (0, -40)]
+_cw, _cr = field(_seamline, echo_at=[(0, 0)])
+_o_per = C.organisation(_cw, _cr, KM, KM, 1.0, PERY)
+_o_open = C.organisation(_cw, _cr, KM, KM, 1.0, OPEN2)
+check("seam_line_is_ONE_feature_when_y_is_periodic",
+      _o_per["org_ncomp"] < _o_open["org_ncomp"],
+      (_o_per["org_ncomp"], _o_open["org_ncomp"]))
+check("CONTROL_treating_the_same_seam_line_as_open_INFLATES_its_elongation",
+      _o_open["E"] > _o_per["E"], (_o_open["E"], _o_per["E"]))
+check("wrap_span_fraction_is_reported_on_a_periodic_axis",
+      _o_per["org_wrap_span_frac"] is not None
+      and _o_open["org_wrap_span_frac"] is None,
+      (_o_per["org_wrap_span_frac"], _o_open["org_wrap_span_frac"]))
+
+# The honest limit: a mask spanning the WHOLE periodic axis has no well-defined
+# extent along it, so the span fraction must saturate and say so.
+# Three columns, not one: a single column merges to ONE component and returns
+# before E is ever computed, so the span would read None and the gate would test
+# nothing. Each column fills the periodic y axis end to end.
+_full = [(x, float(y)) for x in (-20.0, 0.0, 20.0) for y in KM[::2]]
+_cw, _cr = field(_full, echo_at=[(0, 0)])
+check("a_mask_filling_the_periodic_axis_reports_a_saturated_span",
+      C.organisation(_cw, _cr, KM, KM, 1.0, PERY)["org_wrap_span_frac"] > 0.95,
+      C.organisation(_cw, _cr, KM, KM, 1.0, PERY)["org_wrap_span_frac"])
+
 # --- section 12.9: the anti-collapse gate ------------------------------------
 # The suspicion P1 has to answer is the one section 11.4 proved about criterion 1:
 # that the rule collapses to a magnitude comparison wearing a costume. So build

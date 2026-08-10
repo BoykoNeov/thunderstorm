@@ -363,21 +363,29 @@ def chain_stats(nodes, times, xh, yh, periodic, link_km=LINK_KM, max_gap=1):
     path.reverse()
     pts = [nodes[i][c] for i, c in path]
 
-    total = 0.0
+    steps = []
     for a, b in zip(pts, pts[1:]):
         dx = wrap_delta(b["x_km"] - a["x_km"], px, periodic["x"])
         dy = wrap_delta(b["y_km"] - a["y_km"], py, periodic["y"])
-        total += float(np.hypot(dx, dy))
+        steps.append(float(np.hypot(dx, dy)))
     ndx = wrap_delta(pts[-1]["x_km"] - pts[0]["x_km"], px, periodic["x"])
     ndy = wrap_delta(pts[-1]["y_km"] - pts[0]["y_km"], py, periodic["y"])
 
     out.update({"p1_min": round(float(bdur), 1),
                 "p1_net_km": round(float(np.hypot(ndx, ndy)), 2),
-                "p1_path_km": round(total, 2),
+                "p1_path_km": round(sum(steps), 2),
                 "p1_sign": pts[0]["sign"],
                 "p1_start_min": round(float(times[path[0][0]]), 1),
                 "p1_end_min": round(float(times[bi]), 1),
-                "p1_frames": len(path)})
+                "p1_frames": len(path),
+                # Members of the WINNING path, so a descriptor of "one feature or a
+                # walk threading distinct cells" reads the chain the DP actually
+                # found. Re-walking it greedily outside this function produced a
+                # 26 km step -- larger than LINK_KM, i.e. not a chain at all: a
+                # reconstruction artifact of exactly T3's kind, reported as data.
+                "p1_steps_km": [round(s, 2) for s in steps],
+                "p1_areas_km2": [c["area_km2"] for c in pts],
+                "p1_peaks": [c["peak"] for c in pts]})
     return out
 
 
@@ -449,7 +457,7 @@ def frame_metrics(path, opens=None, periodic=None):
         cref >= DBZ_CELL, xh, yh)
 
     # O1 / O2 -- organisation (docs section 8), computed per frame, gated per run
-    m.update(organisation(colmax_w, cref, xh, yh, cell_km2))
+    m.update(organisation(colmax_w, cref, xh, yh, cell_km2, periodic))
 
     # P1 -- section 12: signed rotation centres, per frame. The CHAIN is a run-level
     # statistic (chain_stats); what a frame can supply is its centres. Computed at
@@ -462,23 +470,35 @@ def frame_metrics(path, opens=None, periodic=None):
 
 # --- section 8: the organisation statistics ---------------------------------
 
-def organisation(colmax_w, cref, xh, yh, cell_km2):
+def organisation(colmax_w, cref, xh, yh, cell_km2, periodic=None):
     """Flank coherence R and mask elongation E for one frame (docs section 8.2).
 
     A frame QUALIFIES when it has >=2 updraft components and a >=40 dBZ echo to
     anchor directions on. R is undefined without an independent anchor -- taking
     the components' own mean would force R == 0 by construction -- so the echo
     centroid is used and a frame with no echo does not qualify.
+
+    SECTION 12.6: labelling, the anchor, the component centroids and the covariance
+    are all wrap-aware. On a non-periodic run every one of these reduces EXACTLY to
+    what it was, so sections 9 and 11 are bit-identical for SC/PC/A/B/C; only C2 can
+    move, and section 13 records whether it did.
+
+    The honest limit, because wrap-awareness does not manufacture one: a feature
+    spanning the WHOLE periodic axis has no well-defined extent along it. The
+    circular mean of a uniform ring is degenerate and its circular variance
+    saturates. `org_wrap_span_frac` reports how much of a periodic axis the updraft
+    mask occupies, so a saturated E is visible instead of being read as elongation.
     """
+    periodic = periodic if periodic is not None else {"x": False, "y": False}
     out = {"org_ncomp": 0, "org_qualifies": False, "R": None, "E": None,
-           "org_min_anchor_km": None}
+           "org_min_anchor_km": None, "org_wrap_span_frac": None}
 
     emask = cref >= DBZ_CELL
     umask = colmax_w >= W_UPDRAFT
     if not emask.any() or not umask.any():
         return out
 
-    lab, n = ndimage.label(umask, structure=np.ones((3, 3)))
+    lab, n = label_periodic(umask, periodic)
     if n == 0:
         return out
     idx = np.arange(1, n + 1)
@@ -488,19 +508,37 @@ def organisation(colmax_w, cref, xh, yh, cell_km2):
         out["org_ncomp"] = int(len(keep))
         return out
 
+    px, py = _period(xh), _period(yh)
     jj, ii = np.nonzero(emask)
-    ax, ay = float(xh[ii].mean()), float(yh[jj].mean())
-
-    cents = ndimage.center_of_mass(umask, lab, index=keep)
-    areas = ndimage.sum(umask, lab, index=keep) * cell_km2
+    ax = wrapped_centroid(xh[ii], xh, periodic["x"])
+    ay = wrapped_centroid(yh[jj], yh, periodic["y"])
 
     # O1 -- area-weighted circular resultant length about the echo centroid.
+    #
+    # NOTE the grid-snapped component centroid on a NON-periodic axis. It is a
+    # half-cell imprecision and an exact mean would be better -- but replacing it
+    # here would silently move the R values PUBLISHED in sections 9 and 11 for all
+    # five open-boundary runs (measured: SC 0.4854 -> 0.4821, A 0.5064 -> 0.5211,
+    # B 0.1924 -> 0.1744), post-scoring, in a round whose whole justification is
+    # that it implements a pre-commitment. Section 12.6 promised exactly ONE
+    # recomputation -- C2's E -- so this stays bit-for-bit as it was and the
+    # imprecision is recorded in section 13 as a known defect for a future round.
+    cents = ndimage.center_of_mass(umask, lab, index=keep)
+    areas = ndimage.sum(umask, lab, index=keep) * cell_km2
     num = np.zeros(2)
     den = 0.0
     dists = []
-    for (cy, cx), a in zip(cents, areas):
-        dvec = np.array([float(xh[int(round(cx))]) - ax,
-                         float(yh[int(round(cy))]) - ay])
+    for c, (cy, cx), a in zip(keep, cents, areas):
+        if periodic["x"] or periodic["y"]:
+            cjj, cii = np.nonzero(lab == c)
+            gx = (wrapped_centroid(xh[cii], xh, True) if periodic["x"]
+                  else float(xh[int(round(cx))]))
+            gy = (wrapped_centroid(yh[cjj], yh, True) if periodic["y"]
+                  else float(yh[int(round(cy))]))
+        else:
+            gx, gy = float(xh[int(round(cx))]), float(yh[int(round(cy))])
+        dvec = np.array([wrap_delta(gx - ax, px, periodic["x"]),
+                         wrap_delta(gy - ay, py, periodic["y"])])
         dist = float(np.hypot(*dvec))
         dists.append(dist)
         if dist == 0.0:          # direction undefined: skipped, not counted as 0
@@ -521,11 +559,23 @@ def organisation(colmax_w, cref, xh, yh, cell_km2):
     if len(keep) >= 3:
         kept = np.isin(lab, keep)
         jj2, ii2 = np.nonzero(kept)
-        pts = np.stack([xh[ii2], yh[jj2]], axis=1)
+        # Displacements from the mask's own (circular) mean, minimum-image on a
+        # periodic axis -- otherwise a seam-straddling mask has an inflated
+        # variance along that axis and reads as elongated purely from wrapping.
+        mx = wrapped_centroid(xh[ii2], xh, periodic["x"])
+        my = wrapped_centroid(yh[jj2], yh, periodic["y"])
+        pts = np.stack([wrap_delta(xh[ii2] - mx, px, periodic["x"]),
+                        wrap_delta(yh[jj2] - my, py, periodic["y"])], axis=1)
         pts = pts - pts.mean(axis=0)
         cov = (pts.T @ pts) / len(pts)
         ev = np.clip(np.linalg.eigvalsh(cov), 1e-12, None)
         out["E"] = round(float(np.sqrt(ev[1] / ev[0])), 3)
+        span = []
+        if periodic["x"]:
+            span.append(len(np.unique(ii2)) / float(len(xh)))
+        if periodic["y"]:
+            span.append(len(np.unique(jj2)) / float(len(yh)))
+        out["org_wrap_span_frac"] = round(max(span), 3) if span else None
     return out
 
 

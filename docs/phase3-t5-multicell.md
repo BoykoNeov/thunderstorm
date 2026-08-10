@@ -1478,3 +1478,220 @@ result later: `LINK_KM` (check B), and the behaviour of the wrap-aware path
 exercises it. That path is gated by fixtures in `test_classifier_t5.py`, each with
 a control that fails against the naive implementation, and that is all the
 assurance it has.
+
+---
+
+## 13. Results — criterion 1′ scored, and what it settles
+
+### 13.1 The abort condition PASSED, and SC's half was earned rather than forced
+
+§12.11 has the control table. The short version: **SC returned SUPERCELL on a
+measurement** — an 80-min chain over 17/17 mature frames — and **PC returned SINGLE
+CELL** on a 5-min chain, a **16× separation**. This is the first version of the
+classifier since §3 in which SC's label was *capable* of coming out wrong, and it
+did not. Only then were the candidates scored.
+
+### 13.2 The scores
+
+All figures over mature frames (t ≥ 40 min), at the pre-registered
+`UH_FLOOR = 10`, `LINK_KM = 7.5`, `T_PERSIST = 30 ± 5`.
+
+| run | `P1` (min) | `P1` 1-gap | `P2` net/path | median `R` | median `E` | crit1′ | crit2′ | crit3 | **label** |
+|---|---|---|---|---|---|---|---|---|---|
+| SC (control) | **80** | 80 | 12.8 / 17.3 | 0.4854 | 1.84 | F | F | T | **SUPERCELL** ✔ |
+| PC (control) | **5** | 5 | 1.0 / 1.0 | 0.0055 | 1.000 | T | F | T | **SINGLE CELL** ✔ |
+| **A** `iwnd=4` | **80** | 80 | 24.6 / 30.7 | 0.5064 | 2.304 | F | F | T | **SUPERCELL** |
+| **B** `iwnd=1` | **80** | 80 | 17.3 / 26.9 | 0.1924 | 3.138 | F | T | T | **SUPERCELL** |
+| **C** `iinit=8` | **80** | 80 | 10.9 / 38.9 | 0.1247 | 20.757 | F | T | T | **SUPERCELL — VOID, §9.5** |
+| **C2** contained | **80** | 80 | 20.2 / 40.8 | 0.1082 | 18.058 | F | T | T | **SUPERCELL** |
+
+**No candidate returned MULTICELL.** Same verdict as criterion 1 gave in §§9 and 11,
+reached by a construction that shares nothing with it.
+
+### 13.3 The headline: the defect was real in KIND and null in OUTCOME
+
+§11.4 proved criterion 1 was a median-magnitude comparison with zero temporal
+content. That finding stands — it was 12 000 comparisons over six runs, and nothing
+here impeaches it. **But replacing it moved no verdict.** Criterion 1 (magnitude,
+control-normalised) and criterion 1′ (persistence, scale-free, no control
+normalisation) are independent constructions, and they agree on all six runs.
+
+This is a *stronger* position than a flipped verdict would have been, and it is
+worth saying so plainly rather than presenting a null as a disappointment: **"these
+are all supercells" now rests on two independent rotation criteria instead of one
+that was known to be broken.** A rule can be defective in what it measures and still
+be right about what it decides; §11.4 established the first and §13 establishes the
+second, and they are different claims.
+
+### 13.4 `P1` saturates inside the storm population — §12.8's third bullet fires
+
+`P1` separates the known single cell from everything else by 16× (80 vs 5). Inside
+the storm population it has **no resolution at all**: A, B, C and C2 all chain the
+*entire* mature window, to the frame, exactly as SC does.
+
+So criterion 1′ discriminates **single-cell from storm**, not **multicell from
+supercell**. §12.8 pre-registered that outcome — *"every run persists, or none does
+… an honest result about the probe design, reported rather than patched a fourth
+time"* — and this is it. It is not a failure of the metric to run; it is a
+measurement that the metric does not resolve the distinction T5 needs.
+
+Two checks say the saturation is a property of the storms rather than a mechanical
+artifact of a low floor: the largest rotation component in SC is 137 km², **0.42 %
+of the domain** (§12.11 check C), so nothing chains by covering the map; and every
+step of every winning chain is inside `LINK_KM` by construction, with measured
+maxima of 2.26 (SC) to 6.85 km (C) against the 7.5 budget — the linker is refusing
+hops, not waving them through.
+
+### 13.5 The floor sweep IS the median test, and that is now measured
+
+```
+  UH_FLOOR      5      10      25      50     100     200
+  SC           80      80      80      80      80      80      P1, minutes
+  PC           15       5       0       0       0       0
+  A            80      80      80      80      80      80
+  B            80      80      80      80      80       0
+  C            80      80      80      40      15       5      (VOID)
+  C2           80      80      55      25       0       0
+```
+
+At the pre-registered floor everything in the storm population saturates. Raise the
+floor and an ordering appears — and **it is §11.4's median ordering, exactly.**
+Ranking the runs by the highest floor at which `P1` still banks a supercell, against
+ranking them by median mature `max|uh|`:
+
+| run | median `max\|uh\|` | highest floor with `P1 ≥ 35` |
+|---|---|---|
+| PC | 22.0 | 0 |
+| C2 | 197.3 | 25 |
+| C | 271.5 | 50 |
+| B | 349.9 | 100 |
+| SC | 678.7 | 200 |
+| A | 1132.4 | 200 |
+
+**The two orderings are identical, run for run, all six.** Which is the whole point
+of §12.3 stated as data instead of as an argument: *the floor is where the median
+test gets back in.* Raise it and `P1` stops measuring persistence and starts
+measuring magnitude again — the thing §11.4 retired.
+
+So the sweep is **reported and refused as a discrimination.** Nobody may read "C2
+dies at 100 and SC survives 200" as evidence about storm mode; that sentence is
+"C2's median rotation is smaller than SC's" in costume, and §11.5 already settled
+that a threshold is not moved to find a result. It also retires the §12.3 escape
+hatch permanently: there was never a floor above the noise-gate band that would have
+answered this question honestly, and now that is measured rather than promised.
+
+### 13.6 `P2` and chain continuity are REPORTED and NOT promoted
+
+The descriptors, read off the winning DP path:
+
+| run | net/path | median step (km) | max step | max area jump | max peak jump |
+|---|---|---|---|---|---|
+| SC | 0.74 | 0.96 | 2.26 | 0.3× | 0.2× |
+| PC | 1.00 | 0.99 | 0.99 | 0.2× | 0.0× |
+| A | 0.80 | 1.79 | 3.60 | 0.5× | 0.6× |
+| B | 0.64 | 1.15 | 6.45 | **6.0×** | **12.4×** |
+| C | 0.28 | 2.00 | 6.85 | 2.4× | 1.3× |
+| C2 | 0.50 | 2.43 | 6.80 | 2.0× | 4.5× |
+
+SC and A are smooth: a single feature whose area and peak evolve gently. B, C and C2
+are not — their chains thread features whose area and peak change discontinuously,
+which is what a chain walking along a line of regenerating cells would look like.
+
+**This is not promoted to a gate, and the reason is the whole discipline of §12.**
+`P2` was pre-registered as non-gating in §12.4, for a stated reason. Promoting it now
+would be the **fourth** revision of criterion 1, chosen after the labels were
+visible, in the round whose entire justification was that it *implemented a
+pre-commitment* rather than made a fresh choice. §7.4 named picking a number just
+above what a control did; §11.5 named picking one just above what a candidate did;
+this would be picking a whole new *statistic* because of where the candidates landed.
+
+And the data does not support the promotion anyway, which is worth recording because
+it is the honest reason as well as the disciplined one: **the two descriptors
+disagree on their own ordering.** By net/path, B (0.64) sits between SC (0.74) and
+C2 (0.50); by area/peak discontinuity, B is the *most* discontinuous run on the page
+— more so than C or C2. A statistic whose two readings rank the candidates
+differently is not ready to decide anything. If it is worth gating, that is a future
+pre-registration written against the controls with the candidates re-blinded, and it
+starts from **two calibration points**, which is thin.
+
+### 13.7 §12.6's promise discharged: C2's `E` moved, and the span qualifies it
+
+Recomputed wrap-aware, as promised before the re-score:
+
+| | banked (§11.2) | wrap-aware | change |
+|---|---|---|---|
+| C2 median `E` | 19.037 | **18.058** | −5.1 % |
+| C2 median `R` | 0.1289 | **0.1082** | −16 % |
+| C median `E` (open y) | 20.757 | 20.757 | **none**, as gated |
+
+The **sign is unchanged and no label moves**: 18.06 is still 7.5× the banded floor,
+and C2's `R` was never near its floor. C — which is open in y — is bit-identical,
+which is the gated no-op doing its job.
+
+**But the number carries a qualification that §11 did not state.** C2's updraft mask
+occupies a **median 0.778 of the periodic y axis** (range 0.450–0.944). An
+elongation measured along an axis the feature nearly wraps is a measurement of the
+*domain* as much as of the storm: it cannot exceed what the wrap allows, and it
+cannot be compared with C's 20.757, which was measured on an open axis with no such
+ceiling. §11 banked `E` = 19.04 as C2's strongest signal; the honest version is
+**"elongated, on an axis it nearly fills, so the magnitude is not comparable across
+boundary types."** The verdict does not depend on it — crit1′ decides first — but
+the claim does.
+
+### 13.8 Two errors made during §13 and corrected, recorded because gates missed them
+
+Both were made *after* `63c9f3d` and after the candidate labels were visible. Neither
+can move a verdict — criterion 1′ decides before criterion 2′ is reached — but the
+sequence matters and hiding it would be worse than the errors.
+
+1. **A silent regression in `organisation`, caught by re-reading published numbers,
+   not by a gate.** The first wrap-aware draft replaced the grid-snapped component
+   centroid with an exact mean. That is *better* arithmetic and it was **wrong to
+   do**: it moved `R` on all five open-boundary runs (SC 0.4854 → 0.4821, A 0.5064
+   → 0.5211, B 0.1924 → 0.1744), i.e. it silently edited numbers published in §§9
+   and 11, post-scoring, in a round justified by pre-commitment. §12.6 promised
+   **one** recomputation — C2's `E`. The snap is restored, the five runs reproduce
+   bit-for-bit, and the imprecision is left on the page as a known defect for a
+   future round rather than fixed at the wrong moment.
+   **Why the gate missed it:** the three no-op fixtures put blobs on symmetric
+   integer centres, which snap to themselves — so the gate passed on a change that
+   moved real data. **The same defanging as T3's square grid and as the couplet
+   fixture that needed its one-cell gap closed earlier the same day.** It is now
+   pinned by an asymmetric fixture plus an *independent* reimplementation of §8.2's
+   `R`, with a control asserting the exact mean would have given a different answer.
+2. **A reconstruction artifact reported as data — briefly.** The first §13.6 table
+   was built by re-walking each chain greedily (nearest same-sign component) instead
+   of following the DP back-pointers. It produced a **26.18 km step for C2 — larger
+   than `LINK_KM`**, i.e. describing a path the linker had refused. It also gave B
+   0.3×/0.4× where the real chain gives 6.0×/12.4×. **Exactly T3's lesson**, where an
+   18.5 px "error" turned out to be a matching artifact rather than a placement
+   error, and T4 §5.2's, where a tracker's separation column had to be discarded.
+   `chain_stats` now returns the winning path's own members, and the sanity check
+   "every step ≤ `LINK_KM`" is printed for every run.
+
+### 13.9 State, and what the owner is asked
+
+- **T5 has no multicell, now under two independent criterion-1 designs.** A, B, C
+  and C2 classify SUPERCELL on magnitude (§§9, 11) and on persistence (§13).
+- **Option (iii) is spent.** It did what §11.6 asked — a different discriminator,
+  scale-free, no control normalisation, thresholds fixed a priori and committed
+  before scoring — and the answer is that rotation persistence does not separate
+  these regimes at 1 km. §11.4's defect was real; fixing it changed nothing.
+- **The classifier's reach is now measured, not assumed:** it separates single-cell
+  from storm decisively (16× on `P1`, and criterion 2′ annihilates the ring), and it
+  does **not** separate multicell from supercell. That is a real answer about probe
+  design, in the shape §8.6's last paragraph pre-committed for exactly this case.
+- **§11.8's case against option (i) no longer holds, and that is a change the owner
+  should decide on, not this section.** §11.8 argued (i) was the weakest option
+  because *"C2 … is denied only by a rotation test whose defect is now measured."*
+  The defect is now not merely measured but **fixed**, and C2 is **still** denied —
+  by a test with no self-reference, no control normalisation and no median in it.
+  The premise that made (i) look like paying for the wrong thing is gone.
+  **Its price is unchanged and is restated rather than re-argued:** a third binary
+  hash, a new row in `sim/cm1-patches/README.md`, and moving the charter's CM1 pin
+  that `d427ff2` consolidated. Whether the §2.2 shear gap is worth a second fork is
+  the owner's call; nothing here should be read as taking it.
+- **What is NOT recommended:** moving the floor (§13.5 measures that this is the
+  median test returning), promoting `P2` (§13.6), or a fifth criterion-1 round. Three
+  revisions have now been spent on criterion 1 and each was justified; a fourth
+  chosen from a descriptor that ranks the candidates two different ways would not be.
