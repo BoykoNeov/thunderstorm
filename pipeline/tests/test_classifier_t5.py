@@ -24,6 +24,7 @@ not by accident. The two that matter most:
 
 Run before the classifier is pointed at real data, and it was.
 """
+import inspect
 import os
 import sys
 
@@ -471,6 +472,294 @@ check("module_state_is_restored_after_the_sensitivity_blocks",
       and C.UH_FRAC_FRAMES == 0.5,
       f"THRESH={THRESH} k={C.UH_FRACTION_OF_CONTROL} "
       f"frac={C.UH_FRAC_FRAMES}")
+
+
+
+# ---------------------------------------------------------------------------
+# Section 12: criterion 1' -- rotation PERSISTENCE, and the machinery under it.
+#
+# Section 11.4 retired criterion 1 by MEASURING that it collapses to a median
+# comparison. P1 is exposed to the identical suspicion -- "you moved k with extra
+# steps" -- so the answer here has to be a test and not a paragraph. The blocks
+# below are, in order: the signed-component gates, the wrap-aware geometry (each
+# with a control that FAILS on the naive implementation, because a wrap fixture
+# that passes either way tests nothing), the chain itself, classify_v3's wiring,
+# and section 12.9's anti-collapse gate with its vacuity control.
+# ---------------------------------------------------------------------------
+
+OPEN2 = {"x": False, "y": False}
+PERY = {"x": False, "y": True}
+
+
+def uhfield(blobs, half=1):
+    """A uh field with a (2*half+1)^2 block of the given value at each centre.
+
+    3x3 = 9 km2 at 1 km cells, comfortably over UH_MIN_AREA_KM2 = 4.
+    """
+    a = np.zeros((NX, NX))
+    for cx, cy, val in blobs:
+        i = int(np.argmin(np.abs(KM - cx)))
+        j = int(np.argmin(np.abs(KM - cy)))
+        a[max(0, j - half):j + half + 1, max(0, i - half):i + half + 1] = val
+    return a
+
+
+# --- signed components: the couplet must not merge ---------------------------
+# A splitting storm puts a cyclonic and an anticyclonic mesocyclone side by side.
+# Under abs() the adjacent pair merges into ONE component whose centroid sits
+# BETWEEN the movers -- an artifact in exactly the case that decides SC.
+# The lobes must TOUCH or the control below cannot fire: at centres -2 / +2 the two
+# 3x3 blocks leave a one-cell gap at x=0, abs() has nothing to merge, and the
+# fixture silently stops testing the thing it exists for. Same class of trap as the
+# RING12 radius above. Cyclonic at -2 (cols -3..-1), anticyclonic at +1 (cols 0..2).
+couplet = uhfield([(-2, 0, +500.0), (1, 0, -500.0)])
+cs = sorted(C.rotation_centres(couplet, KM, KM, 1.0, C.UH_FLOOR, OPEN2),
+            key=lambda c: c["x_km"])
+check("signed_couplet_gives_TWO_centres", len(cs) == 2, [c["sign"] for c in cs])
+check("signed_couplet_carries_both_senses",
+      sorted(c["sign"] for c in cs) == [-1, 1], [c["sign"] for c in cs])
+check("signed_couplet_centres_sit_ON_the_movers",
+      abs(cs[0]["x_km"] + 2.0) < 0.6 and abs(cs[1]["x_km"] - 1.0) < 0.6,
+      [c["x_km"] for c in cs])
+# The control that gives the gates above their meaning: |uh| really does merge the
+# couplet, and the merged centroid lands BETWEEN the movers -- on neither of them.
+_abs_lab, _abs_n = C.label_periodic(np.abs(couplet) >= C.UH_FLOOR, OPEN2)
+check("CONTROL_abs_uh_merges_the_couplet_into_one", _abs_n == 1, _abs_n)
+_abs_x = KM[np.nonzero(_abs_lab == 1)[1]].mean()
+check("CONTROL_the_merged_centroid_sits_between_the_movers_on_neither",
+      cs[0]["x_km"] < _abs_x < cs[1]["x_km"], _abs_x)
+
+check("a_component_under_the_area_minimum_is_dropped",
+      C.rotation_centres(uhfield([(0, 0, 500.0)], half=0), KM, KM, 1.0,
+                         C.UH_FLOOR, OPEN2) == [])
+check("rotation_below_the_floor_yields_no_centres",
+      C.rotation_centres(uhfield([(0, 0, C.UH_FLOOR - 0.1)]), KM, KM, 1.0,
+                         C.UH_FLOOR, OPEN2) == [])
+
+# --- wrap-aware geometry, each with a failing naive control -------------------
+check("period_is_one_cell_longer_than_the_coordinate_span",
+      C._period(KM) == (KM[-1] - KM[0]) + 1.0, C._period(KM))
+# The seam gotcha stated as a control: the naive span is short by exactly one cell,
+# which puts a 1 km discontinuity in every wrapped distance.
+check("CONTROL_the_naive_span_is_NOT_the_period",
+      (KM[-1] - KM[0]) != C._period(KM))
+
+PER = C._period(KM)
+check("wrap_delta_takes_the_short_way_round",
+      abs(C.wrap_delta(PER - 3.0, PER, True) - (-3.0)) < 1e-9,
+      C.wrap_delta(PER - 3.0, PER, True))
+check("CONTROL_naive_delta_reads_the_seam_as_a_domain_crossing",
+      abs(C.wrap_delta(PER - 3.0, PER, False)) > 100.0)
+check("wrap_delta_is_identity_well_inside_the_domain",
+      C.wrap_delta(4.0, PER, True) == 4.0)
+
+# A feature straddling the y seam: rows at the very top and the very bottom.
+seam = np.zeros((NX, NX))
+seam[:2, 58:63] = 500.0
+seam[-2:, 58:63] = 500.0
+_lab_p, _n_p = C.label_periodic(seam >= C.UH_FLOOR, PERY)
+_lab_o, _n_o = C.label_periodic(seam >= C.UH_FLOOR, OPEN2)
+check("periodic_labelling_closes_the_seam", _n_p == 1, _n_p)
+check("CONTROL_open_labelling_splits_the_same_feature", _n_o == 2, _n_o)
+
+_yy = np.nonzero(seam >= C.UH_FLOOR)[0]
+_circ = C.wrapped_centroid(KM[_yy], KM, True)
+_arith = C.wrapped_centroid(KM[_yy], KM, False)
+check("circular_centroid_lands_ON_the_seam_feature",
+      min(abs(_circ - KM[0]), abs(_circ - KM[-1]), abs(abs(_circ) - PER / 2)) < 2.0,
+      _circ)
+check("CONTROL_arithmetic_centroid_lands_in_mid_domain_instead",
+      abs(_arith) < 1.0 and abs(_arith - _circ) > 50.0, (_arith, _circ))
+check("circular_centroid_is_folded_into_the_axis_range",
+      KM[0] - 0.5 <= _circ <= KM[-1] + 0.5, _circ)
+check("circular_centroid_equals_the_arithmetic_one_away_from_the_seam",
+      abs(C.wrapped_centroid(np.array([9.0, 11.0]), KM, True) - 10.0) < 1e-6,
+      C.wrapped_centroid(np.array([9.0, 11.0]), KM, True))
+
+# --- the chain ---------------------------------------------------------------
+def centre(x, y, sign=1, area=9.0):
+    return {"sign": sign, "x_km": float(x), "y_km": float(y),
+            "area_km2": area, "peak": 500.0}
+
+
+CH_T = list(range(40, 125, 5))          # 17 mature frames, the probes' own count
+
+
+def chain(nodes, periodic=OPEN2, **kw):
+    return C.chain_stats(nodes, CH_T, KM, KM, periodic, **kw)
+
+
+steady = [[centre(0, 0)] for _ in CH_T]
+check("a_steady_centre_chains_the_whole_window",
+      chain(steady)["p1_min"] == CH_T[-1] - CH_T[0], chain(steady)["p1_min"])
+
+telep = [[centre((i % 2) * 40.0, 0)] for i in range(len(CH_T))]
+check("a_teleporting_centre_forms_no_chain", chain(telep)["p1_min"] == 0.0,
+      chain(telep)["p1_min"])
+# ...and the control that proves the LIMIT is what refuses it, not the fixture:
+check("CONTROL_the_same_teleporting_centre_chains_at_a_huge_link_radius",
+      chain(telep, link_km=1e4)["p1_min"] == CH_T[-1] - CH_T[0])
+
+drifting = [[centre(7.0 * i, 0)] for i in range(len(CH_T))]      # 7 km/frame < 7.5
+check("a_centre_drifting_inside_the_link_radius_still_chains",
+      chain(drifting)["p1_min"] == CH_T[-1] - CH_T[0])
+check("P2_reports_the_walk_a_chain_took",
+      chain(drifting)["p1_net_km"] > 100.0
+      and abs(chain(drifting)["p1_path_km"] - chain(drifting)["p1_net_km"]) < 1e-6)
+
+flip = [[centre(0, 0, sign=+1 if i < 8 else -1)] for i in range(len(CH_T))]
+check("a_sign_flip_breaks_the_chain_at_the_same_position",
+      chain(flip)["p1_min"] < CH_T[-1] - CH_T[0], chain(flip)["p1_min"])
+
+drop = [[centre(0, 0)] if i != 8 else [] for i in range(len(CH_T))]
+check("a_one_frame_dropout_breaks_the_gated_no_gap_chain",
+      chain(drop)["p1_min"] < CH_T[-1] - CH_T[0], chain(drop)["p1_min"])
+check("the_one_gap_DIAGNOSTIC_bridges_that_same_dropout",
+      chain(drop, max_gap=2)["p1_min"] == CH_T[-1] - CH_T[0],
+      chain(drop, max_gap=2)["p1_min"])
+
+# The chain must be able to pick the LONGEST of several, not the first it meets.
+mixed = [[centre(0, 0)] if i < 3 else [centre(30, 30)] for i in range(len(CH_T))]
+check("the_longest_chain_wins_not_the_earliest",
+      chain(mixed)["p1_min"] == CH_T[-1] - CH_T[3], chain(mixed)["p1_min"])
+
+# --- the wrap gate that matters: a chain crossing the y seam -----------------
+# This is section 12.6's whole point, and C2 is the run it lands on. The naive
+# reading is a ~121 km jump -- it breaks a chain that never physically broke, and
+# it breaks it TOWARD crit1' being TRUE, i.e. toward the answer being sought.
+_LO = float(KM[0]) - 0.5                 # the axis's left cell edge
+seamwalk = [[centre(0, _LO + ((-36.0 - 3.0 * i - _LO) % PER))]
+            for i in range(len(CH_T))]   # -3 km/frame, wrapping at mature frame 9
+check("a_chain_crossing_the_PERIODIC_y_seam_survives",
+      chain(seamwalk, periodic=PERY)["p1_min"] == CH_T[-1] - CH_T[0],
+      chain(seamwalk, periodic=PERY)["p1_min"])
+check("CONTROL_the_same_chain_BREAKS_when_y_is_treated_as_open",
+      chain(seamwalk, periodic=OPEN2)["p1_min"] < CH_T[-1] - CH_T[0],
+      chain(seamwalk, periodic=OPEN2)["p1_min"])
+
+# --- classify_v3 wiring ------------------------------------------------------
+def run3(frames, periodic=OPEN2):
+    return {"name": "fixture", "n_frames": len(frames), "declared_motion": (0.0, 0.0),
+            "open_sides": {"x": True, "y": True}, "periodic_sides": periodic,
+            "xh": KM, "yh": KM, "frames": frames}
+
+
+def v3frame(t_min, centres, rot, echo_at=None, cells=1):
+    """A frame carrying BOTH section 8's organisation keys and section 12's centres."""
+    f = orgframe(t_min, centres, echo_at=echo_at, cells=cells)
+    f["rot"] = {f"{fl:g}": (rot if fl <= C.UH_FLOOR else [])
+                for fl in C.FLOOR_SWEEP}
+    return f
+
+
+def v3run(centres, rot_at, echo_at=None, periodic=OPEN2):
+    """`rot_at(i)` returns the rotation centres for mature frame index i."""
+    fr = []
+    for t in TIMES:
+        if t < C.MATURE_MIN:
+            fr.append(v3frame(t, [(0, 0)], []))
+        else:
+            i = (t - C.MATURE_MIN) // 5
+            fr.append(v3frame(t, centres, rot_at(i), echo_at=echo_at, cells=1))
+    return run3(fr, periodic=periodic)
+
+
+ALWAYS = lambda i: [centre(0, 0)]                       # noqa: E731
+NEVER = lambda i: [centre((i % 2) * 40.0, 0)]           # noqa: E731
+
+# Rotation outvotes organisation -- section 8.3's ordering, re-gated for v3. A
+# five-cell LINE with a persistent mesocyclone is a supercell, not a multicell.
+check("persistent_rotation_outvotes_a_five_cell_line",
+      C.classify_v3(v3run(LINE, ALWAYS, echo_at=[(0, 0)]))[0] == "SUPERCELL",
+      C.classify_v3(v3run(LINE, ALWAYS, echo_at=[(0, 0)]))[1])
+check("no_persistence_plus_an_organised_line_is_MULTICELL",
+      C.classify_v3(v3run(LINE, NEVER, echo_at=[(0, 0)]))[0] == "MULTICELL",
+      C.classify_v3(v3run(LINE, NEVER, echo_at=[(0, 0)]))[1])
+check("no_persistence_plus_a_RING_is_SINGLE_CELL",
+      C.classify_v3(v3run(RING4, NEVER, echo_at=[(0, 0)]))[0] == "SINGLE CELL",
+      C.classify_v3(v3run(RING4, NEVER, echo_at=[(0, 0)]))[1])
+
+
+def band_chain(minutes):
+    """Rotation that persists for exactly `minutes`, then teleports away."""
+    n = int(minutes // 5)
+    return lambda i: [centre(0, 0)] if i <= n else [centre(40.0 * (i % 2), 40.0)]
+
+
+check("P1_exactly_at_T_PERSIST_is_INDETERMINATE_not_a_label",
+      C.classify_v3(v3run(LINE, band_chain(30), echo_at=[(0, 0)]))[0]
+      == "INDETERMINATE",
+      C.classify_v3(v3run(LINE, band_chain(30), echo_at=[(0, 0)]))[1]["P1_chain_min"])
+check("P1_one_frame_over_the_band_banks_SUPERCELL",
+      C.classify_v3(v3run(LINE, band_chain(35), echo_at=[(0, 0)]))[0] == "SUPERCELL",
+      C.classify_v3(v3run(LINE, band_chain(35), echo_at=[(0, 0)]))[1]["P1_chain_min"])
+check("P1_one_frame_under_the_band_proceeds_past_criterion_1p",
+      C.classify_v3(v3run(LINE, band_chain(25), echo_at=[(0, 0)]))[0] == "MULTICELL",
+      C.classify_v3(v3run(LINE, band_chain(25), echo_at=[(0, 0)]))[1]["P1_chain_min"])
+
+# Section 11.6 constraint 2, gated STRUCTURALLY rather than promised in prose: the
+# live rule cannot take a control median, so no candidate/control ratio can hide
+# in it and SC's label cannot be arithmetically forced the way section 7.2 found.
+_v3sig = inspect.signature(C.classify_v3).parameters
+check("classify_v3_takes_NO_control_median_argument",
+      "sc_uh_median" not in _v3sig and list(_v3sig) == ["cand", "floor"],
+      list(_v3sig))
+check("CONTROL_the_retired_rule_still_requires_one",
+      "sc_uh_median" in inspect.signature(C.classify_v2).parameters)
+
+# The floor is a NOISE GATE and the whole post-hoc defence rests on it staying one.
+# Section 11.4's lowest candidate median is C2's 197.3; section 12.3 fixes the band
+# at < 50. A future edit nudging UH_FLOOR up to a "principled" 300 would silently
+# reinstate the median test with a citation stapled on -- this refuses it.
+check("UH_FLOOR_stays_inside_the_declared_noise_gate_band",
+      C.UH_FLOOR < 50.0 and C.UH_FLOOR <= 197.3 / 4.0, C.UH_FLOOR)
+check("UH_MIN_AREA_is_the_reused_constant_not_a_new_one",
+      C.UH_MIN_AREA_KM2 == C.W_MIN_AREA_KM2)
+
+# --- section 12.9: the anti-collapse gate ------------------------------------
+# The suspicion P1 has to answer is the one section 11.4 proved about criterion 1:
+# that the rule collapses to a magnitude comparison wearing a costume. So build
+# series where chain duration and EVERY magnitude-only statistic disagree, in both
+# directions, and make the disagreement the assertion.
+LOUD = 10_000.0           # far above any real max|uh|
+QUIET = C.UH_FLOOR + 0.5  # barely above the noise gate
+
+
+def magnitude_says_supercell(val):
+    """Any magnitude-only rule -- peak, median, mean -- reads only `val`."""
+    return val >= C.UH_FLOOR * 10
+
+
+loud_hopper = [[dict(centre((i % 2) * 40.0, 0), peak=LOUD)]
+               for i in range(len(CH_T))]
+quiet_rock = [[dict(centre(0, 0), peak=QUIET)] for i in range(len(CH_T))]
+
+check("anti_collapse_LOUD_but_hopping_rotation_forms_no_chain",
+      magnitude_says_supercell(LOUD) and chain(loud_hopper)["p1_min"] == 0.0,
+      chain(loud_hopper)["p1_min"])
+check("anti_collapse_QUIET_but_steady_rotation_chains_the_whole_window",
+      not magnitude_says_supercell(QUIET)
+      and chain(quiet_rock)["p1_min"] >= C.T_PERSIST_MIN + C.T_BAND_MIN,
+      chain(quiet_rock)["p1_min"])
+
+# The vacuity control, in the shape section 11.4's carried. Remove the displacement
+# limit and the linker cannot refuse any hop: P1 collapses to "was there rotation
+# above the floor in enough consecutive frames", the two rules AGREE again, and the
+# disagreements above are therefore attributable to LINK_KM and not to the framing.
+_diag = float(np.hypot(C._period(KM), C._period(KM)))
+check("VACUITY_at_an_unbounded_link_radius_the_two_rules_agree_again",
+      chain(loud_hopper, link_km=_diag)["p1_min"]
+      == chain(quiet_rock, link_km=_diag)["p1_min"] == CH_T[-1] - CH_T[0],
+      (chain(loud_hopper, link_km=_diag)["p1_min"],
+       chain(quiet_rock, link_km=_diag)["p1_min"]))
+
+# And the converse end: at a zero link radius a MOVING centre chains nothing, so
+# both ends of the LINK_KM knob are pinned and neither extreme is where the real
+# constant sits. (A stationary centre still chains at radius 0 -- its displacement
+# is exactly zero -- which is correct, and is why this uses the drifting series.)
+check("VACUITY_at_a_zero_link_radius_a_moving_centre_chains_nothing",
+      chain(drifting, link_km=0.0)["p1_min"] == 0.0,
+      chain(drifting, link_km=0.0)["p1_min"])
 
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

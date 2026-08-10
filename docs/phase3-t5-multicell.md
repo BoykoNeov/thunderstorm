@@ -120,6 +120,14 @@ storm-following* rotating updraft; a multicell does not. `max|·|` rather than
 `max` because a straight hodograph gives a cyclonic **and** an anticyclonic
 mover, and the anticyclonic one has negative UH.
 
+> **Correction (§12.11 check E, measured 2026-08-10):** the *reason* is wrong.
+> CM1 writes a **non-negative** `uh` — `min(uh) == 0.0` exactly, in all 50 control
+> frames — so no anticyclonic mover ever appears in this field and `abs()` has
+> always been the identity. **No number moves**: every `max|uh|` in §§7, 9 and 11,
+> including §11.4's medians and the whole k-sweep, is unaffected. What it costs is
+> scientific — a left-moving supercell carries no signal in this field at all.
+> Left next to the original per the doc header.
+
 *UH is frame-invariant* — it integrates `w·ζ`, and vertical vorticity
 `ζ = ∂v/∂x − ∂u/∂y` is Galilean-invariant — so a run with `imove=1` and a run
 with `imove=0` may be compared on it directly. That is what licenses §5's
@@ -1077,3 +1085,396 @@ Flagged here so it is not rediscovered later; it has no bearing on the T5 verdic
   rotation test whose defect is now measured. Buying a second CM1 fork to widen the
   shear range would be paying for the wrong thing — §10.4 pre-committed that
   reading before the run, and the run did not change it.
+
+---
+
+## 12. RE-PRE-REGISTRATION of criterion 1 — persistence, not magnitude (option iii)
+
+**Owner call, 2026-08-10: option (iii).** This section is written and committed
+BEFORE any candidate is re-scored, exactly as §§1–6 and §8 were. §11's numbers for
+A, B, C and C2 are already on the page and cannot be un-read — that is the
+difference between this round and the last two, and §12.1 states what it costs and
+what is done about it.
+
+### 12.1 The honesty caveat, stated first and stated bluntly
+
+§8 was written after seeing the two *controls*, with candidates unread. **§12 is
+written after seeing everything.** §9.8 named this exactly — *"doing this after
+§9.6's table is the post-hoc hazard in its purest form"* — and set the only terms
+on which it is defensible: **a discriminator justified on physical grounds
+independently of which way it moves B, C and C2.**
+
+Three structural defences, none of which is blinding, because blinding is no longer
+available:
+
+1. **The defect being fixed was measured, not noticed.** §11.4 established by
+   12 000 comparisons over six runs that criterion 1 is a median-magnitude test
+   with *zero* temporal content. That finding is independent of any candidate's
+   label — it holds identically for PC and for A. The thing being replaced was
+   proven broken before the replacement was designed.
+2. **The replacement is the one §9.8 pre-committed, in the words §9.8 used**
+   ("requiring rotation to *persist at a fixed storm-relative position*"), written
+   before any of §§10–11 existed. §12 is the implementation of a commitment, not a
+   fresh choice made with the answers in hand.
+3. **The magnitude floor is deliberately set where it cannot discriminate**
+   (§12.3). This is the load-bearing one and it is checkable arithmetic, not a
+   promise: if the floor is far below every run's rotation, then no part of the
+   verdict can be a magnitude comparison in disguise, whatever the author's
+   intentions were.
+
+**What is NOT claimed:** that §12 is as strong as §3. It is not. §3 was written
+against no data, §8 against half, §12 against all of it. The compensation is that
+§12's thresholds are checkable against a published table rather than against the
+author's word.
+
+### 12.2 What does NOT change
+
+Criterion 2′ (§8.2, organisation) and criterion 3 (sustained system) are untouched,
+as is the mature window (t ≥ 40 min) and **every one of the six field thresholds**
+(§8.1's list, unchanged again). Criterion 2′ is validated in the field and there is
+no case for reopening it: it fired on neither control, annihilated PC's ring, and
+separated ring from line by 20×.
+
+**The evaluation ORDER is unchanged and still load-bearing** (§8.3): criterion 1′
+runs first and rotation outvotes organisation. A splitting supercell has `R ≈ 0`
+and would fail criterion 2′; it must never reach it.
+
+Criterion 1's retired median rule stays callable (`classify_v2`) so §9 and §11 stay
+reproducible, exactly as the retired count rule (`classify`) was kept for §7.
+
+### 12.3 The floor is a noise gate, and that is the whole point
+
+Criterion 1′ needs *some* magnitude floor — `ndimage.label` on an unthresholded
+field finds structure in numerical noise. **That floor is the single most dangerous
+number in this section**, because §11.4's medians are already known:
+
+| run | A | SC | B | C | C2 | PC |
+|---|---|---|---|---|---|---|
+| median mature `max\|uh\|` (m²/s²) | 1132.4 | 678.7 | 349.9 | 271.5 | **197.3** | 22.0 |
+
+**Any floor in the 150–400 band would reproduce criterion 1's median comparison
+with a different constant and a citation stapled to it** — including the
+respectable-looking dimensional construction (ζ ≥ 0.01 s⁻¹ × w ≥ 10 m/s over a
+3 km layer ⇒ ~300 m²/s²), which lands squarely in that band and would settle C and
+C2 on magnitude alone. That is §11.5's trap with better sourcing, and it is
+rejected here on the page rather than discovered later.
+
+**`UH_FLOOR = 10.0` m²/s², fixed a priori as a noise gate.** Justification, in the
+form it has to take — an argument that the floor *cannot discriminate*:
+
+- **Dimensionally it is not a rotation criterion at all.** Over the 2–5 km layer
+  (3000 m), 10 m²/s² is `w·ζ ≈ 3.3 × 10⁻³ m/s²` sustained — e.g. w = 3.3 m/s with
+  ζ = 10⁻³ s⁻¹. Nothing about that describes a mesocyclone. It describes the level
+  below which "a rotating updraft" is not a meaningful phrase.
+- **It is an order of magnitude below the published operational thresholds** it
+  would otherwise be tempting to borrow (25 m²/s² for surrogate-severe reports at
+  4 km, Sobash et al. 2011, *Wea. Forecasting* 26, 714–728; 75–100 m²/s² is the
+  common supercell identifier in 1–4 km convection-allowing models). Borrowing one
+  of those would be picking a number in the danger band.
+- **It is 19.7× below the lowest candidate median in the table above** (C2's
+  197.3) and **2.2× below the single-cell control's** (PC's 22.0). So *every* run,
+  including the known single cell, clears it and forms rotation components.
+  **PC must therefore be rejected by persistence, not by magnitude** — which is
+  precisely the property that makes the floor provably non-discriminating and puts
+  100 % of the discrimination in the new statistic.
+
+**The bounded escape hatch, declared in advance rather than taken later.** If the
+control measurements (§12.11) show PC forming a spuriously persistent chain, the
+floor may rise — but **only within the noise-gate band, `< 50 m²/s²`**, which keeps
+it ≥ 4× below C2's median and therefore still incapable of reproducing the median
+test. A floor above 50 is not available under this section; if one were needed,
+criterion 1′ has failed and that is the finding (§12.8). Any movement at all is
+recorded next to the original, per the doc header.
+
+**And the floor sweep is a REPORTED DIAGNOSTIC, not a hidden sensitivity** —
+§11.5's lesson applied before the fact rather than after. Chain durations are
+reported over `UH_FLOOR ∈ {5, 10, 25, 50, 100, 200}` for every run. If the verdict
+is floor-sensitive within the noise-gate band, *that is the result*, reported as
+such.
+
+### 12.4 The statistic: P1 — longest same-sign rotation chain
+
+Per mature frame, rotation centres are the connected components (8-connectivity) of
+
+- `uh ≥ +UH_FLOOR` — cyclonic, and
+- `uh ≤ −UH_FLOOR` — anticyclonic,
+
+**labelled separately, not as `|uh|`.** This is not a detail. A splitting storm puts
+a cyclonic and an anticyclonic mesocyclone side by side; under `abs()` an adjacent
+couplet merges into one component whose centroid sits *between* the two movers — an
+artifact in exactly the case that decides the SC control.
+
+> **Measured before commit (§12.11 check E):** on CM1's output the anticyclonic
+> branch is **always empty** (`min(uh) == 0.0` in all 50 control frames), so the
+> split is *inactive* here and the artifact it guards against cannot arise. It is
+> kept because it is correct and free, and `min_uh` is now recorded per frame so a
+> future run carrying negative UH is visible rather than silently reinterpreted —
+> but it is not credited with work it did not do.
+
+Components below
+`UH_MIN_AREA_KM2 = 4.0` km² are dropped — **not a new constant**: it is the
+pre-registered `W_MIN_AREA_KM2`, reused rather than reinvented, per §8.1.
+
+A **link** joins a component in frame *i* to a component in frame *i+1* when:
+
+1. **the signs match** — a mesocyclone does not reverse its sense of rotation, and
+   requiring it stops a chain hopping between the two movers of a split; and
+2. **the centroid displacement is ≤ `LINK_KM` = 7.5 km** (§12.5).
+
+`P1` = the duration `t_last − t_first` of the **longest chain** of such links —
+the longest path through the frame-ordered DAG. Consecutive frames only: a
+mesocyclone that disappears for a frame has not persisted. (`P1` with a one-frame
+gap tolerated is reported as a diagnostic; it does not gate. The no-gap rule errs
+toward *shorter* chains, i.e. toward `crit1′` being TRUE, i.e. **toward MULTICELL —
+the answer being sought.** That direction is named here so the SC control is
+understood as the check on it, and it is why SC's chain is reported both ways.)
+
+**This is a linker, not a tracker, and the distinction is the whole T4 §5.2
+lesson.** The tool that failed there was an *argmax* tracker, which hops to whatever
+is brightest and therefore cannot fail to produce a track. A displacement-limited
+linker *refuses* to hop; when the rotation reappears 20 km away on a new cell, the
+chain breaks, which is the measurement being taken. Its failure mode is a broken
+chain — conservative, and visible.
+
+**P2 — chain net displacement (DESCRIPTOR, does not gate).** The start-to-end
+separation of the longest chain, and its total path length. Reported so a chain
+that "walks" steadily along a line is distinguishable on the page from one that
+stays put, without inventing a second gate. §3.1's M4 was demoted to a descriptor
+for the same reason and that demotion was correct.
+
+### 12.5 The two thresholds, fixed a priori from kinematics and duration
+
+**`LINK_KM = 7.5` km per 5-minute frame = 25 m/s of storm-relative motion.** The
+budget it has to cover is a rotation centre's deviation from the domain frame.
+`imove=1` already removes the bulk storm motion in every run but PC (which does not
+translate), so what remains is (a) the mover deviation of a splitting supercell,
+observationally ~5–10 m/s, and (b) the error in the a-priori `umove/vmove`, measured
+at ~2 m/s for SC (§7.1) and reported per run by `drift_fit`. 25 m/s is roughly 2.5×
+the largest of these, i.e. generous by construction. **The measured drift of every
+run is reported against this budget**, so "the link radius covered the motion" is a
+number on the page and not an assumption.
+
+**`T_PERSIST = 30` min.** Fixed from *duration*, per §11.6's constraint 3, and the
+duration that matters is not arbitrary: **an ordinary convective cell lives ~20–30
+minutes** (Byers & Braham 1949, *The Thunderstorm*; the figure is standard). A
+rotation chain outlasting a single cell's entire lifetime cannot be that one cell's
+transient spin-up — which is exactly the classical "long-lived rotating updraft"
+definition of a supercell, expressed as a time rather than as a magnitude.
+
+**Two-sided band, per §8.6, and quantised honestly.** With `tapfrq=300` a chain
+duration is a multiple of 5 min, so the band is ±1 frame:
+
+- `P1 ≥ 35` min → banks **not-crit1′** (a supercell);
+- `P1 ≤ 25` min → banks **crit1′** (not a supercell), and evaluation proceeds;
+- `P1 = 30` min exactly → **INDETERMINATE**, reported with the numbers.
+
+Neither edge is generous: a candidate landing just under is *not* a MULTICELL result
+to be banked, and one landing just over is *not* a SUPERCELL result either.
+
+### 12.6 Periodic boundaries — the third instance of the §9.5 error, caught first
+
+C2 has **periodic y** (`sbc=nbc=1`); that is what option (ii) bought. Two things
+break silently on a periodic axis, and both would land on the one candidate that
+matters most:
+
+1. **Displacement.** A rotation centre near `y = y_min` reappearing near `y = y_max`
+   is a naive jump of ~180 km. It breaks a chain that never physically broke, and
+   it breaks it toward `crit1′` = TRUE — toward MULTICELL.
+2. **Labelling and centroids.** `ndimage.label` is not wrap-aware, so a component
+   straddling the seam is counted as two; and a naive centroid of a seam-straddling
+   component lands in the middle of the domain, nowhere near the feature.
+
+Both are routed through the run's own boundary types (`periodic_sides()`, the
+mirror of the existing `open_sides()`): seam-adjacent labels are merged, centroids
+on a periodic axis are **circular means**, and displacements on a periodic axis use
+the minimum-image convention. **Neither control is periodic**, so this path is
+exercised by no control — it is therefore gated by fixtures in
+`test_classifier_t5.py`, each carrying a control that FAILS against the naive
+implementation. A wrap fixture that passes on both implementations tests nothing
+(T3's off-diagonal lesson).
+
+**One consequence for an already-published number, flagged not hidden.** C2's banked
+`E` = 19.04 (§11.2) is a voxel covariance computed in y on a periodic domain with
+non-wrap-aware labelling. The sign of that result is not in doubt — a line is
+elongated — but the number may move. It is recomputed in the §13 re-score and any
+change is recorded next to the original, per the doc header.
+
+### 12.7 Criterion 1′, and what the abort condition now means
+
+**`crit1′` ("not a supercell") holds iff `P1 ≤ T_PERSIST − 5` min** (25 min), with
+`P1 ≥ 35` banking a supercell and `P1 = 30` INDETERMINATE. Labels are otherwise
+unchanged from §8.4: `¬crit1′` → **SUPERCELL**; `crit1′ ∧ crit2′ ∧ crit3` →
+**MULTICELL**; `crit1′ ∧ ¬crit2′` → **SINGLE CELL**; anything else →
+**INDETERMINATE**.
+
+**The abort condition stands, and for the first time BOTH halves are live.** §7.2
+established that SC's SUPERCELL label was arithmetically forced, because criterion 1
+scored SC against a fraction of SC's own median. **§11.6's constraint 2 removes
+control normalisation entirely, and with it that forcing.** SC can now genuinely
+fail criterion 1′ — and if it does it falls through to criterion 2′, where its
+measured `R` 0.485 and `E` 1.84 are *both under the floors* (§8.7), so SC would
+return **SINGLE CELL** and the abort would fire.
+
+> **Correction (§12.11 check F, measured after this section was drafted):** the
+> label is wrong, the consequence is not. `R` 0.485 and `E` 1.84 are under the
+> floors but *inside §8.6's two-sided band on both statistics*, so a rotation-less
+> SC returns **INDETERMINATE**, not SINGLE CELL — verified by forcing the branch.
+> The abort fires either way, because the abort requires SC to return SUPERCELL.
+> Left next to the original per the doc header.
+
+This is the strongest single thing option (iii) buys, and it is worth being explicit
+that it is a risk and not a rhetorical flourish: a rule that cannot fail its
+positive control has been carrying this classifier since §3, it was found out twice
+(§7.2, §9.6), and this is the first version where finding out is possible.
+
+**Abort: SC must return SUPERCELL and PC must return SINGLE CELL, or no candidate
+is scored.** Same terms as §4 and §8.4.
+
+### 12.8 What would falsify this section
+
+Recorded so §12 is exposed the way §2.1's prediction and §8.6 were.
+
+- **PC forms a persistent chain** → criterion 1′ calls the known single cell a
+  supercell. Within the §12.3 band the floor may rise once, recorded; if PC still
+  persists at 50 m²/s², **criterion 1′ is wrong** and the honest conclusion is that
+  rotation persistence does not separate these regimes at 1 km.
+- **SC's chain breaks** → the positive control fails, and the interesting sub-case
+  is *why*: if SC's chain is broken only by the no-gap rule (§12.4), that is a
+  finding about the rule, reported with both numbers, not a silent relaxation.
+- **crit1′ is non-discriminating** — every run persists, or none does, across the
+  whole §12.3 floor sweep. That is an honest result about the probe design, exactly
+  as §8.6's last paragraph handled the same outcome for criterion 2′, and it is
+  reported rather than patched a fourth time.
+- **The verdict on B, C or C2 is floor-sensitive inside the noise-gate band.** Then
+  the answer is "criterion 1′ does not settle this candidate", not the answer at
+  whichever floor is prettiest.
+
+### 12.9 An anti-collapse gate, because §11.4 is what got us here
+
+§11.4's finding was that criterion 1 **collapsed to something simpler than it
+looked**, and that was found by testing rather than by reading. `P1` is exposed to
+the identical suspicion — "you moved `k` with extra steps" — and the answer has to
+be a test, not a paragraph.
+
+Committed with the code (`test_classifier_t5.py`), run-data-free, permanent:
+synthetic frame series on which **chain duration and every magnitude-only statistic
+disagree**, in both directions —
+
+- a series with *high* `max|uh|` in every frame whose rotation centre teleports
+  farther than `LINK_KM` each frame: magnitude says supercell, `P1` says no;
+- a series with rotation *barely above the floor* held rock-steady for 60 min:
+  magnitude says no, `P1` says supercell —
+
+plus a **vacuity control** in the shape §11.4's carried: with `LINK_KM` set to the
+domain diagonal the linker cannot refuse any hop, `P1` collapses to "was there
+rotation above the floor in enough consecutive frames", and the two rules **agree
+again**. That is what proves the discrimination comes from the displacement limit
+and not from the framing.
+
+
+### 12.10 Sequence — §8's, which worked
+
+1. §12 written with every threshold justified a priori. ← *this section*
+2. Implementation + wiring gates + §12.9's anti-collapse gate + §12.6's wrap
+   fixtures written, and measured **against SC and PC only** (`--only sc,pc`).
+   Every check recorded whether or not it fired, including "the thresholds did not
+   move" — §8.7's pattern. A check reported only when it fires is not a check.
+3. Doc and code committed *before* anything is scored (`3692e9a`'s pattern).
+4. Only then: A, B, C, C2 re-scored, in §13.
+
+### 12.11 Measurements taken on the controls before §12 was committed
+
+Six checks were run against SC and PC, candidates untouched (`--only sc,pc`). All
+six are listed whether or not they changed anything — §8.7's pattern, and the
+reason for it stands: **a check that is only reported when it fires is not a
+check.**
+
+**The abort condition PASSED, and for the first time SC's half was earned.**
+
+| control | `P1` (no-gap) | expected | returned |
+|---|---|---|---|
+| **SC** | **80 min** — the entire mature window, 17/17 frames | SUPERCELL | **SUPERCELL** ✔ |
+| **PC** | **5 min** — a single link at t = 110–115 | SINGLE CELL | **SINGLE CELL** ✔ |
+
+**0. The thresholds did not move.** `UH_FLOOR` 10.0, `LINK_KM` 7.5, `T_PERSIST`
+30 ± 5 are exactly as §§12.3–12.5 fixed them before any control was read. Recorded
+first because it is the check most worth being able to point at, and because
+§12.3's bounded escape hatch went unused — PC did not force the floor up.
+
+**A. The floor behaved as a noise gate, which is the load-bearing claim.** PC
+*clears* the floor and forms rotation components in 2 of its 17 mature frames — and
+is rejected by **persistence** (5 min against a 25-min band edge), not by magnitude.
+That is the property §12.3 said had to hold for the verdict not to be a median
+comparison in disguise, and it is now measured rather than argued. The floor sweep
+shows what the tempting "principled" choice would have done instead:
+
+```
+  UH_FLOOR      5      10      25      50     100     200
+  SC           80      80      80      80      80      80      P1, minutes
+  PC           15       5       0       0       0       0
+```
+
+At 25 and above PC forms **no components at all** — it would have been rejected on
+magnitude, exactly the collapse §12.3 was written to prevent, and precisely where
+the ζ × w × depth construction (~300) would have landed. **Both controls are
+floor-insensitive across the whole noise-gate band**, and SC is insensitive across
+the entire sweep.
+
+**B. `LINK_KM` is NOT calibrated by the controls — stated because it is a
+weakness.** Sweeping the link radius over 2.5–30 km moves neither control by one
+frame: SC returns 80 min and PC 5 min at every radius. SC's mesocyclone travels
+17.29 km of path over 80 min (≈2.7 m/s storm-relative), so it never approaches even
+the 2.5 km/frame limit. **The controls therefore place no constraint on `LINK_KM`
+in either direction**, and its justification remains purely the a-priori kinematic
+budget of §12.5. What the controls *do* confirm is that the budget is not binding
+on a real supercell — the measured drift is **9 % of the budget for SC and 0 % for
+PC**. A candidate whose verdict turns on `LINK_KM` would be reporting a number the
+controls never validated, and that would have to be said on the page.
+
+**C. The chain is a compact feature, not a domain-filling blob.** The obvious way
+`P1` could be vacuous is a low floor producing one enormous component that overlaps
+itself trivially every frame. Measured at floor 10 over the mature frames: SC's
+largest rotation component is **137 km² — 0.42 % of the 32 400 km² domain**
+(median 26 km²), and PC's are 5–6 km², right at the 4 km² area minimum. Nothing
+here is chaining by covering the map.
+
+**D. The no-gap rule cost neither control anything.** §12.4 flagged that
+consecutive-frame-only linking errs toward shorter chains — *toward* MULTICELL, the
+answer being sought — and made SC the check on it. Both controls return
+**identical** values with and without one-frame gap tolerance (SC 80/80, PC 5/5).
+§12.8's "SC's chain breaks only because of the no-gap rule" sub-case did **not**
+fire.
+
+**E. CM1's `uh` is NON-NEGATIVE, which falsifies a stated reason in §3.1.**
+Measured: `min(uh) == 0.0` **exactly**, in all 50 control frames. §3.1 justified
+`max|·|` over `max` on the grounds that *"a straight hodograph gives a cyclonic and
+an anticyclonic mover, and the anticyclonic one has negative UH"* — CM1 never
+writes one. Three consequences, separated because they are not equally serious:
+
+- **No published number moves.** `abs()` of a non-negative field is the identity,
+  so every `max|uh|` in §§7, 9 and 11 — including §11.4's medians and the entire
+  k-sweep — is unaffected. The *reason* on the page was wrong, not the arithmetic.
+- **§12.4's signed split is inactive on this output.** The anticyclonic branch is
+  always empty, so the couplet-merging artifact it guards against cannot arise
+  here. It is kept — it is correct, it costs nothing, and `min_uh` is now recorded
+  per frame so a future run carrying negative UH is *visible* rather than silently
+  reinterpreted. But it must not be credited with work it did not do.
+- **The real cost is scientific: a LEFT-moving supercell carries no signal in this
+  field at all**, for `P1` exactly as for M1. Every T5 run has a right-favouring or
+  zero-shear profile so no verdict here depends on it, but the limitation belongs
+  to the metric, not to the dataset, and it would matter to any future left-mover.
+
+**F. What SC would have returned had criterion 1′ failed — and §12.7 got the label
+wrong.** Forced by suppressing rotation: SC returns **INDETERMINATE**, not SINGLE
+CELL. Its `R` 0.485 and `E` 1.84 are under both floors but *inside §8.6's two-sided
+band on both*, so the band correctly refuses to bank a label. **The abort fires
+either way** — it requires SC to return SUPERCELL — so the substance of §12.7
+stands and only its parenthetical is corrected, on the page next to the original.
+PC under the same forcing returns SINGLE CELL cleanly, nowhere near either band.
+
+**What the controls do NOT establish.** Two things, so they are not read into the
+result later: `LINK_KM` (check B), and the behaviour of the wrap-aware path
+(§12.6) — **neither control is periodic**, so C2 is the first and only run that
+exercises it. That path is gated by fixtures in `test_classifier_t5.py`, each with
+a control that fails against the naive implementation, and that is all the
+assurance it has.

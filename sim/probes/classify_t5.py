@@ -46,7 +46,7 @@ HERE, before any result: the same 15 km used by the section 6.2 boundary
 descriptor. Stated openly because a criterion invented after seeing a marginal
 number is worthless.
 
-WHAT THE SC CONTROL CAN AND CANNOT DO
+WHAT THE SC CONTROL CAN AND CANNOT DO -- AND WHAT CHANGED AT SECTION 12
 
 Criterion 1's threshold is `0.25 x median(SC mature max|uh|)` and SC is scored
 against it too -- so at least half of SC's own frames are at or above its own
@@ -56,6 +56,17 @@ is not being changed to fix it (that would be post-hoc), but it means SC's job i
 to SET THE SCALE, not to be an independent check: the live half of the abort
 condition is PC. `--only sc,pc` prints the absolute SC median and the SC/PC ratio
 so a reader can see the scale separation is measured rather than assumed.
+
+That paragraph describes `classify` and `classify_v2`, and it is why section 11.4
+went looking: criterion 1 turned out to be a MEDIAN COMPARISON with no temporal
+content at all (k_flip == candidate_median / SC_median to 1e-12 on all six runs).
+`classify_v3` -- the live rule from section 12 -- replaces it with rotation
+PERSISTENCE and takes NO `sc_uh_median` argument at all. That absence is the point:
+with no control normalisation there is no self-reference, so SC's SUPERCELL label
+is no longer forced and BOTH halves of the abort condition are live for the first
+time since section 3. The magnitude floor `classify_v3` does use is a NOISE GATE
+set an order of magnitude below every run's rotation (section 12.3), precisely so
+it cannot smuggle the median test back in.
 """
 import argparse
 import glob
@@ -67,7 +78,8 @@ import numpy as np
 from scipy import ndimage
 
 DEFAULT_RUNS = "/home/boiko/thunderstorm/runs"
-PROBES = ["t5probe_sc", "t5probe_pc", "t5probe_a", "t5probe_b", "t5probe_c"]
+PROBES = ["t5probe_sc", "t5probe_pc", "t5probe_a", "t5probe_b", "t5probe_c",
+          "t5probe_c2"]
 
 # --- pre-registered constants (section 3.1) ---------------------------------
 DBZ_CELL = 40.0          # composite reflectivity threshold for a "cell"
@@ -102,6 +114,29 @@ MIN_QUALIFYING_FRAMES = MIN_FRAMES_WITH_2_CELLS   # 5 -- reused, not reinvented
 R_BAND = 0.10            # section 8.6 two-sided INDETERMINATE band
 E_BAND_FACTOR = 1.20     # ditto, multiplicative: 2.00/1.2 = 1.67 under, 2.40 over
 
+# --- section 12: criterion 1' (persistence), re-pre-registered 2026-08-10 ----
+# The median-magnitude criterion 1 was RETIRED after section 11.4 measured what it
+# actually computes: with UH_FRAC_FRAMES=0.5 and an odd frame count, "rotating for
+# less than half its mature life" IS the median, so criterion 1 is a scalar
+# magnitude ratio with zero temporal content (1 frame at 1e6 = not a supercell;
+# 17 flat frames at 200 = supercell). `classify_v2` still implements it and stays
+# callable so sections 9 and 11 remain reproducible; `classify_v3` is the live one.
+#
+# UH_FLOOR IS A NOISE GATE, NOT A ROTATION CRITERION, and that is load-bearing
+# (section 12.3). Section 11.4's medians are known -- A 1132, SC 679, B 350, C 272,
+# C2 197, PC 22 -- so ANY floor in the 150-400 band would reproduce criterion 1's
+# median comparison with a new constant and a citation stapled on, including the
+# respectable dimensional construction (zeta 1e-2 * w 10 * 3 km ~ 300). 10.0 is
+# 19.7x below the LOWEST candidate median and 2.2x below the single-cell control's,
+# so every run clears it and PC must be rejected by PERSISTENCE, not by magnitude.
+# It may rise only inside the noise-gate band (< 50) and only on the record.
+UH_FLOOR = 10.0          # m2/s2 -- see above; NOT a mesocyclone threshold
+UH_MIN_AREA_KM2 = W_MIN_AREA_KM2   # 4.0 -- reused, not reinvented (section 8.1)
+LINK_KM = 7.5            # max centre displacement per 5-min frame = 25 m/s
+T_PERSIST_MIN = 30.0     # > one ordinary cell's lifetime (Byers & Braham 1949)
+T_BAND_MIN = 5.0         # section 8.6 two-sided band, quantised to one frame
+FLOOR_SWEEP = (5.0, 10.0, 25.0, 50.0, 100.0, 200.0)   # reported diagnostic
+
 
 def open_sides(run_dir):
     """Which lateral boundaries are OPEN, read from the run's own config.
@@ -128,8 +163,227 @@ def open_sides(run_dir):
             "y": int(nml.get("sbc", 2)) == 2 or int(nml.get("nbc", 2)) == 2}
 
 
-def frame_metrics(path, opens=None):
+def periodic_sides(run_dir):
+    """Which lateral boundaries are PERIODIC, read from the run's own config.
+
+    The mirror of `open_sides`, and it exists for the same reason: section 9.5
+    voided candidate C by applying a compact-storm criterion to a direction that
+    has no walls. Section 12.6 is the third instance of that error class, now in
+    the chain statistic -- a rotation centre near y_min reappearing near y_max is
+    a naive ~180 km jump that breaks a chain which never physically broke, and it
+    breaks it TOWARD the answer being sought.
+
+    CM1: 1 = periodic, 2 = open-radiative, 3/4 = rigid wall. CM1 requires the two
+    sides of an axis to agree, so either key answers for the axis; both are read
+    and an axis counts as periodic only if BOTH say so. Absent keys default to the
+    template's 2, so a run predating this function is treated exactly as before.
+    """
+    try:
+        with open(os.path.join(run_dir, "scenario.json")) as f:
+            nml = json.load(f)["sim"]["namelist"]
+    except (OSError, KeyError, ValueError):
+        nml = {}
+    return {"x": int(nml.get("wbc", 2)) == 1 and int(nml.get("ebc", 2)) == 1,
+            "y": int(nml.get("sbc", 2)) == 1 and int(nml.get("nbc", 2)) == 1}
+
+
+def _period(coord):
+    """The wrap length of a uniformly spaced coordinate vector, in its own units.
+
+    xh[-1] - xh[0] is one cell SHORT of the period: the point after xh[-1] is
+    xh[0], not xh[-1]. Getting this wrong puts a one-cell seam in every wrapped
+    distance.
+    """
+    return float(coord[-1] - coord[0]) + float(coord[1] - coord[0])
+
+
+def wrap_delta(d, period, periodic):
+    """Minimum-image displacement: the shortest way round, if there is a way round."""
+    if not periodic:
+        return d
+    return d - period * np.round(d / period)
+
+
+def label_periodic(mask, periodic):
+    """8-connectivity labelling that closes the seam on periodic axes.
+
+    `ndimage.label` is not wrap-aware, so a feature straddling the seam comes back
+    as two components. Labels touching across a seam are merged with union-find and
+    the result is renumbered 1..n so it drops into the same call sites as
+    `ndimage.label`.
+    """
+    lab, n = ndimage.label(mask, structure=np.ones((3, 3)))
+    if n <= 1:
+        return lab, n
+
+    parent = list(range(n + 1))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    def stitch(edge_a, edge_b):
+        # 8-connectivity across the seam: index i on one edge touches i-1, i, i+1
+        for shift in (-1, 0, 1):
+            other = np.roll(edge_b, shift)
+            sel = (edge_a > 0) & (other > 0)
+            for u, v in zip(edge_a[sel], other[sel]):
+                union(int(u), int(v))
+
+    if periodic.get("y"):
+        stitch(lab[0, :], lab[-1, :])
+    if periodic.get("x"):
+        stitch(lab[:, 0], lab[:, -1])
+
+    roots = np.array([find(i) for i in range(n + 1)])
+    uniq = np.unique(roots[1:])
+    remap = np.zeros(n + 1, dtype=int)
+    for new, old in enumerate(uniq, start=1):
+        remap[roots == old] = new
+    remap[0] = 0
+    return remap[lab], int(len(uniq))
+
+
+def wrapped_centroid(vals, coord, periodic):
+    """Mean position of 1-D coordinates, circular where the axis wraps.
+
+    A seam-straddling component's arithmetic mean lands in the middle of the
+    domain, nowhere near the feature. The circular mean is the only honest answer
+    on a periodic axis; it is also exactly the arithmetic mean when the points are
+    compact, so nothing is lost where the axis does not wrap.
+
+    The result is folded back into the axis's OWN range rather than left in
+    [0, period): a centroid reported outside the coordinates it was computed from
+    is a trap for every downstream reader, and P2 is a reported descriptor.
+    """
+    vals = np.asarray(vals, dtype=float)
+    if not periodic:
+        return float(vals.mean())
+    period = _period(coord)
+    ang = 2.0 * np.pi * vals / period
+    m = np.arctan2(np.sin(ang).mean(), np.cos(ang).mean()) / (2.0 * np.pi) * period
+    lo = float(coord[0]) - 0.5 * float(coord[1] - coord[0])   # left cell edge
+    return float(lo + (m - lo) % period)
+
+
+def rotation_centres(uh, xh, yh, cell_km2, floor, periodic):
+    """Section 12.4 -- signed rotation centres for one frame.
+
+    Cyclonic (uh >= +floor) and anticyclonic (uh <= -floor) are labelled
+    SEPARATELY, not as |uh|. A splitting storm puts the two side by side, and under
+    abs() an adjacent couplet merges into one component whose centroid sits BETWEEN
+    the movers -- an artifact in exactly the case that decides the SC control.
+
+    MEASURED CAVEAT (section 12.11): CM1's `uh` is non-negative -- min == 0.0 in
+    all 50 control frames -- so on THIS output the anticyclonic branch is always
+    empty and the split is inactive. It is kept because it is correct, costs
+    nothing, and is the difference between an assumption that is checked (`min_uh`
+    is recorded per frame) and one that is merely believed. The consequence that
+    does bite is scientific, not numerical: a LEFT-moving supercell carries no
+    signal in this field at all, for P1 exactly as for M1.
+    """
+    out = []
+    for sign, mask in ((+1, uh >= floor), (-1, uh <= -floor)):
+        if not mask.any():
+            continue
+        lab, n = label_periodic(mask, periodic)
+        if n == 0:
+            continue
+        idx = np.arange(1, n + 1)
+        sizes = ndimage.sum(mask, lab, index=idx) * cell_km2
+        for c in idx[sizes >= UH_MIN_AREA_KM2]:
+            jj, ii = np.nonzero(lab == c)
+            out.append({
+                "sign": sign,
+                "x_km": wrapped_centroid(xh[ii], xh, periodic["x"]),
+                "y_km": wrapped_centroid(yh[jj], yh, periodic["y"]),
+                "area_km2": round(float(len(ii) * cell_km2), 2),
+                "peak": round(float(np.max(np.abs(uh[jj, ii]))), 1),
+            })
+    return out
+
+
+def chain_stats(nodes, times, xh, yh, periodic, link_km=LINK_KM, max_gap=1):
+    """Section 12.4 -- P1, the longest same-sign displacement-limited chain.
+
+    A LINKER, NOT A TRACKER. T4 section 5.2's argmax tracker hops to whatever is
+    brightest and so cannot fail to produce a track; this refuses to hop, and a
+    broken chain IS the measurement. Longest path through the frame-ordered DAG by
+    dynamic programming -- each node keeps the earliest start time that reaches it.
+
+    `max_gap=1` links consecutive frames only (the pre-registered gate). `max_gap=2`
+    tolerates one missing frame and is reported as a DIAGNOSTIC; its displacement
+    budget scales with the gap, since a centre absent for a frame had twice as long
+    to move.
+    """
+    px, py = _period(xh), _period(yh)
+    best = [[float(t)] * len(cs) for t, cs in zip(times, nodes)]   # earliest start
+    back = [[None] * len(cs) for cs in nodes]
+
+    for i in range(1, len(nodes)):
+        for ci, c in enumerate(nodes[i]):
+            for gap in range(1, max_gap + 1):
+                j = i - gap
+                if j < 0:
+                    break
+                for pj, p in enumerate(nodes[j]):
+                    if p["sign"] != c["sign"]:
+                        continue
+                    dx = wrap_delta(c["x_km"] - p["x_km"], px, periodic["x"])
+                    dy = wrap_delta(c["y_km"] - p["y_km"], py, periodic["y"])
+                    if float(np.hypot(dx, dy)) > link_km * gap:
+                        continue
+                    if best[j][pj] < best[i][ci]:
+                        best[i][ci] = best[j][pj]
+                        back[i][ci] = (j, pj)
+
+    out = {"p1_min": 0.0, "p1_net_km": None, "p1_path_km": None,
+           "p1_sign": None, "p1_start_min": None, "p1_end_min": None,
+           "p1_frames": 0}
+    bi = bc = None
+    bdur = -1.0
+    for i, row in enumerate(best):
+        for ci, start in enumerate(row):
+            if times[i] - start > bdur:
+                bdur, bi, bc = times[i] - start, i, ci
+    if bi is None or bdur <= 0:
+        return out
+
+    path, cur = [], (bi, bc)
+    while cur is not None:
+        path.append(cur)
+        cur = back[cur[0]][cur[1]]
+    path.reverse()
+    pts = [nodes[i][c] for i, c in path]
+
+    total = 0.0
+    for a, b in zip(pts, pts[1:]):
+        dx = wrap_delta(b["x_km"] - a["x_km"], px, periodic["x"])
+        dy = wrap_delta(b["y_km"] - a["y_km"], py, periodic["y"])
+        total += float(np.hypot(dx, dy))
+    ndx = wrap_delta(pts[-1]["x_km"] - pts[0]["x_km"], px, periodic["x"])
+    ndy = wrap_delta(pts[-1]["y_km"] - pts[0]["y_km"], py, periodic["y"])
+
+    out.update({"p1_min": round(float(bdur), 1),
+                "p1_net_km": round(float(np.hypot(ndx, ndy)), 2),
+                "p1_path_km": round(total, 2),
+                "p1_sign": pts[0]["sign"],
+                "p1_start_min": round(float(times[path[0][0]]), 1),
+                "p1_end_min": round(float(times[bi]), 1),
+                "p1_frames": len(path)})
+    return out
+
+
+def frame_metrics(path, opens=None, periodic=None):
     opens = opens if opens is not None else {"x": True, "y": True}
+    periodic = periodic if periodic is not None else {"x": False, "y": False}
     d = netCDF4.Dataset(path)
     t = float(d.variables["time"][0])
     xh = np.asarray(d.variables["xh"][:], dtype=float)   # km
@@ -146,6 +400,14 @@ def frame_metrics(path, opens=None):
 
     # M1 -- sustained mid-level rotation (frame-invariant; see docs 3.1)
     m["max_abs_uh"] = float(np.max(np.abs(uh)))
+
+    # Section 12.11: CM1 writes a NON-NEGATIVE uh (measured, min == 0.0 exactly in
+    # all 50 control frames), so section 3.1's stated reason for max|.| -- "the
+    # anticyclonic mover has negative UH" -- does not hold for this output. abs()
+    # is an identity here and no published number moves, but the assumption is
+    # recorded per frame rather than assumed, so a future run that DOES carry
+    # negative UH is visible instead of silently reinterpreting the signed split.
+    m["min_uh"] = float(np.min(uh))
 
     # M2 -- simultaneous cell count (>=40 dBZ composite reflectivity components)
     m["n_cells"], m["cell_area_km2"] = _components(
@@ -188,6 +450,13 @@ def frame_metrics(path, opens=None):
 
     # O1 / O2 -- organisation (docs section 8), computed per frame, gated per run
     m.update(organisation(colmax_w, cref, xh, yh, cell_km2))
+
+    # P1 -- section 12: signed rotation centres, per frame. The CHAIN is a run-level
+    # statistic (chain_stats); what a frame can supply is its centres. Computed at
+    # every floor in the sweep so section 12.3's reported sensitivity costs no
+    # second pass over 25 netCDF files.
+    m["rot"] = {f"{fl:g}": rotation_centres(uh, xh, yh, cell_km2, fl, periodic)
+                for fl in FLOOR_SWEEP}
     return m
 
 
@@ -349,10 +618,32 @@ def run_metrics(name, runs=DEFAULT_RUNS):
     if not files:
         raise SystemExit(f"{name}: no cm1out_*.nc in {run_dir}")
     opens = open_sides(run_dir)
+    periodic = periodic_sides(run_dir)
+    d0 = netCDF4.Dataset(files[0])
+    xh = np.asarray(d0.variables["xh"][:], dtype=float)
+    yh = np.asarray(d0.variables["yh"][:], dtype=float)
+    d0.close()
     return {"name": name, "n_frames": len(files),
             "declared_motion": _declared_motion(run_dir),
-            "open_sides": opens,
-            "frames": [frame_metrics(f, opens) for f in files]}
+            "open_sides": opens, "periodic_sides": periodic,
+            "xh": xh, "yh": yh,
+            "frames": [frame_metrics(f, opens, periodic) for f in files]}
+
+
+def run_chain(run, floor=UH_FLOOR, link_km=LINK_KM, max_gap=1):
+    """P1 over a run's MATURE frames (section 12.4).
+
+    Scoped to t >= 40 min like every other part of the rule -- including the bubble
+    phase would let a chain start before there is a storm, which is lenient toward
+    the SUPERCELL side of criterion 1'.
+    """
+    fr = mature(run["frames"])
+    key = f"{float(floor):g}"
+    nodes = [f.get("rot", {}).get(key, []) for f in fr]
+    times = [f["t_min"] for f in fr]
+    return chain_stats(nodes, times, run["xh"], run["yh"],
+                       run.get("periodic_sides", {"x": False, "y": False}),
+                       link_km=link_km, max_gap=max_gap)
 
 
 def _declared_motion(run_dir):
@@ -543,6 +834,88 @@ def classify_v2(cand, sc_uh_median):
     return "INDETERMINATE", ev
 
 
+def classify_v3(cand, floor=UH_FLOOR):
+    """The LIVE rule: section 8's criterion 2', with criterion 1 replaced by
+    section 12's criterion 1' (rotation PERSISTENCE). Returns (label, evidence).
+
+    Criterion 2', criterion 3, the mature window and all six field thresholds are
+    untouched (section 12.2). Criterion 1' is still evaluated FIRST and rotation
+    still outvotes organisation: a splitting supercell has R ~ 0 and would FAIL
+    criterion 2', so it must never reach it (section 8.3).
+
+    NOTE the signature: no `sc_uh_median`. That absence IS section 11.6's
+    constraint 2 -- no control normalisation, so nothing here can be a
+    candidate/control ratio, and SC's label is no longer arithmetically forced.
+    """
+    fr = mature(cand["frames"])
+    if not fr:
+        return "INDETERMINATE", {"why": "no mature frames"}
+
+    ch = run_chain(cand, floor=floor)
+    gap = run_chain(cand, floor=floor, max_gap=2)
+    p1 = ch["p1_min"]
+
+    # Section 12.5's two-sided band, quantised to one frame. A candidate landing
+    # just under the floor is not a MULTICELL result to be banked, and one landing
+    # just over is not a SUPERCELL result either.
+    persists = p1 >= T_PERSIST_MIN + T_BAND_MIN     # banks "supercell"
+    crit1p = p1 <= T_PERSIST_MIN - T_BAND_MIN       # banks "not a supercell"
+
+    qual = [f for f in fr if f.get("org_qualifies") and f.get("R") is not None]
+    rs = [f["R"] for f in qual]
+    es = [f["E"] for f in qual if f.get("E") is not None]
+    r_med = float(np.median(rs)) if rs else None
+    e_med = float(np.median(es)) if es else None
+    enough = len(qual) >= MIN_QUALIFYING_FRAMES
+    organised = ((r_med is not None and r_med >= R_FLOOR + R_BAND)
+                 or (e_med is not None and e_med >= E_FLOOR * E_BAND_FACTOR))
+    crit2p = enough and organised
+
+    echo = [f for f in fr if f["n_cells"] >= 1]
+    echo_span = (echo[-1]["t_min"] - echo[0]["t_min"]) if len(echo) >= 2 else 0.0
+    crit3 = echo_span >= MIN_SYSTEM_MINUTES
+
+    near = []
+    if not persists and not crit1p:
+        near.append(f"P1={p1:.0f} min inside the {T_BAND_MIN:.0f}-min band "
+                    f"around T_PERSIST={T_PERSIST_MIN:.0f}")
+    if r_med is not None and R_FLOOR - R_BAND <= r_med < R_FLOOR + R_BAND:
+        near.append(f"R={r_med:.3f} within {R_BAND} of the {R_FLOOR} floor")
+    if e_med is not None and (E_FLOOR / E_BAND_FACTOR <= e_med
+                              < E_FLOOR * E_BAND_FACTOR):
+        near.append(f"E={e_med:.2f} within x{E_BAND_FACTOR} of the {E_FLOOR} floor")
+
+    ev = {
+        "uh_floor": floor,
+        "P1_chain_min": p1,
+        "P1_chain_min_1gap": gap["p1_min"],
+        "P1_sign": ch["p1_sign"],
+        "P1_window": [ch["p1_start_min"], ch["p1_end_min"]],
+        "P2_net_km": ch["p1_net_km"],
+        "P2_path_km": ch["p1_path_km"],
+        "qualifying_frames": len(qual),
+        "median_R": None if r_med is None else round(r_med, 4),
+        "median_E": None if e_med is None else round(e_med, 3),
+        "echo_span_min": round(echo_span, 1),
+        "crit1p_not_supercell": crit1p,
+        "crit2p_organised_multiplicity": crit2p,
+        "crit3_sustained_system": crit3,
+        "near_band": near or None,
+    }
+
+    if persists:
+        return "SUPERCELL", ev          # rotation outvotes organisation, by design
+    if not crit1p:
+        return "INDETERMINATE", ev      # section 12.5's band, before a label is banked
+    if near and enough and not organised:
+        return "INDETERMINATE", ev      # section 8.6's band, unchanged
+    if crit2p and crit3:
+        return "MULTICELL", ev
+    if not crit2p:
+        return "SINGLE CELL", ev
+    return "INDETERMINATE", ev
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", default=DEFAULT_RUNS)
@@ -564,7 +937,8 @@ def main():
             print(f"!! {e}")
     if args.json:
         with open(args.json, "w") as f:
-            json.dump(data, f, indent=1)
+            json.dump({k: dict(v, xh=list(v["xh"]), yh=list(v["yh"]))
+                       for k, v in data.items()}, f, indent=1)
         print(f"wrote {args.json}")
 
     for name, d in data.items():
@@ -621,15 +995,35 @@ def main():
 
     print(f"floors (section 8.2): R >= {R_FLOOR}, E >= {E_FLOOR}, "
           f">= {MIN_QUALIFYING_FRAMES} qualifying frames")
+    print(f"criterion 1' (section 12): UH_FLOOR={UH_FLOOR} (NOISE GATE -- 19.7x below "
+          f"the lowest candidate median), LINK_KM={LINK_KM}/frame, "
+          f"T_PERSIST={T_PERSIST_MIN} +-{T_BAND_MIN} min")
+
+    # Section 12.3's floor sweep -- a REPORTED diagnostic, not a hidden sensitivity.
+    print("\n=== section 12.3 floor sweep: P1 (min) vs UH_FLOOR ===")
+    print(f"{'run':<14}" + "".join(f"{fl:>8g}" for fl in FLOOR_SWEEP)
+          + "   (T_PERSIST band 25 / 35)")
+    for name, d in data.items():
+        print(f"{name:<14}"
+              + "".join(f"{run_chain(d, floor=fl)['p1_min']:>8.0f}"
+                        for fl in FLOOR_SWEEP))
 
     for name, d in data.items():
-        label, ev = classify_v2(d, sc_uh_median)
+        label, ev = classify_v3(d)
+        v2, _ = classify_v2(d, sc_uh_median)
         old, _ = classify(d, sc_uh_median)
         dr = drift_fit(d)
         print(f"\n{name}: {label}" + ("   [VOID -- section 5]" if dr["void"] else "")
-              + f"        (retired count rule said: {old})")
+              + f"\n    (retired median rule said: {v2}; retired count rule: {old})")
         for k, v in ev.items():
             print(f"    {k:<32} {v}")
+        # Section 12.5: the LINK_KM budget is reported against the measured drift,
+        # so "the link radius covered the motion" is a number and not an assumption.
+        if dr["drift_u_ms"] is not None:
+            per_frame = np.hypot(dr["drift_u_ms"], dr["drift_v_ms"]) * 300.0 / 1000.0
+            print(f"    {'drift vs LINK_KM budget':<32} "
+                  f"{per_frame:.2f} km/frame of {LINK_KM} "
+                  f"({100 * per_frame / LINK_KM:.0f}% of budget)")
         if dr["void"]:
             print(f"    {'void_why':<32} {dr['void_why']}")
 
