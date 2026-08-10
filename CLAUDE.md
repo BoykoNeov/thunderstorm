@@ -702,6 +702,53 @@ Do not start a phase without explicit go from the owner.
   (pattern correlation / IoU / centroid), because the per-mover tracker jumps between cells and
   its separation column is not trustworthy. **Owner call 2026-07-28: SHIP NOTHING** — T4 stands
   as mechanism + measured spread; a seeded package stays cheap to produce later (§7).
+  **T5 — BLOCKED ON AN OWNER DECISION; the pre-registered ABORT CONDITION FIRED
+  (2026-08-10, docs/phase3-t5-multicell.md §7).** ⚠ **A, B and C are DELIBERATELY
+  UNSCORED. Do not run the classifier over any candidate until the replacement for
+  criterion 2 is agreed with the owner** — the abort's entire value is that the rule was
+  fixed and found unfit *before* anyone saw the answers, and scoring them now spends that
+  for nothing. Plan §2.3's premise was falsified in the **cheap** direction (again by
+  reading the source first): CM1 reaches multicell candidates through **namelist
+  integers** (`iwnd`/`iinit`), no `init3d.F` edit and so no second fork patch — though
+  only the *option selection* is namelist; every parameter *inside* an option is a
+  hardcoded Fortran local, making the reachable space a few fixed profiles (0–6 km bulk
+  shear **10 / 31.8 / 33.5 m/s**), not a sweep. §2.2's **shear gap** — the
+  multicell↔supercell transition sits *between* 10 and 31.8 and nothing in the namelist
+  reaches it — is pre-committed as the `0002-`-patch branch, priced (third binary hash,
+  moving the CM1 pin d427ff2 just consolidated) and NOT undertaken without a go. Five
+  1 km probes (A/B/C + SC/PC controls) ran and are on disk (`~/thunderstorm/runs/t5probe_*`,
+  `irandp=0` verified in all five, fork binary `5fc93016…`); the classifier and its 20
+  wiring gates were **committed before scoring anything** (`sim/probes/classify_t5.py`,
+  `pipeline/tests/test_classifier_t5.py`, commit 3692e9a). Then **the PC control — the
+  known single cell — classified MULTICELL**, and §4 pre-committed that as an abort.
+  **Why: component counting cannot separate "N cells" from "one ring in N lobes."** PC's
+  four ≥40 dBZ components carry *identical* areas and *identical* peaks to the digit at
+  (±5,±5) — the axisymmetric gust-front ring of a zero-shear pulse cell, quantised by a
+  square grid (4 lobes → 12). `ndimage.label` was chosen in §3.1 precisely to dodge T4's
+  failed argmax tracker and walked into a different failure mode. Both obvious repairs are
+  **refuted with numbers, not argued away**: morphological closing collapses the late
+  frames (12→1 at 2–3 km) but leaves **4 components at t=75/80 at every radius 1–5 km**,
+  and arm A needs only 3 in one frame; threshold-lowering fails likewise. The trap is
+  named too — PC's lobes top out at 26 km², so raising the 4 km² minimum to ~30 rescues
+  the control instantly, i.e. *picking the number just above what the control did*, while
+  suppressing the genuine small cells at 1 km in candidate B that the probe exists to
+  test. Two findings stand on their own: **a self-referential control cannot fail** —
+  criterion 1's threshold is `0.25 × median(SC's own max|uh|)` *and SC is scored against
+  it*, so SC classifies SUPERCELL by arithmetic on any data (`frac_rot` came back exactly
+  1.000); SC sets the scale and **PC was the whole test**. And **"one bubble ⇒ one cell"
+  is false over 2 h** at 1 km with no CIN (the charter's open CIN design task, one level
+  up): the pulse cell peaks 61.6 m/s, decays by t=70, then rings up daughter convection at
+  15–32 m/s / 49–56 dBZ — the control's *expectation* was untested, not just the code.
+  Three vindicated pre-registrations localise the failure: M1 separates the controls
+  **30.8×**, §6.2's boundary descriptor read **0 in all 50 control frames** as predicted at
+  `irandp=0`, and §5's containment/drift check voided neither run (SC's measured drift
+  implies `vmove` 5.1 vs the 3.0 given — a 2 m/s Bunkers error over 2 h, inside 45 km of
+  clearance). §7.6 prices three ways forward without choosing; the recommendation is to
+  **replace the count with an ORGANISATION test** (preferred-flank regeneration / system
+  propagation while cells cycle — a symmetric ring fails it by construction),
+  re-pre-registered against the controls and committed before any candidate is read.
+  Re-scoring the five existing runs costs minutes: **this is a design decision, not a
+  compute one.**
 - **Phase 3T (terrain — its own phase, not started):** terrain-following→Cartesian
   regridding (Python, proper — CM1's is quick-and-dirty), diorama heightfield render path,
   static full-size domain, VHDX resize before the first 250 m terrain hero run.

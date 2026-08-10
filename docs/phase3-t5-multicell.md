@@ -322,17 +322,26 @@ read — A, B and C have not been through the classifier at all.** That is the
 pre-registration doing its job, and it is worth saying plainly that the order it
 forced is what makes the result usable: the classifier was promoted into the repo
 and committed (`sim/probes/classify_t5.py`, `pipeline/tests/test_classifier_t5.py`
-20/20, commit a3e0c76) *before* it was pointed at a single probe frame, and the
+20/20, commit `3692e9a`) *before* it was pointed at a single probe frame, and the
 controls were run and adjudicated on their own, before the candidates.
+
+**This constraint is still live: no candidate may be scored until the replacement
+for criterion 2 is agreed (§7.6).** Running the classifier over A, B or C now would
+spend the pre-registration for nothing — the abort's whole value is that the rule
+was fixed, then found unfit, before anyone saw the answers.
 
 ### 7.1 What the controls actually returned
 
-Both control runs are clean as runs. All five probes completed (25 frames each at
-`tapfrq=300`, `irandp=0`, fork binary `5fc93016…`).
+Both control runs are clean as runs. All five probes completed (25 frames each).
+Their configs were read back from all five run dirs rather than assumed from one:
+**every probe ran `irandp=0`, `seed=0`, `tapfrq=300`, 180² @ 999 m, fork binary
+`5fc93016…`** — including candidate C, which is where it mattered, since §6.2's
+whole correction was C-specific. (Reading a deck is not reading a result; the
+candidates' *output* remains unscored.)
 
 | | SC (`iwnd=2`, Bunkers 12.5/3.0) | PC (`iwnd=0`, `imove=0`) |
 |---|---|---|
-| median mature `max|uh|` | **678.7** m²/s² | **22.0** m²/s² |
+| median mature `max\|uh\|` | **678.7** m²/s² | **22.0** m²/s² |
 | `frac_frames_rotating` (crit 1) | 1.000 | 0.000 |
 | max simultaneous updrafts (M3) | 12 | **12** |
 | frames with ≥2 cells (M2) | 1 | **4** |
