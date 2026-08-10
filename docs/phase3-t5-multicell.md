@@ -898,3 +898,183 @@ seeing the number:
   criterion-1 discriminator — *not* (i). Rotation, not shear reach, is then the
   demonstrated blocker, and buying a second CM1 fork to widen the shear range
   would be paying for the wrong thing.
+
+---
+
+## 11. Results — C2, and what option (ii) actually bought
+
+The run is on disk (`~/thunderstorm/runs/t5probe_c2`, `PROBE_OK`, 32.5 min at 4
+ranks, 25 frames). Provenance from its own log rather than re-asserted here:
+`cm1_binary_sha256 5fc9301623fb…` (the fork), `irandp = 0` in the override dump,
+`sbc`/`nbc` = 1 among 31 overrides, and the classifier's own header line reads
+**`open sides x`** — the run is being scored against the boundary type it was
+given.
+
+### 11.1 The containment fix worked, and the diagnosis holds
+
+| | C (§9.5) | C2 |
+|---|---|---|
+| open sides | x **and y** | x only |
+| §6.2 boundary-cell frames | **17** | **0** |
+| min cell clearance | **0.00 km** | **69.93 km** |
+| min w clearance | **0.00 km** | **68.93 km** |
+| §5 verdict | **VOID** | valid |
+| implied `umove`/`vmove` from drift | 9.23 / −1.24 | 9.16 / −0.30 |
+
+C's void was `iinit=8`'s geometry, exactly as §10.1 read it off the source — not a
+storm escaping. Changing the boundary type and nothing else (the deck differs in
+**2 of 413 lines**, both boundary keys) turns a run that touched the wall in every
+frame into one with ~69 km of clearance. **Namelist-only: no patch, no third binary
+hash, the CM1 pin did not move.**
+
+### 11.2 The score, under the unchanged §8 rule
+
+| run | label | `frac_rot` | crit1 ¬SC | median `R` | median `E` | qual. frames | crit2′ | crit3 |
+|---|---|---|---|---|---|---|---|---|
+| SC (control) | SUPERCELL | 1.000 | ✗ | 0.485 | 1.84 | 13 | ✗ | ✓ |
+| PC (control) | SINGLE CELL | 0.000 | ✓ | 0.006 | 1.00 | 10 | ✗ | ✓ |
+| A | SUPERCELL | 1.000 | ✗ | — | — | — | — | ✓ |
+| B | SUPERCELL | 1.000 | ✗ | — | — | — | — | ✓ |
+| C | SUPERCELL **[VOID]** | 0.941 | ✗ | 0.125 | 20.76 | 17 | ✓ | ✓ |
+| **C2** | **SUPERCELL** | **0.765** | **✗** | **0.129** | **19.04** | **17** | **✓** | **✓** |
+
+No threshold, floor, band or factor moved, as §10.3 fixed in advance. Both
+controls re-scored identically to §9.1.
+
+### 11.3 §10.4's prediction is CONFIRMED, and the §10.4 branch fires
+
+C2 classifies SUPERCELL. The second branch was pre-committed: **option (ii) is
+spent, and the answer is §9.8's (iii) — the criterion-1 discriminator — not (i).**
+
+What (ii) bought is worth stating precisely, because it is more than "no change".
+**C2 is the first non-void run with crit2′ ∧ crit3 ∧ ¬crit1.** C had the same
+signature and was voided, so its isolation was confounded; SC, PC and B all fail
+crit2′; A fails crit1 at every k in the sweep below. On C2 the organisation
+criterion says multicell **decisively** — median `E` 19.04 is 7.9× the banded floor
+of 2.40 — the sustained-system criterion passes, containment is clean, and the sole
+dissenting voice is criterion 1. That is a measurement of where the blocker is, not
+a reading of one.
+
+### 11.4 The finding: criterion 1 is a median comparison, and "half its mature
+life" supplies no temporal robustness
+
+The k-sweep produced a column it was not built to produce. Every run's flip point
+— the k above which `frac_rot` drops below 0.5 — is **exactly** its own
+`median(mature max|uh|) ÷ SC's median`:
+
+| run | median mature `max\|uh\|` | ÷ SC median | k_flip measured |
+|---|---|---|---|
+| A | 1132.4072 | 1.668509 | 1.668509 |
+| SC | 678.6939 | 1.000000 | 1.000000 |
+| B | 349.8639 | 0.515496 | 0.515496 |
+| C | 271.5086 | 0.400046 | 0.400046 |
+| **C2** | **197.3048** | **0.290713** | **0.290713** |
+| PC | 22.0080 | 0.032427 | 0.032427 |
+
+Match to 1e-12 in all six. It is not a coincidence: with `UH_FRAC_FRAMES` = 0.5 and
+an odd frame count (every probe has exactly 17 mature frames), `frac_rot < 0.5` ⟺
+the threshold exceeds the **median**. So criterion 1 reduces to a single scalar
+magnitude ratio:
+
+> **median(candidate mature max|uh|) ≥ 0.25 × median(SC mature max|uh|)** ⇒ SUPERCELL
+
+Tested rather than argued (`check_median_collapse.py`): **12 000 comparisons across
+the six real runs on a dense k grid produced 0 disagreements** between the fraction
+rule and the median rule, as did five adversarial synthetic series built to break
+it. The clinching pair, at the pre-registered k:
+
+- 8 frames at `max|uh|` = 2000 and 9 frames at 1 → **not a supercell** (`frac` 0.471)
+- 9 frames at 2000 and 8 frames at 1 → **supercell** (`frac` 0.529)
+- one frame at 10⁶ and 16 at 1 → **not a supercell**; 17 flat frames at 200 → **supercell**
+
+The pre-registration's phrase *"rotating for less than half its mature life"* reads
+as a persistence requirement and arithmetically is one only in the degenerate sense
+that a median is the middle order statistic. A storm with one monstrous mesocyclone
+frame is not a supercell by this rule; a storm with uniformly mild rotation is.
+**This is the same root cause as §7.2 and §9.6, stated once instead of twice:**
+criterion 1 is a median-magnitude test, and SC is scored against a fraction of its
+own median — which is why SC's label is forced and why the "SC caps k at 0.75"
+claim was arithmetically impossible.
+
+This finding is *earned from data already collected* and is the most useful thing
+§11 hands to (iii).
+
+### 11.5 Stability, not margin, is the argument for (iii)
+
+C2's median rotation is **1.16× criterion 1's threshold — 16 % above it** (197.30
+vs 169.67). Stated as a ratio deliberately: the same fact reads as "0.04 in k",
+which sounds like a rounding error and is a thumb on the scale toward moving k.
+Nobody has to accept that 0.29 is "close to" 0.25 for the real argument to work:
+
+**A boundary-condition-only change moved this candidate's flip point from 0.4000 to
+0.2907 — 0.11 in k, which is 2.7× the distance from the pre-registered 0.25 to the
+flip point.** Criterion 1's verdict on this candidate family is *less stable* than a
+namelist edit that was supposed to be pure containment bookkeeping. A discriminator
+whose answer swings that far on `sbc`/`nbc` is not measuring the thing the label
+claims.
+
+Full sweep, for the record (`*` = void):
+
+```
+  k=0.20   sc=SUPE  pc=SING  a=SUPE  b=SUPE  c=SUPE*  c2=SUPE
+  k=0.25   sc=SUPE  pc=SING  a=SUPE  b=SUPE  c=SUPE*  c2=SUPE      <- pre-registered
+  k=0.30   sc=SUPE  pc=SING  a=SUPE  b=SUPE  c=SUPE*  c2=MULT
+  k=0.40   sc=SUPE  pc=SING  a=SUPE  b=SUPE  c=SUPE*  c2=MULT
+  k=0.50   sc=SUPE  pc=SING  a=SUPE  b=SUPE  c=MULT*  c2=MULT
+  k=0.60   sc=SUPE  pc=SING  a=SUPE  b=MULT  c=MULT*  c2=MULT
+  k=1.00   sc=SUPE  pc=SING  a=SUPE  b=MULT  c=MULT*  c2=MULT
+```
+
+PC is SINGLE CELL at every k and A is SUPERCELL at every k — the controls and the
+CM1-labelled "multicell" profile are unaffected by the whole question. **k is not
+being moved.** §7.4 named picking a number just above what a control did as the
+tuning trap; picking one just above what a *candidate* did is the same trap with a
+different victim.
+
+### 11.6 What (iii) must satisfy — constraints only, not its conclusion
+
+C2 is consistent with a line carrying embedded rotation. **Whether that rotation
+persists at a fixed storm-relative position is unmeasured** — this probe has
+measured `|uh|` *magnitude*, updraft count, elongation and cold pool, and nothing
+at all about rotation *position or persistence*. Asserting the answer here would
+bank (iii)'s conclusion before its metric exists, which is precisely the discipline
+§8 was written to enforce. Three constraints, fixed now:
+
+1. **A different discriminator, not a different k** (§9.8's wording, unchanged).
+2. **Scale-free, with no control normalisation.** Any statistic of the form
+   *candidate magnitude ÷ control magnitude* reinstates §7.2's self-reference,
+   which has now bitten twice. A position-persistence statistic — *does the
+   strongest rotation centre stay within X km of itself for ≥ T minutes in the
+   storm-relative frame* — needs no cross-run normalisation, so both controls can
+   calibrate it without either becoming a tautology.
+3. **Thresholds fixed a priori from geometry and duration, validated on SC and PC
+   only, committed, and only then re-scored against A/B/C/C2.** That is the §8
+   sequence, which worked.
+
+Re-scoring costs minutes: all six runs are on disk and `uh` is already read
+per-frame. This remains a design decision, not a compute one.
+
+### 11.7 One consequence of the containment fix, named and not acted on
+
+If C2 ever becomes the T6 multicell asset, **a periodic-y domain has no finite
+condensate extent in y** — so the crop-box measurement and `require_measured_box`
+would inherit §9.5's error one level up: a compact-storm criterion applied to a
+periodic direction, this time in the export path rather than the classifier.
+Flagged here so it is not rediscovered later; it has no bearing on the T5 verdict.
+
+### 11.8 State
+
+- **All four candidates (A, B, C, C2) classify SUPERCELL. T5 still has no
+  multicell.**
+- Option (ii) is **spent and it delivered**: the void is gone, the diagnosis held,
+  and the blocker is isolated to criterion 1 with no confounds.
+- The pre-committed next step is **(iii)**, and §11.4 gives it a concrete defect to
+  fix rather than a threshold to argue about. **Not started — it needs an owner
+  go**, and per §9.8 its post-hoc hazard is real: it is defensible only for a
+  discriminator justified independently of which way it moves B, C and C2.
+- **(i), the `0002-` shear patch, is now the weakest of the three.** Its premise is
+  that the multicell regime is out of namelist reach; C2 shows a namelist-reachable
+  candidate that passes organisation and sustained-system and is denied only by a
+  rotation test whose defect is now measured. Buying a second CM1 fork to widen the
+  shear range would be paying for the wrong thing — §10.4 pre-committed that
+  reading before the run, and the run did not change it.

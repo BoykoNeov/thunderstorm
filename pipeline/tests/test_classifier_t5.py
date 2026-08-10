@@ -389,5 +389,77 @@ with open(os.path.join(_tmp, "scenario.json"), "w") as fh:
 check("periodic_sbc_nbc_are_read_as_a_closed_y",
       C.open_sides(_tmp) == {"x": True, "y": False}, C.open_sides(_tmp))
 
+print("--- section 11.4: criterion 1 IS a median comparison ---")
+
+# docs section 11.4 claims criterion 1 reduces to
+#     median(candidate mature max|uh|) >= k * SC_median
+# and that the pre-registration's "rotating for less than half its mature life"
+# therefore supplies NO temporal robustness. That claim now sits in a doc; these
+# gates put it under test, so the doc cannot drift from the code -- and so that
+# whoever implements section 9.8's option (iii) has to consciously break them
+# rather than silently inherit the defect.
+#
+# The measurement in section 11.4 used the six real 1 km probe runs (12 000
+# comparisons, 0 disagreements). Those runs are not in git; this is the half that
+# needs no data, which is the half that can be gated permanently.
+
+def crit1_not_supercell(vals):
+    """The rule as written: a FRACTION-of-frames test."""
+    return C.classify(run([frame(t, uh=v) for t, v in zip(TIMES[8:], vals)]),
+                      SC_MEDIAN)[1]["crit1_not_supercell"]
+
+
+def median_rule(vals):
+    """The scalar the fraction test is claimed to be equivalent to."""
+    return float(np.median(vals)) < THRESH
+
+
+_SERIES = {
+    "flat_mild":        [200.0] * 17,
+    "flat_below":       [50.0] * 17,
+    "8_huge_spikes":    [2000.0] * 8 + [1.0] * 9,
+    "9_huge_spikes":    [2000.0] * 9 + [1.0] * 8,
+    "ramp":             list(np.linspace(0.0, 1600.0, 17)),
+    "one_huge_spike":   [1e6] + [1.0] * 16,
+    "one_deep_dropout": [2000.0] * 16 + [0.0],
+}
+_dis = [k for k, v in _SERIES.items() if crit1_not_supercell(v) != median_rule(v)]
+check("crit1_is_exactly_the_median_comparison", not _dis, f"disagree: {_dis}")
+
+# The two series that make the point: 8 identical huge frames is not enough and 9
+# is, so the rule reads only which side of the middle the 9th value falls on.
+check("eight_frames_of_violent_rotation_is_NOT_a_supercell",
+      crit1_not_supercell(_SERIES["8_huge_spikes"]) is True)
+check("nine_identical_frames_IS_a_supercell",
+      crit1_not_supercell(_SERIES["9_huge_spikes"]) is False)
+check("a_single_10e6_frame_is_NOT_a_supercell",
+      crit1_not_supercell(_SERIES["one_huge_spike"]) is True)
+check("uniformly_mild_rotation_IS_a_supercell",
+      crit1_not_supercell(_SERIES["flat_mild"]) is False)
+
+# Negative control: the equivalence is a property of UH_FRAC_FRAMES = 0.5, not a
+# tautology of the code. Move the fraction off the median and the two rules must
+# come apart -- otherwise the gate above would pass on any implementation.
+_saved = C.UH_FRAC_FRAMES
+C.UH_FRAC_FRAMES = 0.25
+_dis25 = [k for k, v in _SERIES.items() if crit1_not_supercell(v) != median_rule(v)]
+C.UH_FRAC_FRAMES = _saved
+check("the_equivalence_BREAKS_at_a_non_median_fraction", _dis25,
+      "no series separated the two rules at UH_FRAC_FRAMES=0.25 -- "
+      "the equivalence gate is vacuous")
+
+# And it is the FRACTION that carries the property, not the 0.25 magnitude: k
+# rescales the threshold, so the equivalence must survive any k.
+_ks = []
+for _k in (0.1, 0.25, 0.5, 0.9, 1.5):
+    _t = C.UH_FRACTION_OF_CONTROL
+    C.UH_FRACTION_OF_CONTROL = _k
+    THRESH = _k * SC_MEDIAN
+    _ks += [k for k, v in _SERIES.items()
+            if crit1_not_supercell(v) != median_rule(v)]
+    C.UH_FRACTION_OF_CONTROL = _t
+THRESH = C.UH_FRACTION_OF_CONTROL * SC_MEDIAN
+check("the_equivalence_holds_at_every_k", not _ks, f"disagree: {_ks}")
+
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)
