@@ -1535,12 +1535,26 @@ supercell**. §12.8 pre-registered that outcome — *"every run persists, or non
 time"* — and this is it. It is not a failure of the metric to run; it is a
 measurement that the metric does not resolve the distinction T5 needs.
 
-Two checks say the saturation is a property of the storms rather than a mechanical
-artifact of a low floor: the largest rotation component in SC is 137 km², **0.42 %
-of the domain** (§12.11 check C), so nothing chains by covering the map; and every
-step of every winning chain is inside `LINK_KM` by construction, with measured
-maxima of 2.26 (SC) to 6.85 km (C) against the 7.5 budget — the linker is refusing
-hops, not waving them through.
+Two checks rule out the crudest mechanical explanations. The largest rotation
+component in SC is 137 km², **0.42 % of the domain** (§12.11 check C), so nothing
+chains there by covering the map; and every step of every winning chain is inside
+`LINK_KM` by construction, with measured maxima of 2.26 (SC) to 6.85 km (C) against
+the 7.5 budget — the linker is refusing hops, not waving them through.
+
+**But those checks do not license the stronger claim, and an earlier draft of this
+paragraph made it anyway.** The 137 km² figure is *SC's*; it says nothing about the
+candidates. C2 carries 15 simultaneous updrafts, and §13.6 measures its chain
+stepping across **2.0× area** and **4.5× peak** discontinuities — consistent with a
+chain **threading distinct cells along a line** rather than following one persistent
+mesocyclone. A compactness check on SC cannot rule that out.
+
+So the honest form is narrower and, as it happens, a stronger conclusion:
+**`P1` as gated cannot distinguish a persistent mesocyclone from a walk along a line
+of regenerating cells** — and the descriptor that hints at the difference (§13.6) is
+the one that must not be promoted (§13.6's own argument). `P1`'s non-resolution is
+therefore **partly structural, not merely an empirical tie**: the statistic measures
+"was there an unbroken displacement-limited thread of rotation", and both storm modes
+under test produce one.
 
 ### 13.5 The floor sweep IS the median test, and that is now measured
 

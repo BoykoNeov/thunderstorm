@@ -623,6 +623,33 @@ mixed = [[centre(0, 0)] if i < 3 else [centre(30, 30)] for i in range(len(CH_T))
 check("the_longest_chain_wins_not_the_earliest",
       chain(mixed)["p1_min"] == CH_T[-1] - CH_T[3], chain(mixed)["p1_min"])
 
+# The winning path's own members. Section 13.6's whole table is built from these
+# three fields, and the error they exist to prevent -- a reported step LARGER than
+# LINK_KM, i.e. describing a path the linker refused -- is precisely what a refactor
+# reintroduces in silence. Section 13.8 documented that number-in-a-tracked-doc with
+# no gate under it as a defect; leaving these ungated would repeat it immediately.
+for _nm, _series in (("steady", steady), ("drifting", drifting), ("mixed", mixed)):
+    _c = chain(_series)
+    check(f"every_reported_step_is_within_LINK_KM_{_nm}",
+          _c["p1_steps_km"] and max(_c["p1_steps_km"]) <= C.LINK_KM + 1e-9,
+          _c["p1_steps_km"])
+    check(f"chain_members_match_the_frame_count_{_nm}",
+          len(_c["p1_areas_km2"]) == _c["p1_frames"]
+          and len(_c["p1_peaks"]) == _c["p1_frames"]
+          and len(_c["p1_steps_km"]) == _c["p1_frames"] - 1,
+          (len(_c["p1_areas_km2"]), len(_c["p1_peaks"]),
+           len(_c["p1_steps_km"]), _c["p1_frames"]))
+# The path length must BE the sum of the reported steps -- otherwise P2 and the
+# step list are describing two different chains, which is the failure that produced
+# the retracted 26 km step.
+_cd = chain(drifting)
+check("P2_path_is_exactly_the_sum_of_the_reported_steps",
+      abs(sum(_cd["p1_steps_km"]) - _cd["p1_path_km"]) < 0.02,
+      (sum(_cd["p1_steps_km"]), _cd["p1_path_km"]))
+check("a_broken_chain_reports_no_members_rather_than_stale_ones",
+      chain(telep)["p1_frames"] == 0 and not chain(telep)["p1_steps_km"],
+      chain(telep))
+
 # --- the wrap gate that matters: a chain crossing the y seam -----------------
 # This is section 12.6's whole point, and C2 is the run it lands on. The naive
 # reading is a ~121 km jump -- it breaks a chain that never physically broke, and

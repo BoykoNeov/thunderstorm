@@ -344,9 +344,12 @@ def chain_stats(nodes, times, xh, yh, periodic, link_km=LINK_KM, max_gap=1):
                         best[i][ci] = best[j][pj]
                         back[i][ci] = (j, pj)
 
+    # The member lists are in the DEFAULT too, not only on the success path: a
+    # consumer of a broken chain should get an empty list, not a KeyError, and a
+    # stale list from a previous call is the shape of bug section 13.8 records.
     out = {"p1_min": 0.0, "p1_net_km": None, "p1_path_km": None,
            "p1_sign": None, "p1_start_min": None, "p1_end_min": None,
-           "p1_frames": 0}
+           "p1_frames": 0, "p1_steps_km": [], "p1_areas_km2": [], "p1_peaks": []}
     bi = bc = None
     bdur = -1.0
     for i, row in enumerate(best):
