@@ -239,7 +239,28 @@ def _seed_to_var7(seed, irandp, path):
 
 # --- override assembly ------------------------------------------------------
 
-def build_overrides(sc):
+def _match_template_type(key, value, template_lines):
+    """Cast an optional override to the Fortran type the TEMPLATE declares.
+
+    CM1's namelist variables are typed, and a REAL written into an INTEGER slot is
+    a hard read error at startup, not a subtle wrongness. Rather than keeping a
+    hand-maintained type table that can drift, the type is read from the template
+    line the value will replace -- the same source of truth the rest of the
+    generator uses. Unfound key -> float, matching the pre-existing behaviour;
+    generate()'s `hits != 1` guard is what actually catches a missing line.
+    """
+    if template_lines is not None:
+        pat = re.compile(rf"^\s*{re.escape(key)}\s*=\s*(\S+?),?\s*$", re.IGNORECASE)
+        for line in template_lines:
+            m = pat.match(line)
+            if m:
+                raw = m.group(1)
+                is_int = not any(c in raw for c in ".eEdD")
+                return int(value) if is_int else float(value)
+    return float(value)
+
+
+def build_overrides(sc, template_lines=None):
     """All four categories, resolved into one {key: value} map."""
     nml = dict(sc.namelist)
     nml.pop("_note", None)
@@ -267,12 +288,19 @@ def build_overrides(sc):
     # stray `seed` override would trip the hits != 1 guard in generate().
     ov[SEED_NAMELIST_KEY] = _seed_to_var7(ov.pop("seed"), nml["irandp"], sc.source_path)
 
-    # Category 5 -- optional run-control passthrough (rstfrq, ...). Present -> the
-    # scenario's value wins; absent -> the template default stands untouched, so
+    # Category 5 -- optional run-control passthrough (rstfrq, sbc, nbc). Present ->
+    # the scenario's value wins; absent -> the template default stands untouched, so
     # scenarios that omit these reproduce byte-for-byte (the T1c gate is unaffected).
+    #
+    # The cast is NOT blanket float(). It was, for rstfrq (a CM1 REAL, template line
+    # `rstfrq = -3600.0`), and that silently emitted `sbc = 1.0` into an INTEGER
+    # namelist variable -- which gfortran rejects outright, so the run would have
+    # died at startup rather than produced a wrong storm. The Fortran type belongs
+    # to the CM1 variable, not to the JSON, so it is read off the TEMPLATE line:
+    # a template value written without a decimal point is an integer key.
     for k in OPTIONAL_KEYS:
         if k in nml:
-            ov[k] = float(nml[k])
+            ov[k] = _match_template_type(k, nml[k], template_lines)
 
     # Category 2 -- geometry-derived. Inert at stretch_x/y = 0, kept consistent.
     ov["dx_inner"] = float(nml["dx"])
@@ -332,7 +360,7 @@ def generate(sc, template_path=None):
     with open(path) as f:
         lines = f.read().splitlines()
 
-    overrides = build_overrides(sc)
+    overrides = build_overrides(sc, lines)
 
     for key, value in overrides.items():
         lines, hits = _substitute(lines, key, value)

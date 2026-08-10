@@ -180,6 +180,32 @@ def main():
     check("a declared optional key is substituted into the deck",
           optional_present_is_substituted)
 
+    def optional_key_keeps_the_templates_fortran_type():
+        """An INTEGER namelist variable must not be emitted as a REAL.
+
+        The cast used to be a blanket float(), which was right for rstfrq (a CM1
+        REAL) and silently wrong for sbc/nbc (INTEGERs): `sbc = 1.0` is a hard
+        gfortran namelist read error, so the run dies at startup. The type is now
+        read off the template line -- the same source of truth as everything else
+        in the generator -- so adding a future integer optional key cannot
+        reintroduce it.
+        """
+        t, _ = deck.generate(mutated(sc, sbc=1, nbc=1, rstfrq=3600.0))
+        bad = [ln.strip() for ln in t.splitlines()
+               if re.match(r"^\s*(sbc|nbc)\s*=", ln) and "." in ln]
+        if bad:
+            return False, f"integer key emitted as REAL: {bad}"
+        real = [ln.strip() for ln in t.splitlines()
+                if re.match(r"^\s*rstfrq\s*=", ln)]
+        if not real or "." not in real[0]:
+            return False, f"REAL key lost its decimal point: {real}"
+        p = deck.parse(t)
+        return p.get("sbc") == 1 and p.get("nbc") == 1, \
+            f"sbc={p.get('sbc')} nbc={p.get('nbc')} rstfrq line={real[0]!r}"
+
+    check("an optional key is emitted with the template's Fortran type",
+          optional_key_keeps_the_templates_fortran_type)
+
     passed = sum(_results)
     print(f"\n{'=' * 62}\n{passed} passed, {len(_results) - passed} failed")
     return 0 if passed == len(_results) else 1
