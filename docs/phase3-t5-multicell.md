@@ -467,3 +467,194 @@ Recommendation: **(A)**, with (C)'s honesty about criterion 2 folded in — the 
 result stays on the page as the reason the count was retired. §2.2's shear-gap
 branch and §6's outcome table are untouched and still pending, because they turn
 on candidate results that have not been read.
+
+---
+
+## 8. RE-PRE-REGISTRATION of criterion 2 — organisation, not count
+
+**Owner call, 2026-08-10: option (A).** This section is written and committed
+BEFORE any candidate is scored, exactly as §§1–6 were. A, B and C are still
+unread.
+
+**The honesty caveat this section cannot escape, stated first.** §§1–6 were
+written before *any* data existed. §8 is not: it is written after seeing the two
+CONTROLS, because the ring is what retired the count. Candidates remain unread,
+which is the property that matters — the discriminator cannot have been shaped by
+the answer it will produce. Where §8 is weaker than §3, it says so.
+
+### 8.1 What does NOT change
+
+Criterion 1 (rotation), criterion 3 (sustained system), the mature window
+(t ≥ 40 min), and **every one of the six field thresholds** — `DBZ_CELL` 40,
+`DBZ_MIN_AREA_KM2` 10, `W_UPDRAFT` 10, `W_MIN_AREA_KM2` 4, `COLDPOOL_K` −2,
+`MATURE_MIN` 40. The area minimum in particular is deliberately **left at 4 km²**:
+§7.4 identified raising it as the tuning trap, and a re-pre-registration that
+quietly took the trap would be worse than the original error. Criterion 1 keeps its
+SC-relative calibration; it separated the controls 30.8× and nothing impeaches it.
+
+### 8.2 The replacement: criterion 2′ — ORGANISED multiplicity
+
+Multiplicity alone is not multicellularity; PC proved that. What distinguishes a
+multicell system from a decaying cell's outflow ring is that its cells are
+**organised** — they regenerate on a preferred flank, or they line up. Both are
+statements about the *geometry of the component set*, and both are computable
+frame-locally without identifying or tracking a single cell.
+
+For each **qualifying frame** — mature, with ≥2 updraft components (w ≥ 10 m/s,
+≥4 km²) and a ≥40 dBZ echo present — two shape statistics of the component
+centroids:
+
+**O1 — flank coherence `R` (first moment).** Let `c` be the echo centroid (the
+≥40 dBZ mask centroid: an *independent* anchor — using the updraft components' own
+mean would force `R ≡ 0` by construction). With `û_i` the unit vector from `c` to
+component *i*'s centroid and `a_i` its area:
+
+```
+R = |Σ a_i û_i| / Σ a_i        R ∈ [0, 1]
+```
+
+This is the standard area-weighted circular resultant length. **R = 0 is exactly
+the ring** — PC's four lobes at (±5,±5) with identical areas cancel to zero by
+symmetry — and **R → 1 is all new convection on one flank**, which is what
+cold-pool-driven regeneration in shear looks like. A component sitting exactly on
+the anchor is skipped (its direction is undefined), not counted as zero.
+
+**O2 — elongation `E` (second moment).** `E = √(λ₁/λ₂)`, the axis ratio of the
+covariance of the **updraft mask's voxels** — every w ≥ 10 m/s voxel in the
+surviving components, so *n* is in the thousands and the weighting is area by
+construction. Frames with ≥3 components qualify (with 2 components an elongation
+statement is not meaningful, and those frames are scored on `R` alone).
+
+**Not the covariance of the component centroids, and that distinction is
+measured, not stylistic.** `E` estimated from three centroid points is nearly
+free: under an isotropic null of random triples the median `E` is **3.72**, and
+**79.7 %** of triples clear 2.0 (n=4: 64 %; n=5: 52 %; n=12: 11 %). A floor of 2.0
+on a 3-point ellipse would fire on unorganised convection roughly four times in
+five — and **PC could never have caught it**, because its ring-symmetric 4/8/12
+components give `E ≈ 1` either way. The voxel covariance has no such bias and
+separates the shapes that matter: on synthetic blobs, ring-of-4 **1.00**,
+ring-of-12 **1.00**, an unorganised compact triple **1.09**, a one-sided flank
+cluster **1.85**, a five-cell line **8.37**.
+
+**O2 exists because of candidate C, and without it C would be a false negative by
+construction.** A squall line is the canonical multicell system, and its cells sit
+symmetrically *about* the centroid — first-moment coherence `R ≈ 0`, the same
+answer as the ring. The second moment separates them: a line is elongated
+(`E ≫ 1`), a ring is isotropic (`E ≈ 1`).
+
+**Criterion 2′ holds iff both:**
+
+1. **Sustained multiplicity** — ≥ **5** qualifying frames (25 min at `tapfrq=300`).
+   Not a new constant: 5 is the pre-registered `MIN_FRAMES_WITH_2_CELLS`, reused
+   rather than reinvented.
+2. **Organisation** — over the qualifying frames, `median(R) ≥ 0.5` **or**
+   `median(E) ≥ 2.0`.
+
+**Why those two numbers are floors and not fits.** They are geometric statements
+fixed a priori, readable without reference to any run: `R ≥ 0.5` means the
+area-weighted mean direction of the convection is at least half-coherent (a
+hemisphere-worth of preference rather than a ring); `E ≥ 2` means the cluster is at
+least twice as long as it is wide. Neither was read off a control's distribution.
+
+**This is deliberate, and it is what keeps PC a LIVE control.** The obvious move —
+threshold at PC's 95th percentile — would have repeated §7.2's mistake one level
+down: a run's median can never exceed its own p95, so PC would fail by arithmetic
+and *both* controls would be tautologies, leaving the abort condition with nothing
+live in it. With fixed floors, PC can genuinely come back MULTICELL again if its
+ring turns out to be anisotropic. PC's measured `R`/`E` distributions are still
+reported — as **evidence about the null, not as the threshold**.
+
+### 8.3 Order matters: criterion 1 still runs first
+
+A splitting supercell puts two movers on opposite flanks, so `R ≈ 0` and, with
+two components, no `E` — a supercell would *fail* criterion 2′. It never gets
+there: `crit1` is evaluated first and rotation outvotes everything, exactly as
+§3.2 pre-registered. The ordering was load-bearing before and is more so now.
+
+### 8.4 Labels, controls, abort condition — unchanged in form
+
+`crit1` False → **SUPERCELL**. `crit1 ∧ crit2′ ∧ crit3` → **MULTICELL**.
+`crit1 ∧ ¬crit2′` → **SINGLE CELL** — and this is where PC's ring must now land.
+Anything else → **INDETERMINATE**.
+
+**The abort condition stands and is re-armed:** SC must return SUPERCELL and PC
+must return SINGLE CELL, or no candidate is scored. As §7.2 established, SC's half
+is arithmetically forced and carries no information; **PC's half is live**, and
+under §8.2's fixed floors it is live in the strong sense — PC has already failed
+this abort once and nothing about the new rule guarantees it passes.
+
+### 8.5 What is reported but does not gate
+
+`R` and `E` per frame for all five runs; PC's null distribution; M4's peak-w
+location series and M5's cold pool (descriptors from §3.1, unchanged); and the
+§5 drift/void check, which voided neither control and is applied to candidates
+unchanged.
+
+### 8.6 What would falsify this section
+
+Recorded so §8 is exposed the way §2.1's prediction was. **The uncertainty band is
+two-sided, deliberately.** A statistic inside `R` **0.40–0.60** or `E`
+**1.67–2.40** is uncertainty, not evidence, in *either* direction: a candidate
+landing just over a floor is **not** a MULTICELL result to be banked, and one
+landing just under is **not** a SINGLE CELL result either. Both are reported as
+INDETERMINATE with the numbers. So the value that banks a MULTICELL is `R ≥ 0.60`
+or `E ≥ 2.40`, and the value that banks a SINGLE CELL is `R < 0.40` **and**
+`E < 1.67`.
+
+**The band is per-statistic, and criterion 2′ is an OR.** A candidate whose `R` is
+decisive (say 0.97) is not made uncertain by an `E` that happens to sit near its
+own floor — only the statistic that *decides* the outcome has to be clear of its
+band. This was caught by a fixture, not by reasoning: the one-sided flank cluster
+(`R` 0.97, `E` 1.85) came back INDETERMINATE under the first draft of this
+paragraph, which was wrong about a case the rule is supposed to be sure of.
+
+The under-side is not symmetry for its own sake — it is aimed at a named risk.
+**Candidate B is the weak-shear case (10 m/s), where cold-pool regeneration is only
+weakly preferred downshear**, so B's plausible landing zone is `R ≈ 0.3–0.5`: right
+at the floor. Without the under-band, `B → SINGLE CELL` would be ambiguous between
+"B is not a multicell" and "the floor sits above weak-shear organisation", and
+nothing on the page would let a reader tell which. A one-sided band is a thumb on
+the scale toward the negative result.
+
+And
+if PC returns MULTICELL a second time, criterion 2′ is wrong too, and the honest
+conclusion is that this classifier cannot separate the regimes at 1 km — which
+would be a real answer about the probe design, not a failure to be patched a
+third time.
+
+### 8.7 Measurements taken on the controls before §8 was committed
+
+Three checks were run against SC and PC (and synthetic shapes) while §8 was being
+drafted, before it was committed and with the candidates unread. All three are
+listed whether or not they changed anything — a check that is only reported when
+it fires is not a check.
+
+1. **The `E`-from-3-points bias — CHANGED THE RULE.** Measured above; O2 moved
+   from centroid points to the union mask because of it.
+2. **`R`'s area weighting near the anchor — CHECKED, NO CHANGE.** The concern: the
+   parent updraft is usually both the largest component and the closest to the echo
+   centroid, so its unstable heading would carry the largest weight. Recomputing
+   `R` with components inside 2Δx of the anchor excluded moves **nothing on PC**
+   (identical to three decimals in all 10 qualifying frames) and moves **one SC
+   frame** (t=65: 0.598 → 0.631). Not material, so no exclusion is added — but the
+   minimum component-to-anchor distance is reported per frame so the assumption
+   stays visible.
+3. **The floors were fixed before these numbers were seen, and did not move.**
+   `R ≥ 0.5` and `E ≥ 2.0` were written into the §8.2 draft on geometric grounds;
+   the control measurements below were taken afterwards and neither floor was
+   adjusted to them.
+
+**Measured null (controls, mature qualifying frames):**
+
+| | `R` | `E` (mask) |
+|---|---|---|
+| **PC** (the ring) | 0.000–0.041, median **0.000** | **1.00 in every frame** |
+| **SC** (supercell + flanking cells) | 0.191–0.943, median **≈0.49** | 1.29–2.12, median **≈1.83** |
+
+PC's ring is annihilated by both statistics, which is the intended behaviour and
+the reason for the pivot. The SC row is the more interesting one: a supercell's
+scattered flanking convection sits at `R ≈ 0.49` and `E ≈ 1.83` — *just under both
+floors*. So the floors are not generous thresholds that anything organised clears;
+they are set at roughly "more organised than a supercell's flank scatter". SC's
+label does not depend on this (criterion 1 catches it first, §8.3), which is what
+makes the number usable as calibration rather than as a result.

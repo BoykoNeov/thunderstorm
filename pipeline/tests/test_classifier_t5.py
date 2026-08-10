@@ -184,5 +184,153 @@ for tag, uh_series in (("flat", [7.0] * len(TIMES)),
     lab = C.classify(run(fake_sc), med)[0]
     check(f"SC_label_is_arithmetically_forced_{tag}", lab == "SUPERCELL", lab)
 
+print("--- section 8: criterion 2' computed from real fields ---")
+
+import numpy as np  # noqa: E402
+
+NX = 121
+KM = np.arange(NX, dtype=float) - NX // 2          # -60 .. +60 km, 1 km cells
+
+
+def field(centres, radius_km=2.0, w=20.0, dbz=50.0, echo_at=None):
+    # radius 2 km, not 3: at 3 the RING12 lobes (5.1 km apart) merge into a single
+    # annulus and the fixture silently stops testing 12 components. Physically
+    # right, pedagogically useless -- the same class of trap as T3's square grid.
+    """Build (colmax_w, cref) with a blob at each centre, so `organisation` runs
+    on the same arrays it will see from CM1 rather than on a mocked summary."""
+    yy, xx = np.meshgrid(KM, KM, indexing="ij")
+    cw = np.zeros((NX, NX))
+    for cx, cy in centres:
+        cw = np.maximum(cw, np.where((xx - cx) ** 2 + (yy - cy) ** 2
+                                     <= radius_km ** 2, w, 0.0))
+    cref = np.zeros((NX, NX))
+    for cx, cy in (echo_at if echo_at is not None else centres):
+        cref = np.maximum(cref, np.where((xx - cx) ** 2 + (yy - cy) ** 2
+                                         <= radius_km ** 2, dbz, 0.0))
+    return cw, cref
+
+
+def org(centres, echo_at=None):
+    cw, cref = field(centres, echo_at=echo_at)
+    return C.organisation(cw, cref, KM, KM, 1.0)
+
+
+# PC's actual geometry: four equal lobes of one ring, echo centred on the ring.
+RING4 = [(-5, -5), (5, -5), (-5, 5), (5, 5)]
+RING12 = RING4 + [(0, -6), (0, 6), (-6, 0), (6, 0),
+                  (-9, -9), (9, -9), (-9, 9), (9, 9)]
+LINE = [(-18, 0), (-9, 0), (0, 0), (9, 0), (18, 0)]
+FLANK = [(0, 0), (9, 1), (11, -3), (13, 4)]
+
+o4, o12 = org(RING4, echo_at=[(0, 0)]), org(RING12, echo_at=[(0, 0)])
+check("ring4_has_no_flank_coherence", o4["R"] < 0.01, o4["R"])
+check("ring4_is_not_elongated", o4["E"] < 1.1, o4["E"])
+check("ring12_has_no_flank_coherence", o12["R"] < 0.01, o12["R"])
+check("ring12_is_not_elongated", o12["E"] < 1.1, o12["E"])
+
+oL = org(LINE, echo_at=[(0, 0)])
+check("line_is_elongated_far_past_the_floor", oL["E"] >= C.E_FLOOR * 2, oL["E"])
+check("line_has_no_flank_coherence_which_is_why_E_exists",
+      oL["R"] < 0.05, oL["R"])
+
+oF = org(FLANK, echo_at=[(0, 0)])
+check("flank_cluster_is_coherent", oF["R"] >= C.R_FLOOR, oF["R"])
+
+# Qualification rules.
+check("one_component_does_not_qualify", not org([(0, 0)])["org_qualifies"])
+check("no_echo_does_not_qualify",
+      not C.organisation(field(RING4)[0], np.zeros((NX, NX)), KM, KM, 1.0)
+      ["org_qualifies"])
+o2 = org([(-9, 0), (9, 0)], echo_at=[(0, 0)])
+check("two_components_qualify_but_carry_no_E",
+      o2["org_qualifies"] and o2["E"] is None, o2["E"])
+
+# The bias that moved O2 off centroid points (docs 8.2). Three points in general
+# position give a wildly elongated 3-point ellipse; the mask says otherwise.
+TRIPLE = [(0, 0), (7, 1), (3, 6)]
+pts = np.array(TRIPLE, dtype=float)
+d = pts - pts.mean(axis=0)
+ev = np.linalg.eigvalsh((d.T @ d) / len(d))
+check("centroid_point_ellipse_is_the_rejected_estimator",
+      float(np.sqrt(ev[1] / ev[0])) > org(TRIPLE, echo_at=[(0, 0)])["E"],
+      f"points={np.sqrt(ev[1] / ev[0]):.2f} mask={org(TRIPLE, echo_at=[(0, 0)])['E']:.2f}")
+check("unorganised_triple_stays_under_the_E_floor",
+      org(TRIPLE, echo_at=[(0, 0)])["E"] < C.E_FLOOR,
+      org(TRIPLE, echo_at=[(0, 0)])["E"])
+
+print("--- section 8: the rule, and the failure it was built to fix ---")
+
+
+def orgframe(t_min, centres, uh=10.0, echo_at=None, cells=1):
+    o = org(centres, echo_at=echo_at)
+    f = frame(t_min, uh=uh, cells=cells, updrafts=o["org_ncomp"])
+    f.update(o)
+    return f
+
+
+ring_run = [orgframe(t, RING4, echo_at=[(0, 0)]) if t >= 40 else orgframe(t, [(0, 0)])
+            for t in TIMES]
+line_run = [orgframe(t, LINE, echo_at=[(0, 0)]) if t >= 40 else orgframe(t, [(0, 0)])
+            for t in TIMES]
+flank_run = [orgframe(t, FLANK, echo_at=[(0, 0)]) if t >= 40 else orgframe(t, [(0, 0)])
+             for t in TIMES]
+
+check("ring_run_is_SINGLE_CELL_under_the_new_rule",
+      C.classify_v2(run(ring_run), SC_MEDIAN)[0] == "SINGLE CELL",
+      C.classify_v2(run(ring_run), SC_MEDIAN)[0])
+# ...and this is the whole point of section 8: the SAME fixture under the retired
+# count rule is the abort. A gate that only shows the fix passing does not show
+# that it fixed anything.
+check("control_ring_run_WAS_multicell_under_the_retired_count_rule",
+      C.classify(run(ring_run), SC_MEDIAN)[0] == "MULTICELL",
+      C.classify(run(ring_run), SC_MEDIAN)[0])
+
+check("line_run_is_MULTICELL", C.classify_v2(run(line_run), SC_MEDIAN)[0] == "MULTICELL",
+      C.classify_v2(run(line_run), SC_MEDIAN)[0])
+check("flank_run_is_MULTICELL", C.classify_v2(run(flank_run), SC_MEDIAN)[0] == "MULTICELL",
+      C.classify_v2(run(flank_run), SC_MEDIAN)[0])
+
+# Rotation still outvotes organisation (section 8.3): a rotating LINE is a
+# supercell, not a squall line, and must not be relabelled by its geometry.
+rot_line = [dict(f, max_abs_uh=500.0) if f["t_min"] >= 40 else f for f in line_run]
+check("rotation_still_outvotes_organisation",
+      C.classify_v2(run(rot_line), SC_MEDIAN)[0] == "SUPERCELL",
+      C.classify_v2(run(rot_line), SC_MEDIAN)[0])
+
+# Sustained multiplicity: organised, but only in 4 frames.
+brief = [orgframe(t, FLANK, echo_at=[(0, 0)]) if 60 <= t <= 75 else orgframe(t, [(0, 0)])
+         for t in TIMES]
+_, evb = C.classify_v2(run(brief), SC_MEDIAN)
+check("four_organised_frames_are_not_enough",
+      evb["qualifying_frames"] == 4 and not evb["crit2p_organised_multiplicity"],
+      f"{evb['qualifying_frames']} {evb['crit2p_organised_multiplicity']}")
+
+print("--- section 8.6: the two-sided uncertainty band ---")
+
+
+def band_run(r_value):
+    fr = []
+    for t in TIMES:
+        f = frame(t, uh=10.0, cells=1, updrafts=3)
+        f.update({"org_qualifies": t >= 40, "org_ncomp": 3,
+                  "R": r_value if t >= 40 else None, "E": 1.0,
+                  "org_min_anchor_km": 5.0})
+        fr.append(f)
+    return run(fr)
+
+
+check("just_over_the_R_floor_is_INDETERMINATE_not_multicell",
+      C.classify_v2(band_run(0.55), SC_MEDIAN)[0] == "INDETERMINATE",
+      C.classify_v2(band_run(0.55), SC_MEDIAN)[0])
+check("just_under_the_R_floor_is_INDETERMINATE_not_single_cell",
+      C.classify_v2(band_run(0.45), SC_MEDIAN)[0] == "INDETERMINATE",
+      C.classify_v2(band_run(0.45), SC_MEDIAN)[0])
+check("clearly_over_the_R_floor_is_MULTICELL",
+      C.classify_v2(band_run(0.75), SC_MEDIAN)[0] == "MULTICELL",
+      C.classify_v2(band_run(0.75), SC_MEDIAN)[0])
+check("clearly_under_the_R_floor_is_SINGLE_CELL",
+      C.classify_v2(band_run(0.15), SC_MEDIAN)[0] == "SINGLE CELL",
+      C.classify_v2(band_run(0.15), SC_MEDIAN)[0])
+
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

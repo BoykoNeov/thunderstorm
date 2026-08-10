@@ -89,6 +89,19 @@ MIN_SYSTEM_MINUTES = 60.0
 BOUNDARY_KM = 15.0       # "near an open wall", for the 6.2 descriptor AND for the
                          # section-5 void criterion (see docstring)
 
+# --- section 8: criterion 2' (organisation), re-pre-registered 2026-08-10 ----
+# The count-based criterion 2 was RETIRED after the PC control classified
+# MULTICELL: PC's four >=40 dBZ components had identical areas and identical peaks
+# at (+-5,+-5) -- one axisymmetric gust-front ring quantised by a square grid, not
+# four cells (section 7.3). `classify` below still implements the retired rule and
+# is kept callable so section 7's numbers stay reproducible; `classify_v2` is the
+# live one.
+R_FLOOR = 0.5            # area-weighted circular resultant: "at least half-coherent"
+E_FLOOR = 2.0            # mask elongation: "at least twice as long as wide"
+MIN_QUALIFYING_FRAMES = MIN_FRAMES_WITH_2_CELLS   # 5 -- reused, not reinvented
+R_BAND = 0.10            # section 8.6 two-sided INDETERMINATE band
+E_BAND_FACTOR = 1.20     # ditto, multiplicative: 2.00/1.2 = 1.67 under, 2.40 over
+
 
 def frame_metrics(path):
     d = netCDF4.Dataset(path)
@@ -145,7 +158,79 @@ def frame_metrics(path):
     m.update(_containment(np.abs(w).max(axis=0) >= W_UPDRAFT, xh, yh, "w"))
     m["cell_centroid_x_km"], m["cell_centroid_y_km"] = _centroid(
         cref >= DBZ_CELL, xh, yh)
+
+    # O1 / O2 -- organisation (docs section 8), computed per frame, gated per run
+    m.update(organisation(colmax_w, cref, xh, yh, cell_km2))
     return m
+
+
+# --- section 8: the organisation statistics ---------------------------------
+
+def organisation(colmax_w, cref, xh, yh, cell_km2):
+    """Flank coherence R and mask elongation E for one frame (docs section 8.2).
+
+    A frame QUALIFIES when it has >=2 updraft components and a >=40 dBZ echo to
+    anchor directions on. R is undefined without an independent anchor -- taking
+    the components' own mean would force R == 0 by construction -- so the echo
+    centroid is used and a frame with no echo does not qualify.
+    """
+    out = {"org_ncomp": 0, "org_qualifies": False, "R": None, "E": None,
+           "org_min_anchor_km": None}
+
+    emask = cref >= DBZ_CELL
+    umask = colmax_w >= W_UPDRAFT
+    if not emask.any() or not umask.any():
+        return out
+
+    lab, n = ndimage.label(umask, structure=np.ones((3, 3)))
+    if n == 0:
+        return out
+    idx = np.arange(1, n + 1)
+    sizes = ndimage.sum(umask, lab, index=idx) * cell_km2
+    keep = idx[sizes >= W_MIN_AREA_KM2]
+    if len(keep) < 2:
+        out["org_ncomp"] = int(len(keep))
+        return out
+
+    jj, ii = np.nonzero(emask)
+    ax, ay = float(xh[ii].mean()), float(yh[jj].mean())
+
+    cents = ndimage.center_of_mass(umask, lab, index=keep)
+    areas = ndimage.sum(umask, lab, index=keep) * cell_km2
+
+    # O1 -- area-weighted circular resultant length about the echo centroid.
+    num = np.zeros(2)
+    den = 0.0
+    dists = []
+    for (cy, cx), a in zip(cents, areas):
+        dvec = np.array([float(xh[int(round(cx))]) - ax,
+                         float(yh[int(round(cy))]) - ay])
+        dist = float(np.hypot(*dvec))
+        dists.append(dist)
+        if dist == 0.0:          # direction undefined: skipped, not counted as 0
+            continue
+        num += a * dvec / dist
+        den += a
+
+    out["org_ncomp"] = int(len(keep))
+    out["org_qualifies"] = True
+    out["org_min_anchor_km"] = round(min(dists), 2) if dists else None
+    out["R"] = round(float(np.hypot(*num) / den), 4) if den else None
+
+    # O2 -- elongation of the surviving mask's VOXELS, not of the component
+    # centroids. From 3 centroid points the axis ratio is biased hard (median E
+    # 3.72 under an isotropic null, 79.7% of triples clearing 2.0, docs 8.2); the
+    # voxel covariance has n in the thousands and no such bias. Needs >=3
+    # components for an elongation statement to mean anything.
+    if len(keep) >= 3:
+        kept = np.isin(lab, keep)
+        jj2, ii2 = np.nonzero(kept)
+        pts = np.stack([xh[ii2], yh[jj2]], axis=1)
+        pts = pts - pts.mean(axis=0)
+        cov = (pts.T @ pts) / len(pts)
+        ev = np.clip(np.linalg.eigvalsh(cov), 1e-12, None)
+        out["E"] = round(float(np.sqrt(ev[1] / ev[0])), 3)
+    return out
 
 
 def _components(mask, cell_km2, min_area_km2):
@@ -340,6 +425,81 @@ def classify(cand, sc_uh_median):
     return "INDETERMINATE", ev
 
 
+def classify_v2(cand, sc_uh_median):
+    """The LIVE rule: section 3.2 with criterion 2 replaced by section 8's
+    criterion 2' (organised multiplicity). Returns (label, evidence).
+
+    Criterion 1 and criterion 3 are untouched, as are all six field thresholds --
+    section 8.1. Criterion 1 is evaluated FIRST and rotation outvotes everything:
+    a splitting supercell puts two movers on opposite flanks, so R ~ 0 and it would
+    FAIL criterion 2'. It must never reach it (section 8.3).
+    """
+    fr = mature(cand["frames"])
+    if not fr:
+        return "INDETERMINATE", {"why": "no mature frames"}
+
+    thresh = UH_FRACTION_OF_CONTROL * sc_uh_median
+    frac_rot = sum(1 for f in fr if f["max_abs_uh"] >= thresh) / len(fr)
+    crit1 = frac_rot < UH_FRAC_FRAMES
+
+    qual = [f for f in fr if f.get("org_qualifies") and f.get("R") is not None]
+    rs = [f["R"] for f in qual]
+    es = [f["E"] for f in qual if f.get("E") is not None]
+    r_med = float(np.median(rs)) if rs else None
+    e_med = float(np.median(es)) if es else None
+
+    # Section 8.6: the floors carry a two-sided band. "Organised" means a statistic
+    # clears its floor DECISIVELY (past the upper band edge); a statistic sitting
+    # inside the band is uncertainty, not evidence, in either direction. The band
+    # is per-statistic and criterion 2' is an OR, so a decisive R is not made
+    # uncertain by an E that happens to sit near its own floor.
+    enough = len(qual) >= MIN_QUALIFYING_FRAMES
+    organised = ((r_med is not None and r_med >= R_FLOOR + R_BAND)
+                 or (e_med is not None and e_med >= E_FLOOR * E_BAND_FACTOR))
+    crit2p = enough and organised
+
+    echo = [f for f in fr if f["n_cells"] >= 1]
+    echo_span = (echo[-1]["t_min"] - echo[0]["t_min"]) if len(echo) >= 2 else 0.0
+    crit3 = echo_span >= MIN_SYSTEM_MINUTES
+
+    # Section 8.6: a two-sided band around each floor is INDETERMINATE, not a
+    # result. The under-side exists for candidate B (weak shear, plausible landing
+    # zone R ~ 0.3-0.5); a one-sided band is a thumb on the scale.
+    near = []
+    if r_med is not None and R_FLOOR - R_BAND <= r_med < R_FLOOR + R_BAND:
+        near.append(f"R={r_med:.3f} within {R_BAND} of the {R_FLOOR} floor")
+    if e_med is not None and (E_FLOOR / E_BAND_FACTOR <= e_med
+                              < E_FLOOR * E_BAND_FACTOR):
+        near.append(f"E={e_med:.2f} within x{E_BAND_FACTOR} of the {E_FLOOR} floor")
+
+    ev = {
+        "uh_threshold": round(thresh, 1),
+        "frac_frames_rotating": round(frac_rot, 3),
+        "qualifying_frames": len(qual),
+        "median_R": None if r_med is None else round(r_med, 4),
+        "median_E": None if e_med is None else round(e_med, 3),
+        "R_range": [round(min(rs), 4), round(max(rs), 4)] if rs else None,
+        "E_range": [round(min(es), 3), round(max(es), 3)] if es else None,
+        "echo_span_min": round(echo_span, 1),
+        "crit1_not_supercell": crit1,
+        "crit2p_organised_multiplicity": crit2p,
+        "crit2p_enough_frames": enough,
+        "crit2p_organised": organised,
+        "crit3_sustained_system": crit3,
+        "near_floor": near or None,
+    }
+
+    if not crit1:
+        return "SUPERCELL", ev          # rotation outvotes organisation, by design
+    if near and enough and not organised:
+        return "INDETERMINATE", ev      # section 8.6, before any label is banked
+    if crit2p and crit3:
+        return "MULTICELL", ev
+    if not crit2p:
+        return "SINGLE CELL", ev
+    return "INDETERMINATE", ev
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", default=DEFAULT_RUNS)
@@ -369,16 +529,20 @@ def main():
               f"declared umove/vmove {d['declared_motion']}) ===")
         print(f"{'t_min':>6} {'max|uh|':>9} {'cells':>5} {'bdry':>4} "
               f"{'updrafts':>8} {'max_w':>7} {'min_w':>7} {'w@(x,y)km':>14} "
-              f"{'echoC(x,y)':>14} {'cold_km2':>9} {'minTh':>6} "
-              f"{'clearW':>7} {'clearC':>7}")
+              f"{'echoC(x,y)':>14} {'R':>6} {'E':>6} {'anch':>5} "
+              f"{'cold_km2':>9} {'minTh':>6} {'clearW':>7} {'clearC':>7}")
         for f in d["frames"]:
             loc = f"({f['max_w_x_km']:.0f},{f['max_w_y_km']:.0f})"
             cen = ("-" if f["cell_centroid_x_km"] is None
                    else f"({f['cell_centroid_x_km']:.0f},{f['cell_centroid_y_km']:.0f})")
+            rr = "-" if f.get("R") is None else f"{f['R']:.3f}"
+            ee = "-" if f.get("E") is None else f"{f['E']:.2f}"
+            an = "-" if f.get("org_min_anchor_km") is None else f"{f['org_min_anchor_km']:.1f}"
             print(f"{f['t_min']:6.0f} {f['max_abs_uh']:9.1f} {f['n_cells']:5d} "
                   f"{f['n_boundary_cells']:4d} "
                   f"{f['n_updrafts']:8d} {f['max_w']:7.1f} {f['min_w']:7.1f} "
-                  f"{loc:>14} {cen:>14} {f['coldpool_area_km2']:9.0f} "
+                  f"{loc:>14} {cen:>14} {rr:>6} {ee:>6} {an:>5} "
+                  f"{f['coldpool_area_km2']:9.0f} "
                   f"{f['min_thpert_sfc']:6.1f} "
                   f"{str(f['w_clearance_km']):>7} {str(f['cell_clearance_km']):>7}")
 
@@ -410,14 +574,19 @@ def main():
         print("NOTE: SC's own label is arithmetically forced (see docstring); the "
               "live half of the abort condition is PC.")
 
+    print(f"floors (section 8.2): R >= {R_FLOOR}, E >= {E_FLOOR}, "
+          f">= {MIN_QUALIFYING_FRAMES} qualifying frames")
+
     for name, d in data.items():
-        label, ev = classify(d, sc_uh_median)
+        label, ev = classify_v2(d, sc_uh_median)
+        old, _ = classify(d, sc_uh_median)
         dr = drift_fit(d)
-        print(f"\n{name}: {label}" + ("   [VOID -- section 5]" if dr["void"] else ""))
+        print(f"\n{name}: {label}" + ("   [VOID -- section 5]" if dr["void"] else "")
+              + f"        (retired count rule said: {old})")
         for k, v in ev.items():
-            print(f"    {k:<28} {v}")
+            print(f"    {k:<32} {v}")
         if dr["void"]:
-            print(f"    {'void_why':<28} {dr['void_why']}")
+            print(f"    {'void_why':<32} {dr['void_why']}")
 
 
 if __name__ == "__main__":
