@@ -314,7 +314,147 @@ differently. The shipped scenarios all run `irandp=0` and are unaffected. §5.2'
 numbers should be read with this caveat; they are not re-measured here because
 T4's package decision (ship nothing) does not turn on them.
 
-## 7. Results
+## 7. Results — THE ABORT CONDITION FIRED
 
-*Empty by design. Filled after the probe runs, which do not exist at the time
-this file is committed.*
+**§4's pre-registered abort condition is met: the PC control classified
+MULTICELL, not SINGLE CELL. No candidate result may be reported, and none was
+read — A, B and C have not been through the classifier at all.** That is the
+pre-registration doing its job, and it is worth saying plainly that the order it
+forced is what makes the result usable: the classifier was promoted into the repo
+and committed (`sim/probes/classify_t5.py`, `pipeline/tests/test_classifier_t5.py`
+20/20, commit a3e0c76) *before* it was pointed at a single probe frame, and the
+controls were run and adjudicated on their own, before the candidates.
+
+### 7.1 What the controls actually returned
+
+Both control runs are clean as runs. All five probes completed (25 frames each at
+`tapfrq=300`, `irandp=0`, fork binary `5fc93016…`).
+
+| | SC (`iwnd=2`, Bunkers 12.5/3.0) | PC (`iwnd=0`, `imove=0`) |
+|---|---|---|
+| median mature `max|uh|` | **678.7** m²/s² | **22.0** m²/s² |
+| `frac_frames_rotating` (crit 1) | 1.000 | 0.000 |
+| max simultaneous updrafts (M3) | 12 | **12** |
+| frames with ≥2 cells (M2) | 1 | **4** |
+| echo span, mature (crit 3) | 80.0 min | 80.0 min |
+| §6.2 boundary-cell frames | 0 | 0 |
+| §5 drift (u, v) | −0.31 / +2.13 m/s → implied `umove/vmove` 12.19 / 5.13 | 0.00 / 0.00 |
+| min mature clearance (cell / w) | 47.95 / 44.96 km | 77.92 / 77.92 km |
+| **label** | SUPERCELL | **MULTICELL** ← abort |
+
+Three pre-registered expectations *held*, and they are the reason the failure can
+be localised so precisely:
+
+- **M1 separates the controls by a factor of 30.8.** The rotation discriminator is
+  not the problem; §3.1's claim for it is vindicated.
+- **§6.2's prediction that the boundary-cell descriptor reads 0 at `irandp=0`
+  held**, in all 50 control frames. The domain-wide spurious convection seen in
+  T4's `irandp=1` run is absent, as predicted.
+- **§5's containment/drift check passes both controls** and voids neither. SC's
+  measured drift implies `vmove` ≈ 5.1 against the 3.0 it was given — a 2 m/s
+  Bunkers error over 2 h, far inside the 45 km clearance.
+
+### 7.2 SC could not have failed — recording it rather than fixing it
+
+Criterion 1's threshold is `0.25 × median(SC mature max|uh|)` and **SC is scored
+against it too**. At least half of SC's frames sit at or above their own median,
+which is four times the threshold, so `frac_rot ≥ 0.5` always and SC classifies
+SUPERCELL *by arithmetic* — on any data, including an empty domain. `frac_rot`
+came back exactly 1.000, which is what that looks like from the outside.
+
+The rule is **not** being changed for this; changing it now would be post-hoc.
+What it means is that §4's abort condition was only ever half-live: **SC's job is
+to set the scale, not to be an independent check, and PC was the whole test.**
+Three gates in `test_classifier_t5.py` feed absurd SC inputs (flat, tiny, wildly
+growing) and confirm SUPERCELL comes back every time, so the fact stays visible in
+test output instead of being rediscovered while reading results. This is the same
+family as T3's symmetric fixture and the standing rule *a gate that has only ever
+passed is not known to work* — here, reproduced inside §3.2's self-reference.
+
+### 7.3 Why PC classified MULTICELL: one axisymmetric ring, counted as four cells
+
+PC's pulse cell peaks at **61.6 m/s at t=25** and decays to `max w` 10.6 by t=70.
+What trips criterion 2 comes *after* that, and it has an unmistakable signature:
+
+| t (min) | ≥40 dBZ components | w≥10 m/s components |
+|---|---|---|
+| 60 | 1 × 96 km², pk 63 dBZ @ (0,0) | 1 × 12 km², pk 28 @ (0,0) |
+| 85 | 4 × **41 km², pk 52 dBZ** @ (±5,±5) + 1 × 20 km² @ (0,0) | 4 × **25 km², pk 21** @ (±5,±5) |
+| 90 | 4 × **52 km², pk 53 dBZ** @ (±5,±5) | 4 × **26 km², pk 19** @ (±5,±5) |
+| 105 | 1 × 295 km² @ (0,0) | 12: 4 × 11 km² pk 20 @ (±6,±6), 4 × 10 km² pk 18 @ (0,±6)/(±6,0), 4 × 8 km² pk 15 @ (±9,±9) |
+
+**The four lobes have identical areas and identical peak values, to the digit,
+in every frame.** That is not four cells; it is one axisymmetric structure — the
+gust-front ring of a zero-shear pulse cell — quantised by a square grid, first
+into 4 lobes and then, as the ring expands, into 4 corner + 4 edge + 4 outer
+lobes. Connected-component labelling cannot tell "N cells" from "one ring in N
+lobes", and §3.1 chose `ndimage.label` precisely *because* it avoids the tracker
+that failed in T4 §5.2. It avoided that failure mode and walked into another one.
+
+For contrast, SC's simultaneous components are 100–300 km², separated by 20–58 km,
+with different peaks — genuinely distinct updrafts.
+
+### 7.4 Two obvious repairs, both refuted with numbers — and one trap named
+
+Measured on the controls only (`diag_ring.py`, PC frames 75–120):
+
+- **Morphological closing** (merge lobes separated by a grid-scale gap). It works
+  late — t=105/110 collapse from 12/8 to 1 at a 2–3 km radius — and **fails
+  early**: at **t=75 and t=80 PC still has 4 simultaneous w≥10 components at every
+  radius 1, 2, 3, 4 and 5 km.** Criterion 2 arm A needs 3 in *one* frame, so the
+  label does not move.
+- **Lowering the w threshold** (a ring becomes one annulus). Same shape of
+  failure: t=75 gives 4 components at w≥5 and 5 at w≥3; t=105/110 give 8 at w≥5.
+- **The trap, named so it is not stumbled into later:** PC's lobes top out at
+  26 km², so raising `W_MIN_AREA_KM2` from 4 to ~30 would rescue the control
+  immediately. That is exactly *picking the number just above what the control
+  did*, and it would also suppress genuine small cells at 1 km in candidate B —
+  the candidate the whole probe exists to test. Not done.
+
+### 7.5 The diagnosis: §3.2's PC expectation was naive, not merely mis-implemented
+
+§4 pre-committed the reading "the classifier is wrong" for a control failure. The
+evidence supports a sharper statement, which is recorded here rather than
+smoothed over: **the classifier miscounts a ring, *and* the expectation that PC
+shows "1 and 0" was itself untested.** Those lobes carry peak w 15–32 m/s and
+49–56 dBZ — that is convection, not speckle. A zero-shear pulse cell at t = 2 h
+has a cold pool and a gust-front ring of daughter cells; "one bubble ⇒ one cell
+for 120 minutes" was an assumption nobody had measured, and it is false at 1 km
+over this window.
+
+That makes this a **pivot, not a patch**, for three compounding reasons:
+
+1. Component counting cannot separate multiplicity from geometry *at all* — the
+   ring proves the metric is unfit, not mis-tuned.
+2. Criterion 2 cannot be calibrated against PC the way criterion 1 is calibrated
+   against SC. PC's maximum count is **12**, higher than any threshold one would
+   set for a multicell, so the symmetric-calibration move that legitimises the
+   `0.25 ×` factor is simply unavailable on this axis.
+3. The false-positive mode points **straight at candidates B and C** — the
+   weak-shear and line-forcing configurations, the two most likely to produce an
+   outflow ring. A patched count could return MULTICELL for exactly the wrong
+   reason, which is the one outcome worse than no answer.
+
+### 7.6 State, and what the owner is being asked
+
+**Committed:** the classifier, its 20 wiring gates, and this abort. **Not done and
+deliberately not done:** any candidate label; any edit to §§1–6; any change to a
+metric or threshold. The five probe runs are on disk and cost nothing to re-score
+once a discriminator is agreed — this is a *design* decision, not a compute one.
+
+The principled replacement for a count is **organisation**: preferred-flank
+regeneration (do daughter cells appear on one side, as with shear, or on all
+sides, as in PC's ring?) and system propagation while individual cells cycle. A
+symmetric ring fails an organisation test by construction, which is precisely why
+it is the right axis. Options, priced rather than chosen:
+
+| Option | What it costs | Risk |
+|---|---|---|
+| **(A) Re-pre-register criterion 2 as an organisation test**, controls-only, candidates still unread | Metric design + a new pre-registration section; **no new runs** (re-scoring 5 × 25 frames is minutes) | The metric is designed after seeing PC's ring. Mitigation: it is fixed against the controls and committed before any candidate is read — the same discipline that produced this abort |
+| **(B) Replace or re-window the PC control** so it is genuinely a single cell | Cheap if it means scoring a shorter window; **expensive** if it means a sounding with real CIN to suppress secondary triggering — that is the charter's open CIN design task | A re-window is close to tuning, and shortening the mature window also amputates the multicell development the probe is looking for |
+| **(C) Accept the ring as real multicellularity** and drop criterion 2, classifying on rotation + organisation only | Cheapest | Makes "multicell" mean "not a supercell", which would label PC's decaying pulse cell a multicell — a teaching-grade scenario would then be wrong in the way that matters most |
+
+Recommendation: **(A)**, with (C)'s honesty about criterion 2 folded in — the ring
+result stays on the page as the reason the count was retired. §2.2's shear-gap
+branch and §6's outcome table are untouched and still pending, because they turn
+on candidate results that have not been read.
