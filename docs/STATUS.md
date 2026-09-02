@@ -738,3 +738,60 @@ Full advisor pressure-test of the original plan: docs/advisor-review-2026-07-09.
   **Structural changes in the same commit:** this file created (status log moved out
   of the charter), `docs/README.md` index added, `README.md` brought current (it
   still said "pre-implementation"), deck/template/probe READMEs updated.
+
+---
+
+## Phase 3 T5s — external sounding (`isnd=7`) — 2026-09-02
+
+Owner go given. Full record and every number: `sim/probes/README.md` (sections 4.0,
+4.1, 4.2) and `docs/plan-science-hurdles-2026-09-02.md`. Commits `5d4ff57`, `1b53270`,
+`68e8aee`, `3cfce47`, `dddf3f3`.
+
+**§4.0 source read (step 1, no run).** All three of the plan's unverified assumptions
+confirmed in `base.F`: the file format; that `iwnd` is ignored at `isnd=7` (settled
+three ways — `param.F` even forces it to 0 with a *non-fatal* warning, so this
+project's refusal is stricter than CM1's); and that the level cap is 1 000 000, the
+binding constraint being instead that the file's last `z` exceed the top **scalar**
+level (19 750 m). **The read paid for itself three times:** the template ran
+`output_basestate=0` so the gates would have been unevaluable *after* their runs;
+`run_probe.sh` never generated `input_sounding` at all despite the README claiming it
+did; and the writer's 100 m spacing put the moisture residual at 92 % of the gate
+budget because CM1 interpolates **RH** across the mixed-layer kink — 50 m fixes it,
+25 m adds nothing. Also recorded: `iwnd=3` measured at 52.4 m/s (above the gap, so T5's
+"ruled out" now rests on arithmetic); `isnd=17` exists and is refused by name.
+
+**§4.1 neutrality — PASSED 11/11.** Plumbing at floating-point noise (theta 2.2e-05 K,
+qv 8.5e-07 g/kg); this project's WK82 vs CM1's at 0.0048 g/kg, the value predicted
+offline before the runs; CM1's own t=0 CAPE within 0.03 %; wind not zeroed by `iwnd=0`;
+pulse cell reproduced to 0.07 % and supercell to 2.45 %, both at identical peak times.
+**The environment now reaches CM1 through a generated text file with the binary
+unchanged — option (i) is measured to be unnecessary.** The isnd=5 references needed no
+re-run: their base state is recoverable exactly at t=0 (`th-thpert`, `qv`, `prs`,
+`uinterp`), verified to 0.000e+00 against CM1's own arrays on the new runs first.
+
+**§4.2 criterion 2 (births) — RETIRED for cause, before it scored anything.** The
+plan's trigger could not fire (1 of 6 runs, not the supercell control). Re-registered;
+then two threshold-free defects in the re-registration itself (right censoring, and a
+greedy tracker this project retired in T4) were fixed. The corrected control result
+still fails: SC 2 births against a bar of ≤1, and PC's 0 is a *non-exercise* — its
+censored tail holds **four entries identical to the decimal**, T5 §7.3's axisymmetric
+gust-front ring arriving through a completely independent construction, which fifteen
+minutes earlier would have labelled the single-cell control MULTICELL. **H3 confirmed
+by an independent construction**; the entity definition was NOT iterated a third time.
+
+**§4.2 sweep — RUN, CONTAINED, SCORED.** All three label SUPERCELL on `P1 = 80`, the
+ceiling; the unsheared control reads 5, so `P1` separates *sheared from unsheared*.
+Descriptors are monotone in shear (`R` 0.364→0.526→0.560, `E` 2.721→1.948→1.546), and
+criterion 2′ read alone on unchanged thresholds puts **`us15` decisively on the
+multicell side on both statistics** while `us20`, `us25` and the supercell control are
+INDETERMINATE. **The structural transition lands between U_s 15 and 20 — exactly where
+BRN crosses 50, predicted from the sounding before any run.** Not claimed: that `us15`
+is a multicell. Complication recorded: `us15` has the *fewest* updrafts and *zero*
+births, so its signature is line-like (elongated, incoherent) rather than discrete-cell
+multiplicity — different objects, and now the open question.
+
+**Lessons.** (i) A statistic that never moves makes a criterion vacuous rather than
+wrong, and only a control can show it — the domain-wide peak updraft never halves.
+(ii) Right censoring turns "persisted exactly the minimum" into an artifact of the run
+length. (iii) A criterion whose *negative* side is INDETERMINATE for the known positive
+control separates one member without establishing anything about the others.
