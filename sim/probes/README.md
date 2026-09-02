@@ -43,7 +43,7 @@ recorded prediction equals what the config's own sounding computes).
 | config | role | environment | prediction |
 |---|---|---|---|
 | `t5s_neutral_pc.json` | control — PC re-run through the file path | WK82 14 g/kg, no wind | base state ≡ `t5probe_pc` (θ/qv to interpolation accuracy); same pulse cell |
-| `t5s_neutral_a.json` | control — A re-run through the file path | WK82 + tanh U_s=35 | u0 ≡ `t5probe_a`'s (settles "wind from file, iwnd ignored"); same supercell |
+| `t5s_neutral_a.json` | control — A re-run through the file path | WK82 + tanh U_s=35 | u0 ≡ `t5probe_a`'s (CONFIRMS in the run what the source read settled); same supercell |
 | `t5s_us15.json` | sweep | WK82 + tanh U_s=15 (14.5 m/s 0–6 km) | BRN 59 → **multicell** |
 | `t5s_us20.json` | sweep | WK82 + tanh U_s=20 (19.3 m/s) | BRN 33 → supercell |
 | `t5s_us25.json` | sweep | WK82 + tanh U_s=25 (24.1 m/s) | BRN 21 → supercell |
@@ -51,6 +51,78 @@ recorded prediction equals what the config's own sounding computes).
 The neutrality controls run FIRST and gate everything else: if `t5s_neutral_pc` does
 not reproduce `t5probe_pc`'s base state, `isnd=7` is not what the plan believes and the
 sweep is not run.
+
+#### §4.0 source read — **DONE 2026-09-02**, all three questions answered from source
+
+The plan's §4.0 required reading `base.F` before any run, because the three facts the
+proposal rests on came from memory of `README.namelist`, not from the source. Read in
+`/home/boiko/thunderstorm/build/cm1r21.1/src/` (the pinned tarball, `dc49fe84...`):
+
+| Question | Answer | Source |
+|---|---|---|
+| (a) `isnd=7` file format | **Confirmed exactly as the plan states.** Header `p_sfc[mb] th_sfc[K] qv_sfc[g/kg]`; then `z[m] theta[K] qv[g/kg] u[m/s] v[m/s]` ascending. `qv` is divided by 1000 on read. | `base.F:463-494` (comment), `:543-560` (reader) |
+| (b) is `iwnd` applied at `isnd=7`? | **No -- settled three ways.** The comment says so; the whole analytic-wind section is skipped; and `param.F` *forcibly sets* `iwnd=0` with a **non-fatal** warning. This project's deck rule is **stricter than CM1's**: CM1 warns and continues, `deck.py` refuses. | `base.F:466`, `base.F:2263` (`IF(isnd.ne.7)`), `param.F:836-853` |
+| (c) level cap | **`nmax = 1000000`**, comment "# of levels is arbitrary". The writer's 441 is nowhere near it. The real constraints are `nsnd > 2` and **the last `z` must exceed `zh(nk)`** (the top *scalar* level = 19750 m here, not the 20000 m nominal model top) or CM1 stops. The writer's 22000 m clears it. | `base.F:501` (`nmax`), `:565-572` (`nsnd>2`), `:492` + `:681-684` (z-top check) |
+
+**Five further findings from the same read, none of which change T5s's design:**
+
+1. **`output_basestate=0` in the template -- the gate would have been unevaluable.**
+   `th0`/`qv0`/`prs0`/`u0`/`v0` are written *only* at `output_basestate=1`
+   (`writeout.F:4431-4494`, `:6886`, `:7347`), and the template runs 0. Every `t5s_*`
+   config now declares `output_basestate: 1`; it is a Category 5 optional key in
+   `deck.py`, so the shipped scenarios that omit it stay byte-identical (all four
+   byte-identity suites re-run green). Found *before* the runs, not after.
+2. **`input_sounding_grid` is dead code.** `base.F:3247` sits behind `dothis = .false.`,
+   so CM1 never writes the interpolated sounding to a plate. The netCDF base state is
+   the only gate input, which is what item 1 makes possible.
+3. **CM1's WK82 and this project's agree line for line**, which is what the
+   thermodynamics gate actually compares. Same theta (eq. 1) and RH (eq. 2) constants
+   (`base.F:369-374`, `:390-396`); the mixed layer is the **same implicit clip** in both
+   (`if(qv0.gt.qv_pbl) qv0=qv_pbl` is `min(rh*qvs, qv_pbl)`), so the PBL join is at the
+   same height by construction rather than by agreement; same saturation formula
+   (Bolton 1980, `rslf` in `cm1libs.F:35-41`); and identical physical constants
+   (`constants.F:110-117`: `g=9.81, rd=287.04, cp=1005.7, rv=461.5`). Two known small
+   differences remain and are expected in the gate residual, not treated as failures:
+   CM1's `isnd=5` builds its first half-step from a **saturated** surface
+   (`qv_sfc = rslf(p_sfc,T_sfc)`, about 22.6 g/kg) while the `isnd=7` path takes the
+   file header's 14 g/kg -- worth a few Pa; and the file is interpolated from 100 m
+   spacing onto CM1's levels, RH-preserving.
+4. **The writer's level spacing is now 50 m, and the reason was measured before the
+   run.** CM1 interpolates the file's **RH** linearly onto its own levels, and the
+   mixed layer ends in an implicit *kink* in RH(z) (where WK82's RH stops demanding
+   more moisture than the `qv_pbl` clip allows -- 1300 m for the 14 g/kg reference). A
+   model level straddling that kink picks up a moisture error. Measured offline against
+   the isnd=5 reference run's own base state: 100 m spacing gave **0.046 g/kg at
+   z=1250 m -- 92 % of the gate's 0.05 g/kg budget**; 50 m gives 0.0048; 25 m gives
+   0.0048 (converged). `DEFAULT_DZ_M` is 50 m. This is a fix found *before* spending a
+   run, which is the whole point of doing the source read first -- the alternative
+   would have been a gate that passed by 8 % and nobody knowing why.
+5. **CM1 extrapolates the surface wind** rather than reading it -- the header line has no
+   wind columns, so `usnd(1)`/`vsnd(1)` come from levels 2 and 3 (`base.F:611-618`).
+   For a `tanh` profile at 100 m spacing that is a 0.004 m/s error. Recorded so a future
+   profile with curvature at the ground does not silently disagree with the bulk shear
+   the generator reports.
+
+**`u0` in the output is grid-relative.** `base.F:2661-2668` subtracts `umove`/`vmove`
+after the sounding is built, for `isnd=7` exactly as for `isnd=5`. The neutrality
+comparison is unaffected (A and `t5s_neutral_a` both run `umove=23`), but a comparison
+of `u0` against the *file* must add `umove` back.
+
+**`iwnd=3` -- ruled out in T5, now measured from source.** T5 section 2.2 ruled it out on
+the grounds that its source comment is `Mulit-cell type profile (?)` with no citation.
+Computed from the constants at `base.F:2366-2392` (`u` linear from -12.73 to +52.73 m/s
+over 7500 m, `v` constant at 12.73 so it adds nothing to the vector difference), its
+0-6 km bulk shear is **52.4 m/s** (48.0 between CM1's 250 m and 5750 m scalar levels) --
+**above** the 10-31.8 m/s gap, not inside it. So T5's conclusion is unchanged and now
+rests on arithmetic rather than on a missing citation. It is not probed: wrong side of
+the gap, and probing an uncited profile to look for a wanted answer is T5 section 7.4's
+trap.
+
+**`isnd=17` -- a real option the record did not have.** Same file, columns 4-5 ignored,
+wind from `iwnd` (`base.F:495`, `:552-554`; `README.namelist`). It decouples the two
+knobs, so a future task could hold CM1's validated `iwnd=2` wind while sweeping CIN
+through the file. It also **inverts** the `iwnd=0` rule, and no gate covers it, so
+`deck.py` refuses it by name rather than letting it pass Category 6 vacuously.
 
 ## Running one
 

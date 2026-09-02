@@ -64,7 +64,7 @@ advisor review.
 its website is egress-blocked from the session that wrote this, so three facts are from
 memory of `README.namelist`, not from a source read: (a) the `isnd=7` file format above;
 (b) that at `isnd=7` the wind is taken from the file and `iwnd` is not applied on top;
-(c) the maximum number of file levels `base.F` accepts (the writer emits 221). The
+(c) the maximum number of file levels `base.F` accepts (the writer emits 441). The
 project's own rule — T4 and T5 both found their plan's premise false by reading the
 source first — applies here with full force: **step 1 of T5s is a `base.F` read, not a
 run**, and the neutrality gates in §4.1 are the empirical check either way. The deck
@@ -155,20 +155,55 @@ result.
 committed and run → gates pass → *then* the sweep is run and read. Configs are tracked in
 `sim/probes/configs/t5s_*.json` and each carries its prediction.
 
-### 4.0 Source read (no run)
+### 4.0 Source read (no run) — **DONE 2026-09-02. All three confirmed; findings and
+line numbers in `sim/probes/README.md`.**
 
 In `base.F` of the pinned tarball: confirm (a) the `isnd.eq.7` reader and its column
 order/units; (b) whether `iwnd` is applied at `isnd=7`; (c) the level cap. Record the
 three line numbers in `sim/probes/README.md`. If (a) differs from §2's format, fix the
 writer *before* any run; if (b) says `iwnd` is applied, keep `iwnd=0` and confirm the
-file's winds survive in `u0` (the gate below); if (c) is below 221, raise `dz_m`.
+file's winds survive in `u0` (the gate below); if (c) is below 441, raise `dz_m`.
+
+**Outcome.** (a) the format is exactly as §2 states; (b) `iwnd` is ignored, settled
+three ways in source — `param.F` even forces it to 0 with a *non-fatal* warning, so
+this project's refusal is stricter than CM1's; (c) the cap is 1 000 000 levels, and the
+binding constraint is instead that the file's last `z` exceed the top **scalar** level
+(19 750 m, not the 20 000 m nominal top) — the writer's 22 000 m clears it. §2's
+"what is NOT verified, stated bluntly" paragraph is now discharged; nothing in the
+design changed.
+
+**One thing the read caught that a run would not have.** The deck template runs
+`output_basestate = 0`, so `th0`/`qv0`/`prs0`/`u0`/`v0` are simply not written to the
+netCDF — the §4.1 gates would have been **unevaluable after** their runs. The `t5s_*`
+configs now declare `output_basestate: 1` (a Category 5 optional key, so the shipped
+scenarios stay byte-identical). CM1's other candidate output for this,
+`input_sounding_grid`, is dead code behind `dothis = .false.`
+
+**Also fixed before any run:** `sim/probes/run_probe.sh` did not generate
+`input_sounding` at all — the probes README claimed it did. A `t5s_*` probe launched
+through it would have died on a missing file, or silently read a stale one left from an
+earlier version of the same config. It now generates the file from the config, removes
+any stale one before staging, and records `input_sounding_sha256` in `run_meta.txt`.
 
 ### 4.1 Neutrality controls — two 1 km runs, ~13 min each at `np=4`
 
 | Run | Reference | Gate (pass/fail, fixed now) |
 |---|---|---|
 | `t5s_neutral_pc` — PC's deck with `isnd 5→7`, WK82 reference file, no wind | `t5probe_pc` (on disk) | `th0`, `qv0`, `prs0` at t=0: \|Δθ\| < 0.1 K and \|Δqv\| < 0.05 g/kg at every level; CM1's own `cape`/`cin` at t=0 within 10 % of `input_sounding.report.json`'s SB values; same pulse cell: peak `w` within 5 %, peak time ± 5 min. |
-| `t5s_neutral_a` — A's deck with `isnd 5→7`, `iwnd 4→0`, WK82 + tanh U_s=35 | `t5probe_a` (on disk) | `u0` at every level within 0.2 m/s of A's, `v0` = 0 (**this settles "wind from file, iwnd ignored"**); same supercell family: peak `w` within 5 %. |
+| `t5s_neutral_a` — A's deck with `isnd 5→7`, `iwnd 4→0`, WK82 + tanh U_s=35 | `t5probe_a` (on disk) | `u0` at every level within 0.2 m/s of A's, `v0` = 0 (**confirms in the run what §4.0 settled in the source**); same supercell family: peak `w` within 5 %. |
+
+**The `neutral_pc` gate tests two separable claims, and they are scored separately.**
+"CM1 read the file and honoured it" (plumbing) and "this project's WK82 equals CM1's
+WK82" (two implementations of one paper) would otherwise fail as one number, and an
+innocuous formula difference would stop T5s under a gate meant for the plumbing. So a
+tolerance breach triggers a **second comparison first**: CM1's t=0 base state against
+**the generated file's own values interpolated to CM1's levels the way `base.F` does
+it** (RH-preserving — `base.F:686-716`). That comparison contains no WK82 content at
+all. Plumbing is only declared broken if *it* also fails. Pre-registered here before
+the run, not chosen after seeing a residual. (The §4.0 read makes a large residual
+unlikely: the two WK82s share constants, formulas and the moisture clip — see
+`sim/probes/README.md`. The two known differences, a saturated-surface first half-step
+at `isnd=5` and the 100 m-to-model-level interpolation, are expected in the residual.)
 
 **Either gate failing stops T5s.** A base-state mismatch means `isnd=7` is not what §2
 says; a wind mismatch with `u0 ≡ 0` means `iwnd` *is* applied and the deck rule must

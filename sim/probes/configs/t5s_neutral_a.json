@@ -3,7 +3,7 @@
   "name": "t5s_neutral_a",
   "kind": "t5s_probe",
   "phase": "phase3-T5s-probe",
-  "description": "Phase 3 T5s NEUTRALITY CONTROL (wind). The t5probe_a run (isnd=5, iwnd=4: CM1's 35 tanh(z/3 km) profile) re-run with the same environment through the external sounding: WK82 reference thermodynamics + wind kind=tanh, u_max=35, z_scale=3000. GATE (plan section 4.1): u0 at t=0 must match t5probe_a's u0 at every level (|du| < 0.2 m/s), v0 = 0, AND the deck's iwnd=0 must NOT have zeroed the wind -- this is the run that settles whether CM1 takes the wind from the file and ignores iwnd at isnd=7 (the source read in base.F is the first check; this is the empirical one). Storm: same supercell family as A (peak w within 5 %). imove=1 with umove=23 as A used.",
+  "description": "Phase 3 T5s NEUTRALITY CONTROL (wind). The t5probe_a run (isnd=5, iwnd=4: CM1's 35 tanh(z/3 km) profile) re-run with the same environment through the external sounding: WK82 reference thermodynamics + wind kind=tanh, u_max=35, z_scale=3000. GATE (plan section 4.1): u0 at t=0 must match t5probe_a's u0 at every level (|du| < 0.2 m/s), v0 = 0, AND the deck's iwnd=0 must NOT have zeroed the wind -- the source read (2026-09-02) SETTLED that CM1 takes the wind from the file and ignores iwnd at isnd=7 -- base.F:466, base.F:2263, param.F:836-853, which forces iwnd=0 non-fatally -- so this run CONFIRMS it empirically rather than deciding it. Storm: same supercell family as A (peak w within 5 %). imove=1 with umove=23 as A used.",
   "sim": {
     "run_dir": "/home/boiko/thunderstorm/runs/t5s_neutral_a",
     "namelist": {
@@ -18,6 +18,7 @@
       "dtl": 6.0,
       "adapt_dt": 1,
       "isnd": 7,
+      "output_basestate": 1,
       "icor": 0,
       "iorigin": 2,
       "iinit": 1,

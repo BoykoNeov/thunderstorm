@@ -340,6 +340,43 @@ def main():
 
     check("isnd=7 + block + iwnd=0 generates a deck", external_generates)
 
+    def isnd17_refused():
+        # base.F:495 accepts isnd=17 through the SAME reader but ignores columns 4-5
+        # and takes the wind from iwnd -- which inverts the iwnd=0 rule above. Refused
+        # by name so it is an error, not a deck that passes Category 6 vacuously.
+        return expect_error(lambda: deck.generate(mutated(base, isnd=17, iwnd=0, sounding=WK82_BLOCK)),
+                            deck.DeckError, "isnd=17")
+
+    check("isnd=17 (file thermodynamics, analytic wind) is refused by name", isnd17_refused)
+
+    def basestate_flag_passthrough():
+        # The T5s neutrality gates read CM1's OWN base state out of the netCDF. The
+        # template runs output_basestate=0, so without this override the arrays are
+        # not in the file and the gate is unevaluable AFTER the run.
+        text, _ = deck.generate(mutated(base, isnd=7, iwnd=0, output_basestate=1,
+                                        sounding=WK82_BLOCK))
+        on = deck.parse(text)["output_basestate"]
+        off = deck.parse(deck.generate(mutated(base, isnd=7, iwnd=0,
+                                               sounding=WK82_BLOCK))[0])["output_basestate"]
+        return on == 1.0 and off == 0.0, (
+            f"declared -> {on:.0f}; omitted -> template default {off:.0f} (so the "
+            "shipped scenarios, which omit it, stay byte-identical)")
+
+    check("output_basestate reaches the deck when declared and is 0 when omitted",
+          basestate_flag_passthrough)
+
+    def probes_request_basestate():
+        rows = []
+        for f in sorted(os.listdir(PROBE_DIR)):
+            if not f.startswith("t5s_"):
+                continue
+            d = json.load(open(os.path.join(PROBE_DIR, f)))
+            rows.append((f, d["sim"]["namelist"].get("output_basestate")))
+        return all(v == 1 for _, v in rows), "; ".join(f"{f}: {v}" for f, v in rows)
+
+    check("every t5s_* probe asks CM1 to write the base state its gate reads",
+          probes_request_basestate)
+
     def block_typo_refused():
         return expect_error(lambda: S.from_config({"kind": "wk82", "qv_pbl": 14.0}),
                             S.SoundingError, "unrecognised")

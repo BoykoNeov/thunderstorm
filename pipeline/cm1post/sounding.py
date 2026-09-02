@@ -29,7 +29,7 @@ one more file whose sha256 `run_meta.txt` records.
          on top (deck.py requires iwnd=0 at isnd=7 so the deck cannot LOOK like it
          declares shear it does not use; the neutrality gate below is the arbiter);
       3. the maximum number of file levels base.F accepts (this writer defaults to
-         221 levels: 0-22 km at 100 m).
+         441 levels: 0-22 km at 50 m).
     Neutrality gate (docs/plan-science-hurdles-2026-09-02.md section 4): a scenario
     run at isnd=7 with THIS module's WK82 profile must reproduce the isnd=5 base
     state (th0/qv0/u0/v0 in cm1out) to interpolation accuracy. Not bitwise -- the
@@ -111,7 +111,17 @@ WK82_DEFAULTS = {
     "p_sfc_hpa": 1000.0,
 }
 DEFAULT_Z_TOP_M = 22000.0     # must exceed the CM1 model top (19.75 km here)
-DEFAULT_DZ_M = 100.0
+# 50 m, not 100 m, and the reason is measured. The mixed layer ends where WK82's RH
+# profile stops demanding more moisture than the qv_pbl clip allows -- an implicit KINK
+# in RH(z) (at 1300 m for the 14 g/kg reference). CM1 reads the file, converts qv to RH,
+# and interpolates RH LINEARLY onto its own levels (base.F:686-716), so a model level
+# that straddles the kink gets a moisture error. Measured against the isnd=5 reference
+# run's own base state, on CM1's 500 m levels: 100 m spacing -> 0.046 g/kg at z=1250 m,
+# which is 92 % of the neutrality gate's 0.05 g/kg budget; 50 m -> 0.0048; 25 m ->
+# 0.0048 (converged, so 50 m is where the interpolation stops being the limit). theta
+# improves 0.0022 K -> 0.00007 K over the same change. base.F's level cap is 1 000 000,
+# so 441 levels costs nothing.
+DEFAULT_DZ_M = 50.0
 RH_MAX = 0.995                # the base state is never allowed to be saturated. WK82's
                               # RH(z) -> 1 as z -> 0 whenever qv_pbl does not cap it,
                               # so the limit is 'not saturated', not 'comfortably dry'.

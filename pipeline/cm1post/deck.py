@@ -108,7 +108,18 @@ REQUIRED_OUTPUT_FLAGS = {
 #             configuration for squall-line simulations and makes the same line the
 #             INTENDED setup. Category 5 rather than 5-with-physics because it changes
 #             the domain's topology, not the storm's environment.
-OPTIONAL_KEYS = ("rstfrq", "sbc", "nbc")
+#   output_basestate -- write CM1's OWN base state (pi0, th0, prs0, qv0, u0, v0) into
+#             the netCDF. The template runs 0 and every shipped scenario keeps it: the
+#             base state is constant in time, so writing it every frame is payload the
+#             player never reads. The T5s neutrality gates (docs/plan-science-hurdles-
+#             2026-09-02.md 4.1) compare CM1's base state against the generated
+#             input_sounding, and with the template default those arrays are simply
+#             not in the file -- the gate would be unevaluable AFTER the 13-minute run.
+#             Category 5 rather than 4 because Category 4 flags are CHECKED and never
+#             generated; this one is written on request. It changes what is recorded,
+#             not what is simulated. Verified against writeout.F:4431-4494 (pi0, th0,
+#             prs0, qv0), :6886 (u0), :7347 (v0).
+OPTIONAL_KEYS = ("rstfrq", "sbc", "nbc", "output_basestate")
 
 # Category 6. THE EXTERNAL SOUNDING (Phase 3 T5s, docs/plan-science-hurdles-2026-09-02.md).
 # Not a namelist key at all: with isnd=7 CM1 reads the base state (theta, qv, u, v)
@@ -121,6 +132,14 @@ OPTIONAL_KEYS = ("rstfrq", "sbc", "nbc")
 # verified on the box by the base-state neutrality gate; requiring 0 is safe under
 # either reading -- if iwnd DID apply, 0 would zero the winds and the gate fires.
 ISND_EXTERNAL = 7
+# isnd=17 is the SAME external file with columns 4-5 (u, v) ignored: the thermodynamics
+# come from the file and the wind from `iwnd` (README.namelist; base.F:495, :552-554).
+# It is a real option and a useful one -- it decouples the two knobs, so a future task
+# can hold CM1's validated iwnd=2 wind while sweeping CIN through the file. But it
+# INVERTS the iwnd rule below (iwnd=0 would mean no wind at all, not "wind from file"),
+# and nothing in this project has run it. Refused by name so the failure is an error
+# rather than a deck that passes Category 6 without any of it applying.
+ISND_EXTERNAL_NOWIND = 17
 
 
 class DeckError(Exception):
@@ -347,6 +366,14 @@ def build_overrides(sc, template_lines=None):
 
 def _check_sounding_coupling(sc, nml):
     has_block = bool(getattr(sc, "sounding", None))
+    if int(nml["isnd"]) == ISND_EXTERNAL_NOWIND:
+        raise DeckError(
+            f"{sc.source_path}: isnd={ISND_EXTERNAL_NOWIND} reads the same "
+            "input_sounding but IGNORES its wind columns and takes the wind from "
+            f"iwnd instead, which inverts the iwnd rule this generator applies at "
+            f"isnd={ISND_EXTERNAL}. No project run has used it and no gate covers "
+            "it. If a task wants it (file thermodynamics + analytic wind), extend "
+            "Category 6 deliberately -- see cm1post/deck.py.")
     external = int(nml["isnd"]) == ISND_EXTERNAL
     if external and not has_block:
         raise DeckError(
