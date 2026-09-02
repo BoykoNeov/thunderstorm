@@ -1696,7 +1696,11 @@ sequence matters and hiding it would be worse than the errors.
   does **not** separate multicell from supercell. That is a real answer about probe
   design, in the shape §8.6's last paragraph pre-committed for exactly this case.
 - **§11.8's case against option (i) no longer holds, and that is a change the owner
-  should decide on, not this section.** §11.8 argued (i) was the weakest option
+  should decide on, not this section.** — *[**RESOLVED 2026-09-02 (owner).** The owner **dropped
+  option (i)** after T5s §4.1 showed the gap is reachable through an external
+  sounding with the binary unchanged. This paragraph stands as the reasoning of its
+  time; the decision it asked for has been made. See
+  `docs/plan-science-hurdles-2026-09-02.md` §7.]* §11.8 argued (i) was the weakest option
   because *"C2 … is denied only by a rotation test whose defect is now measured."*
   The defect is now not merely measured but **fixed**, and C2 is **still** denied —
   by a test with no self-reference, no control normalisation and no median in it.

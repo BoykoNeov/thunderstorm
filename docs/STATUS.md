@@ -795,3 +795,24 @@ wrong, and only a control can show it — the domain-wide peak updraft never hal
 (ii) Right censoring turns "persisted exactly the minimum" into an artifact of the run
 length. (iii) A criterion whose *negative* side is INDETERMINATE for the known positive
 control separates one member without establishing anything about the others.
+
+### T5s owner decisions — answered 2026-09-02
+
+- **Option (i), the `0002-` shear patch — DROPPED.** Retired outright rather than kept
+  priced: no third binary hash, no `sim/cm1-patches/README.md` row, no charter pin
+  move. **The fork count stays at one.** T5 §13's carried "owner call" is thereby
+  closed, and `docs/phase3-t5-multicell.md` carries a pointer to this resolution rather
+  than being rewritten.
+- **500 m re-run of `t5s_us15` — APPROVED, deferred (not today).** ~2 h. Its three
+  outcome branches were fixed in the plan *before* the 1 km sweep was read and must not
+  be renegotiated at run time.
+- **Capped single-cell control — APPROVED, deferred (not today).** 13 min. Feasibility
+  measured offline first, and it **corrected the plan's own §5.1 numbers**: a 1 km mixed
+  layer is refused at 14 g/kg (RH 1.002), and the intuitive workaround is backwards —
+  holding CAPE against a cooling cap makes the solver *raise* `qv_pbl`, saturating
+  harder (RH 1.091), so a 1 km layer would need a lower CAPE target rather than lower
+  moisture. Runnable envelope: `z_cap_m` 600–900 m, Δθ 2–6 K, CAPE holding itself to
+  within 2 J/kg of the 1860 J/kg reference with no solver. CIN **strengthens with Δθ and
+  weakens with depth** (600 m/6 K → −82 J/kg; 900 m/2 K → −39; uncapped −48), so the
+  strongest suppression at fixed CAPE is the *shallowest* cap with the *largest* Δθ —
+  the opposite of the "deeper mixed layer" intuition.

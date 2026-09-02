@@ -329,7 +329,8 @@ time.
 ### 4.4 What T5s retires
 
 - **Option (i), the `0002-` shear patch** — its premise ("only a source edit can reach
-  the gap") is false. Recommend the owner drop it once §4.1 passes.
+  the gap") is false. **RESOLVED 2026-09-02 (owner).** **The owner dropped it.** Retired: no third
+  binary, no pin move, fork count stays at one.
 - **T5 §11.7's carried consequence** (a periodic-y line has no finite condensate extent
   in y, so the crop-box measurement inherits an error one level up in the export path):
   a compact WK82 multicell at open boundaries replaces the line as the T6 asset, so the
@@ -345,11 +346,30 @@ things at once would make the sweep unreadable. Its uses, in order of value:
 
 1. **A clean single-cell control.** T5 §7.5 found the zero-CIN pulse cell rings up
    daughter convection after t=70 min, which is what broke the PC control's role. A
-   capped variant (`cap.dtheta_k` 2–3 K over a 1 km mixed layer, CAPE held at the
-   reference 1859 J/kg) is a one-block change to `t5probe_pc` and would give the
-   classifier the "one bubble, one cell, then nothing" control it was designed
-   against. **Owner's call whether that is worth a 13-minute run**; it is not needed
-   for T5s.
+   capped variant is a one-block change to `t5probe_pc` and would give the classifier
+   the "one bubble, one cell, then nothing" control it was designed against.
+   ****RESOLVED 2026-09-02 (owner).** APPROVED, deferred — not today.**
+
+   **Feasibility measured offline 2026-09-02, and this paragraph's own numbers were
+   wrong.** A **1 km** mixed layer is NOT available at 14 g/kg — the generator refuses
+   it (RH 1.002). And the obvious workaround is **backwards**: holding CAPE against a
+   cooling cap makes the solver *raise* `qv_pbl`, which saturates harder still (RH
+   1.091 at 1 km), so a 1 km layer needs a **lower CAPE target**, not lower moisture.
+   The runnable envelope at `qv_pbl` 14 g/kg, with CAPE holding itself to within
+   2 J/kg of the 1860 J/kg reference and no solver needed:
+
+   | `z_cap_m` | Δθ = 2 K | 3 K | 4 K | 5 K | 6 K |
+   |---|---|---|---|---|---|
+   | 600 | −53 | −60 | −67 | −74 | −82 |
+   | 700 | −49 | −56 | −63 | −70 | −78 |
+   | 800 | −44 | −51 | −59 | −66 | −73 |
+   | 900 | −39 | −46 | −53 | −60 | −68 |
+   | 1000 | refused — saturated | | | | |
+
+   (SB CIN in J/kg; uncapped reference is −48.) CIN **strengthens with Δθ and weakens
+   with depth**, so the strongest suppression at fixed CAPE is the *shallowest* cap with
+   the *largest* Δθ — the opposite of the "deeper mixed layer" intuition. Pick from
+   this table when the run is scheduled; nothing else is owed first.
 2. **The forecast → outcome panel.** Two scenarios with identical CAPE and shear and
    different CIN — one that initiates, one where the bubble fails to break the cap — is
    the charter's honest "why storms form" lesson made literal, and the generator holds
@@ -392,15 +412,28 @@ left mover its signal and is a web-only diagnostic field like `w` — a T8-shape
 
 ---
 
-## 7. Owner decisions requested
+## 7. Owner decisions — **ANSWERED 2026-09-02**
 
-1. **T5s go/no-go** (§4). Step 1 is a source read; steps 2–3 are five 13-minute runs.
-2. **Drop option (i)** (the `0002-` shear patch) once §4.1 passes, or keep it priced.
-3. **Whether to run the capped single-cell control** (§5.1) — optional, 13 min.
-4. **Whether the squall line (C2) stays a wanted scenario** — if yes, T5 §11.7's box
-   hazard is real work; if no, it is retired with T5s.
-5. Carried, unchanged: UE SVT visual streaming sign-off; diorama 5c pan gestures; VHDX
-   resize number; manifest inline provenance (now with a second input to record).
+1. ~~**T5s go/no-go**~~ — **GO given, and T5s ran to completion.** Source read, two
+   neutrality controls, three sweep members, all recorded (§§4.0–4.2,
+   `sim/probes/README.md`).
+2. ~~**Drop option (i)**~~ — **RESOLVED 2026-09-02 (owner).** **DROPPED.** The `0002-` shear
+   patch is retired: no third binary hash, no new row in `sim/cm1-patches/README.md`,
+   and the charter's CM1 pin stays where T4 left it (`5fc93016…`). Its premise — "only
+   a source edit can reach the 10–31.8 m/s gap" — was measured false by §4.1, and the
+   sweep then ran *inside* that gap on the unchanged binary. **The project's fork count
+   stays at one.** Nothing further is owed to this option; it is not "kept priced".
+3. **Capped single-cell control** (§5.1) — **RESOLVED 2026-09-02 (owner).** **APPROVED, deferred
+   — not today.** 13 min when scheduled. Feasibility settled offline so the run cannot
+   fail on a `SoundingError` (see §5.1's amended note).
+4. **Squall line (C2) as a wanted scenario** — **still open.** Unchanged by T5s: if yes,
+   T5 §11.7's box hazard is real work; if no, it retires with T5s.
+5. **500 m re-run of `t5s_us15`** (§4.2's contingency, ~2 h) — **RESOLVED 2026-09-02 (owner).**
+   **APPROVED, deferred — not today.** The three outcome branches are already fixed in
+   §4.2 and must not be renegotiated when it runs.
+6. Carried, unchanged: UE SVT visual streaming sign-off; diorama 5c pan gestures; VHDX
+   resize number; manifest inline provenance (now with `input_sounding` as a second
+   input to record).
 
 ---
 

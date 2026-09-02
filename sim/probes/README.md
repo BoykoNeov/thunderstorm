@@ -154,7 +154,7 @@ pulse cell's 0.07 %. It is inside the pre-registered 5 % and the peak time is id
 This is why section 4.1 asked for "the same storm family", not bitwise equality — CM1
 interpolates the file, so bitwise was never on offer (section 2's table said so).
 
-**Consequence for owner decision 2:** option (i), the `0002-` shear patch and its third
+**Owner decision 2 — **RESOLVED 2026-09-02 (owner).** option (i), the `0002-` shear patch, is DROPPED.** No third binary hash, no pin move; the project's fork count stays at one. What follows is the reasoning that produced that call: option (i) and its third
 binary hash, is now **measured to be unnecessary** — the gap is reachable with the pinned
 fork binary and a text file. Recommend dropping it. That is the owner's call, not this
 document's.

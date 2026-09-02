@@ -224,25 +224,30 @@ task records THERE; keep this table to one line per phase.
 | **3T** terrain | not started — Cartesian regridding module, heightfield render path, static full domain, VHDX resize first | Phase 3 plan §8 |
 | **4** lightning · hail swaths · particles · polish | not started — prerequisites listed in the 2026-09-02 plan §7 | — |
 
-**Open owner calls (2026-09-02, after T5s):**
-1. ~~T5s go / no-go~~ — **given, and T5s ran.** Source read + 2 neutrality controls +
-   3 sweep members, all recorded in `sim/probes/README.md`.
-2. **Drop option (i)** (the `0002-` shear patch and its third binary hash). T5s section
-   4.1 passed, so its premise — "only a source edit can reach the shear gap" — is
-   **measured to be false**. Recommend dropping it. Owner's call.
-3. **Re-run `t5s_us15` at 500 m (~2 h)?** T5s's own pre-registered contingency, and the
-   only open route to a multicell LABEL. Hypothesis fixed in advance: does rotation
-   persistence `P1` break once 5–10 km cells are resolved, while elongation `E` stays
-   high? Yes ⇒ `us15` classifies MULTICELL on unchanged thresholds and T6 has its
-   asset. No ⇒ the ceiling is structural and H3 needs a criterion this project does
-   not have.
-4. **Optional, 13 min:** the capped single-cell control (plan section 5.1). Not needed
-   for T5s — but the uncapped control currently passes its gate by accident (clause (c)
-   gates its daughter ring rather than rejecting it), and a capped one would make it a
-   real control. Note the generator refuses a saturating base state, so the cap depth
-   must sit below ~0.9 km at 14 g/kg, or hold CAPE at lower moisture.
-5. Carried, unchanged: UE SVT visual streaming sign-off; diorama 5c pan gestures; VHDX
-   resize number before the first terrain hero run; manifest inline provenance (now
-   with `input_sounding` as a second input to record).
+**Open owner calls (2026-09-02, after T5s — three ANSWERED, see below):**
+
+*Answered 2026-09-02:*
+- **Option (i), the `0002-` shear patch: DROPPED.** Its premise — "only a source edit
+  can reach the 10–31.8 m/s shear gap" — was measured false, and the sweep then ran
+  *inside* that gap on the unchanged T4 binary. **No third binary hash, no
+  `sim/cm1-patches/` row, and the CM1 pin above does not move. The project's fork count
+  stays at one.** Not "kept priced" — retired.
+- **500 m re-run of `t5s_us15`: APPROVED, deferred — not today.** ~2 h. The only open
+  route to a multicell *label*. Its three outcome branches are already fixed in
+  docs/plan-science-hurdles-2026-09-02.md §4.2 and are **not to be renegotiated when it
+  runs**.
+- **Capped single-cell control: APPROVED, deferred — not today.** 13 min. Feasibility
+  settled offline so it cannot fail on a `SoundingError`: a 1 km mixed layer is
+  **unavailable** at 14 g/kg, and holding CAPE against the cap makes it *worse* (the
+  solver raises moisture). Runnable envelope and the CIN table are in §5.1 of the plan;
+  pick from it when scheduling.
+
+*Still open:*
+1. **Does the squall line (C2) stay a wanted scenario?** If yes, T5 §11.7's crop-box
+   hazard is real work; if no, it retires with T5s.
+2. UE SVT visual streaming sign-off.
+3. Diorama 5c pan gestures.
+4. VHDX resize number before the first terrain hero run.
+5. Manifest inline provenance — now with `input_sounding` as a second input to record.
 
 Full advisor pressure-test of this plan: docs/advisor-review-2026-07-09.md
