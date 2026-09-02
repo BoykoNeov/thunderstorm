@@ -308,9 +308,16 @@ all INDETERMINATE. **The structural transition lands between U_s 15 and 20 -- ex
 where BRN crosses 50**, as section 3.3 predicted from the sounding before any run.
 NOT claimed: that `us15` is a multicell. Its own descriptors complicate it -- fewest
 updrafts, zero births -- so its signature is line-like (elongated, incoherent) rather
-than discrete-cell multiplicity, and those are different objects. Next step is this
-section's own contingency, a 500 m re-run of `us15`, with the hypothesis stated in
-advance: does `P1` break once 5-10 km cells are resolved, while `E` stays high?
+than discrete-cell multiplicity, and those are different objects. **SPLIT TEST (the alternative T5 section 8.3 names) RUN AND FALSIFIED:** `us15` has
+ONE two-component echo frame in its mature window while `us20`/`us25` have 6 and 9 --
+perfectly mirrored, equal areas to the km2, diverging at 3-4 m/s -- and the splitters
+score HIGHER R, not the R~0 that section 8.3 predicts. So `us15` is not a split
+misread, and `us20`/`us25` carry the textbook supercell signature measured with no
+classifier at all -- separating the sweep in the same place BRN did. Next step is this
+section's own contingency, a 500 m re-run of `us15`, with THREE branches fixed in
+advance: P1 breaks and E holds (resolution artifact -> MULTICELL); P1 breaks and E
+collapses (the elongation was resolution-driven too); P1 still reads 80 (the ceiling
+is structural and H3 needs a criterion this project does not have).
 
 ### 4.3 Cost
 

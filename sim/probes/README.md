@@ -287,13 +287,77 @@ the same object, and these descriptors currently point at the second. That disti
 is now the open scientific question, and it is a better one than "can we reach the
 gap", which is answered.
 
+##### The split test — the one alternative explanation the record itself names, run and **falsified**
+
+T5 §8.3 warns in terms: *"a splitting supercell puts two movers on opposite flanks, so
+R ~ 0 and it would FAIL criterion 2′. It must never reach it."* Criterion 2′ was built
+assuming criterion 1′ screens splits out first. `P1` is at its ceiling, so that screen
+is gone — and `us15`'s decisive verdict rests on a two-component statistic. So the
+competing reading is that `us15` is a **splitting pair misread as a line**. Tested on
+data already on disk (the rotation-*sign* test is unavailable — H4/§13.7 measured CM1's
+`uh` as non-negative, so every centre reads +1; geometry is what is left):
+
+| run | two-component **echo** frames in the mature window | geometry | separation trend |
+|---|---|---|---|
+| `t5s_us15` | **1** (the final frame only) | mirrored ±10.2 km | — |
+| `t5s_us20` | **6** | mirrored, equal areas to the km², `dx` = 0.00 | **+3.16 m/s** |
+| `t5s_us25` | **9** | mirrored, equal areas to the km², `dx` = 0.00 | **+4.09 m/s** |
+| `t5probe_sc` | 1 (final frame) | asymmetric, 1640 vs 60 km² | — |
+| `t5probe_a` | 2 | asymmetric, 1663 vs 82 km², separated in **x**, `dy` = 0 | — |
+
+**The hypothesis is falsified.** `us15` is the member that does *not* split during its
+mature window; `us20` and `us25` are the ones that do — and they score **higher** `R`
+(0.526, 0.560) than `us15` (0.364), which is the opposite of §8.3's predicted failure
+mode. So `us15`'s elongated, incoherent signature comes from a **single echo containing
+several updrafts**, not from two separating movers. The line-like reading survives the
+test the record specifically demanded of it.
+
+**Two findings fall out, and the second is better than the criterion result.**
+
+1. **§8.3's prediction is not borne out in this sweep.** Splitting members score higher
+   coherence, not `R ~ 0`. Recorded as an observation about criterion 2′, not acted on.
+2. **`us20` and `us25` produce textbook mirror-image splitting storm pairs** — equal
+   areas to the km², exactly mirrored about y = 0, diverging steadily at 3–4 m/s. (The
+   mirror symmetry is exact because the setup is symmetric about y = 0: unidirectional
+   shear, centred bubble, `icor=0`, `irandp=0`. So a split is unambiguous — the storm is
+   either one echo on the axis or two mirrored echoes off it. A labelling artifact
+   across a weak middle would not *diverge monotonically for 30–40 minutes* while both
+   components grow.) **This is the classic supercell signature, measured with no
+   classifier at all**, and it separates the sweep in the same place BRN did:
+   `us15` no split · `us20`, `us25` split.
+
+`t5probe_a` (unidirectional, 33.5 m/s) does *not* split in 2 h and `t5probe_sc`
+(directional shear) splits only asymmetrically at the last frame — so splitting here
+peaks in the middle of the shear range rather than rising with it, which is where WK82
+puts the supercell regime. This is a descriptor, recorded, not a new criterion.
+
+**Net effect on the T5s claim:** the environment result is unchanged and the structural
+claim is now defended against the one alternative the record names — and it no longer
+rests on criterion 2′ alone, because "does it split into mirror-image movers?" says the
+same thing independently.
+
+##### Two record notes
+
+- **Measured drift runs 7–14 % below the declared domain speed on all three members**
+  (8.93 vs 9.9, 11.9 vs 13.3, 14.35 vs 16.6 m/s), consistently in one direction: a
+  0–6 km mean-wind estimate runs slightly fast for these storms. Containment was never
+  at risk here (60–71 km clearance), but T6's 333 m domain sizing should inherit the
+  number rather than rediscover it.
+- `t5s_us25` shows 4 right-censored births against `us20`'s 0. Noise on a descriptor
+  already retired for cause; noted so it is not mistaken for signal later.
+
 **Next step, which is §4.2's own contingency and now has a specific hypothesis.** Re-run
 `t5s_us15` at 500 m (T5 §6.1: 1 km under-resolves 5–10 km cells; ~2 h of machine time).
 The hypothesis to test is stated before the run: **does `P1` break at 500 m** — i.e.
 does the rotation stop persisting once individual cells are resolved — **while `E` stays
-high?** If yes, the 1 km ceiling was a resolution artifact and `us15` classifies
-MULTICELL on unchanged thresholds. If `P1` still reads 80 at 500 m, the ceiling is
+high?** Three branches, all fixed before the run: (i) **`P1` breaks, `E` stays high**
+— the 1 km ceiling was a resolution artifact and `us15` classifies MULTICELL on
+unchanged thresholds; (ii) **`P1` breaks and `E` collapses too** — the 1 km `E` was
+itself resolution-driven, so neither the ceiling nor the elongation survives and the
+structural claim goes with them; (iii) **`P1` still reads 80** — the ceiling is
 structural, H3 needs a criterion this project does not have, and that is the finding.
+Branch (ii) exists because without it three numbers would be interpreted after the
+fact.
 
 ## Running one
 
