@@ -1069,6 +1069,13 @@ would inherit §9.5's error one level up: a compact-storm criterion applied to a
 periodic direction, this time in the export path rather than the classifier.
 Flagged here so it is not rediscovered later; it has no bearing on the T5 verdict.
 
+*[**RESOLVED 2026-09-02 (owner): KEEP.** The owner **keeps** the squall line as a wanted scenario, so this
+consequence is live rather than avoided. Scoping it in 2026-09 found it understated:
+the export schema carries ONE `crop_half_width_m` and derives `ny = nx`, so the box is
+square by construction and cannot describe a line at all — the fix is a contract change
+(a separate along-line extent), not only a measurement rule. Full scope:
+`docs/plan-science-hurdles-2026-09-02.md` §4.4.]*
+
 ### 11.8 State
 
 - **All four candidates (A, B, C, C2) classify SUPERCELL. T5 still has no

@@ -336,6 +336,35 @@ time.
   a compact WK82 multicell at open boundaries replaces the line as the T6 asset, so the
   hazard is avoided rather than solved. If the owner still wants the squall line as a
   scenario, that hazard returns and needs the box-measurement fix first.
+  — **RESOLVED 2026-09-02 (owner): KEEP.** **The owner keeps the squall line, so the hazard is NOT avoided
+  and this bullet does not retire.**
+
+**What keeping it costs, scoped 2026-09-02.** T5 §11.7 named one hazard — a periodic-y
+domain has no finite condensate extent in y, so the crop-box measurement would apply a
+compact-storm criterion to a wrapping direction. Reading the export path to size the
+work found a **second and sharper** problem the note did not have:
+
+1. **The scenario schema cannot describe a line.** `Scenario` carries a single
+   `crop_half_width_m`, and the derived grid hardcodes `ny = nx`
+   (`pipeline/cm1post/scenario.py`) — the export box is **square by construction**. A
+   squall line needs a *compact* extent across the line and the *full domain* along it.
+   With the schema as it stands the only legal box for a line is the full square
+   domain: the largest possible package, mostly empty. So this is not only a
+   measurement fix; the contract needs a separate along-line half-extent, and
+   `nx`, `ny`, `origin_m` and every consumer follow.
+2. **The measurement itself** — on a periodic axis the extent is the full domain **by
+   construction**, not a measured condensate union. `require_measured_box` must accept
+   that as a *valid measured route* rather than treating it as an unmeasured
+   placeholder, or a line can never clear the gate that exists to stop a box being
+   copied from a different storm.
+3. **Downstream:** `manifest.py`'s `bbox_center_m` and grid record follow the new
+   extents. The SVT static-centre rule is *easier* here, not harder — a full-domain
+   axis is inherently static across the sequence.
+
+None of this is started, and none of it blocks anything currently in flight: it is
+owed **before C2 could ship as a scenario package**, not before T6. Sizing it properly
+is its own task and needs a go.
+
 
 ---
 
@@ -426,8 +455,9 @@ left mover its signal and is a web-only diagnostic field like `w` — a T8-shape
 3. **Capped single-cell control** (§5.1) — **RESOLVED 2026-09-02 (owner).** **APPROVED, deferred
    — not today.** 13 min when scheduled. Feasibility settled offline so the run cannot
    fail on a `SoundingError` (see §5.1's amended note).
-4. **Squall line (C2) as a wanted scenario** — **still open.** Unchanged by T5s: if yes,
-   T5 §11.7's box hazard is real work; if no, it retires with T5s.
+4. **Squall line (C2) as a wanted scenario** — **RESOLVED 2026-09-02 (owner): KEEP.** It does **not** retire
+   with T5s. T5 §11.7's box hazard is therefore live work, and scoping it found the
+   note understated it — see §4.4.
 5. **500 m re-run of `t5s_us15`** (§4.2's contingency, ~2 h) — **RESOLVED 2026-09-02 (owner).**
    **APPROVED, deferred — not today.** The three outcome branches are already fixed in
    §4.2 and must not be renegotiated when it runs.

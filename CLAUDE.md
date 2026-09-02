@@ -224,7 +224,7 @@ task records THERE; keep this table to one line per phase.
 | **3T** terrain | not started — Cartesian regridding module, heightfield render path, static full domain, VHDX resize first | Phase 3 plan §8 |
 | **4** lightning · hail swaths · particles · polish | not started — prerequisites listed in the 2026-09-02 plan §7 | — |
 
-**Open owner calls (2026-09-02, after T5s — three ANSWERED, see below):**
+**Open owner calls (2026-09-02, after T5s — four ANSWERED, see below):**
 
 *Answered 2026-09-02:*
 - **Option (i), the `0002-` shear patch: DROPPED.** Its premise — "only a source edit
@@ -242,12 +242,19 @@ task records THERE; keep this table to one line per phase.
   solver raises moisture). Runnable envelope and the CIN table are in §5.1 of the plan;
   pick from it when scheduling.
 
+- **Squall line (C2): KEEP.** It does not retire with T5s, so T5 §11.7's crop-box
+  hazard is **live work owed before C2 can ship as a package** (not before T6).
+  Scoping found §11.7 understated it: `Scenario` carries one `crop_half_width_m` and
+  derives `ny = nx`, so the export box is **square by construction** and cannot
+  describe a line — the fix is a contract change (a separate along-line extent, with
+  `nx`/`ny`/`origin_m`/manifest following), plus a rule that a periodic axis's extent
+  is the full domain BY CONSTRUCTION and must count as measured. **Not started; needs
+  its own go.** Scope: docs/plan-science-hurdles-2026-09-02.md §4.4.
+
 *Still open:*
-1. **Does the squall line (C2) stay a wanted scenario?** If yes, T5 §11.7's crop-box
-   hazard is real work; if no, it retires with T5s.
-2. UE SVT visual streaming sign-off.
-3. Diorama 5c pan gestures.
-4. VHDX resize number before the first terrain hero run.
-5. Manifest inline provenance — now with `input_sounding` as a second input to record.
+1. UE SVT visual streaming sign-off.
+2. Diorama 5c pan gestures.
+3. VHDX resize number before the first terrain hero run.
+4. Manifest inline provenance — now with `input_sounding` as a second input to record.
 
 Full advisor pressure-test of this plan: docs/advisor-review-2026-07-09.md

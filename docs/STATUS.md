@@ -816,3 +816,14 @@ control separates one member without establishing anything about the others.
   weakens with depth** (600 m/6 K → −82 J/kg; 900 m/2 K → −39; uncapped −48), so the
   strongest suppression at fixed CAPE is the *shallowest* cap with the *largest* Δθ —
   the opposite of the "deeper mixed layer" intuition.
+- **Squall line (C2) — KEPT.** It does not retire with T5s, so T5 §11.7's crop-box
+  hazard is live. Scoping it found the note **understated** the problem: the export
+  contract carries a single `crop_half_width_m` and derives `ny = nx`
+  (`pipeline/cm1post/scenario.py`), so the box is **square by construction** and cannot
+  describe a line — the only legal box for one today is the full square domain, the
+  largest possible package and mostly empty. Keeping C2 therefore needs (a) a separate
+  along-line extent in the scenario contract, with `nx`/`ny`/`origin_m` and
+  `manifest.bbox_center_m` following; (b) `require_measured_box` to accept "a periodic
+  axis's extent is the full domain by construction" as a *valid measured route* rather
+  than an unmeasured placeholder. The SVT static-centre rule is easier on a periodic
+  axis, not harder. Owed before C2 ships as a package, not before T6. Not started.
