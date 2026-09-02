@@ -23,8 +23,9 @@ both learned the hard way elsewhere in this repo:
     comments in &nssl2mom_params through float formatting, and would rewrite 400
     lines to change 17.
 
-Four key CATEGORIES, and only the first lives in the scenario JSON
-------------------------------------------------------------------
+Key CATEGORIES -- the first lives in the scenario JSON, the fifth optionally, and
+the sixth is not a namelist key at all (see ISND_EXTERNAL below)
+--------------------------------------------------------------------------------
   1. SCENARIO IDENTITY (JSON `sim.namelist`, REQUIRED)  -- grid, timing, microphysics,
      sounding/shear/initiation. Required rather than template-defaulted so that
      generating a scenario genuinely exercises every override instead of silently
@@ -108,6 +109,18 @@ REQUIRED_OUTPUT_FLAGS = {
 #             INTENDED setup. Category 5 rather than 5-with-physics because it changes
 #             the domain's topology, not the storm's environment.
 OPTIONAL_KEYS = ("rstfrq", "sbc", "nbc")
+
+# Category 6. THE EXTERNAL SOUNDING (Phase 3 T5s, docs/plan-science-hurdles-2026-09-02.md).
+# Not a namelist key at all: with isnd=7 CM1 reads the base state (theta, qv, u, v)
+# from a text file `input_sounding` in the run dir, which cm1post.sounding renders
+# from the scenario's `sim.sounding` block. That file is the second scenario input
+# and run_scenario.sh records its sha256 beside the binary's. The generator's job
+# here is the COUPLING: the block and isnd=7 must appear together, and iwnd must
+# be 0 so the deck cannot look like it declares a shear profile CM1 does not apply
+# (the wind comes from the file). Whether CM1 really ignores iwnd at isnd=7 is
+# verified on the box by the base-state neutrality gate; requiring 0 is safe under
+# either reading -- if iwnd DID apply, 0 would zero the winds and the gate fires.
+ISND_EXTERNAL = 7
 
 
 class DeckError(Exception):
@@ -283,6 +296,9 @@ def build_overrides(sc, template_lines=None):
 
     ov = {k: nml[k] for k in REQUIRED_KEYS}
 
+    # Category 6 -- external sounding coupling (both directions, plus iwnd).
+    _check_sounding_coupling(sc, nml)
+
     # Category 1, semantic -- `seed` is declared by name and emitted as var7. Popped
     # rather than left in place: there is no `seed =` line in the template, so a
     # stray `seed` override would trip the hits != 1 guard in generate().
@@ -327,6 +343,27 @@ def build_overrides(sc, template_lines=None):
             ov[k] = float(nml[k])
 
     return ov
+
+
+def _check_sounding_coupling(sc, nml):
+    has_block = bool(getattr(sc, "sounding", None))
+    external = int(nml["isnd"]) == ISND_EXTERNAL
+    if external and not has_block:
+        raise DeckError(
+            f"{sc.source_path}: isnd={ISND_EXTERNAL} (external sounding) but the "
+            "scenario has no sim.sounding block. CM1 would start, look for "
+            "input_sounding, and die -- or worse, read a stale one left in run_dir "
+            "from another scenario. Declare the environment in sim.sounding.")
+    if has_block and not external:
+        raise DeckError(
+            f"{sc.source_path}: sim.sounding is declared but isnd={nml['isnd']}. "
+            f"CM1 reads input_sounding only at isnd={ISND_EXTERNAL}; at any other "
+            "value the declared environment is silently NOT the one simulated.")
+    if external and int(nml["iwnd"]) != 0:
+        raise DeckError(
+            f"{sc.source_path}: isnd={ISND_EXTERNAL} with iwnd={nml['iwnd']}. The "
+            "wind profile comes from input_sounding; declare iwnd=0 so the deck does "
+            "not advertise an analytic shear profile that is not what runs.")
 
 
 # --- generation -------------------------------------------------------------

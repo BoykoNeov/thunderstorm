@@ -12,13 +12,21 @@ Phase 2/4; they attach to the same manifest.
 
 | Path | Role |
 |---|---|
-| `export_scenario.py` | CLI driver — `bbox` (verify the padded box) and `export` (write the sequence). |
-| `cm1post/config.py` | **The export contract.** Channel map, thresholds, crop box, resolution, origin. Every number is load-bearing. |
+| `export_scenario.py` | CLI driver — `bbox` (measure/verify the padded box), `export` (VDB sequence + manifest), `export-web` (web bricks + web manifest). Takes `--scenario`. |
+| `gen_deck.py` | Scenario JSON → CM1 `namelist.input` (template + overrides; `--verify` against a committed deck). |
+| `gen_sounding.py` | Scenario JSON `sim.sounding` → CM1 `input_sounding` for `isnd=7`, plus the environment diagnostics JSON (CAPE/CIN/BRN/regime prediction). |
+| `scenario_info.py` | Exposes config fields to `sim/run_scenario.sh` through the real loader (never grep). |
+| `cm1post/contract.py` | **The package contract**, frozen per `format_version`: channel names/order, source fields, thresholds, SVT texture map, `WEB_FORMAT_VERSION`. |
+| `cm1post/scenario.py` | Per-scenario config: run dir, export voxel, crop box (grid derived, never declared), `sim.namelist`, `sim.sounding`. |
+| `cm1post/deck.py` | Deck generator: six key categories, line-anchored substitution, output-flag assertion, seed→`var7`, isnd=7⇔sounding coupling. |
+| `cm1post/sounding.py` | Environment generator: WK82 thermodynamics, capped-mixed-layer CIN knob with CAPE held, tanh/linear winds, parcel CAPE/CIN, BRN + WK82 regime prediction, `input_sounding` writer/reader. Every formula cites its paper in the module docstring. |
 | `cm1post/fields.py` | CM1 variables → render channels. The *only* place CM1 names appear. |
-| `cm1post/regrid.py` | Resample CM1 grid → fixed export box. |
+| `cm1post/regrid.py` | Resample CM1 grid → fixed export box (`resample` clips ≥0; `resample_signed` for `w`; `resample_dbz` in linear Z; `resample_dbz_2d` for `cref`). |
 | `cm1post/densevol.py` | `.densevol` writer (the handoff `dense2vdb` consumes). |
+| `cm1post/webvol.py` | Web bricks (`rgba`, `dbz`, `w`, `cref`) + `web_manifest.json`. |
 | `cm1post/manifest.py` | Scenario-package manifest — the contract UE reads. |
 | `vdbwriter/` | C++ `dense2vdb` + `vdb_inspect`. See its own README. |
+| `tests/` | Gate scripts, one per task, each with negative controls; all read only committed files. |
 
 ## Usage (inside WSL)
 

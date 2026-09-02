@@ -32,6 +32,26 @@ records it, and that file is not tracked, so the number is written here.
 C2 differs from C in exactly two deck lines, both boundary keys (§10.3). All six
 run `irandp=0` and the fork binary `5fc93016…`.
 
+### T5s — external sounding (`isnd=7`), pre-registered 2026-09-02, NOT YET RUN
+
+`docs/plan-science-hurdles-2026-09-02.md`. These configs carry a `sim.sounding` block;
+`run_probe.sh`/`run_scenario.sh` generate `input_sounding` from it and record its
+sha256. Each config's `provenance` records the BRN and the WK82 regime it PREDICTS,
+computed from the sounding alone before any run (`test_sounding_t5s.py` gates that the
+recorded prediction equals what the config's own sounding computes).
+
+| config | role | environment | prediction |
+|---|---|---|---|
+| `t5s_neutral_pc.json` | control — PC re-run through the file path | WK82 14 g/kg, no wind | base state ≡ `t5probe_pc` (θ/qv to interpolation accuracy); same pulse cell |
+| `t5s_neutral_a.json` | control — A re-run through the file path | WK82 + tanh U_s=35 | u0 ≡ `t5probe_a`'s (settles "wind from file, iwnd ignored"); same supercell |
+| `t5s_us15.json` | sweep | WK82 + tanh U_s=15 (14.5 m/s 0–6 km) | BRN 59 → **multicell** |
+| `t5s_us20.json` | sweep | WK82 + tanh U_s=20 (19.3 m/s) | BRN 33 → supercell |
+| `t5s_us25.json` | sweep | WK82 + tanh U_s=25 (24.1 m/s) | BRN 21 → supercell |
+
+The neutrality controls run FIRST and gate everything else: if `t5s_neutral_pc` does
+not reproduce `t5probe_pc`'s base state, `isnd=7` is not what the plan believes and the
+sweep is not run.
+
 ## Running one
 
 ```sh

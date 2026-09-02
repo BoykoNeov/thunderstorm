@@ -39,6 +39,13 @@ class Scenario:
     namelist: dict = field(default_factory=dict)
     source_path: str = ""
 
+    # Optional `sim.sounding` block: the environment for CM1 `isnd=7`, rendered to
+    # `input_sounding` by cm1post.sounding. Empty for the analytic-sounding
+    # scenarios (isnd=5). deck.py enforces the coupling both ways -- a block at
+    # isnd!=7 is a sounding CM1 would never read, and isnd=7 without one is a run
+    # that dies at startup looking for a file nobody generated.
+    sounding: dict = field(default_factory=dict)
+
     # True while `export` still holds placeholder numbers. The crop box is an
     # OUTPUT of the run, not an input: it is measured from that run's own
     # active-voxel union (Phase 1 learned this the expensive way -- a box copied
@@ -129,6 +136,7 @@ def load(name_or_path, run_dir_override=None):
         crop_z_top_m=float(_require(exp, "crop_z_top_m", path)),
         provenance=sim.get("provenance", {}),
         namelist=sim.get("namelist", {}),
+        sounding=sim.get("sounding", {}),
         source_path=path,
         provisional_box=bool(exp.get("_provisional", False)),
     )

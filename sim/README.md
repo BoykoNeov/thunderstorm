@@ -12,7 +12,9 @@ are copied out to durable storage.
 |---|---|
 | `scenarios/<name>.json` | **The single source of truth for a scenario.** Feeds both the CM1 deck generator and the post-processor, so a scenario cannot be simulated with one geometry and exported with another. |
 | `templates/base.namelist.input` | The validated Phase 0 deck. ~8 KB of numerics, boundary conditions, SGS constants and the NSSL block that must not drift. A scenario overrides ~17 of its 413 lines; the rest stay byte-identical. |
-| `run_scenario.sh` | Generic runner: generate deck → stage binary → run → write `run_meta.txt`. |
+| `run_scenario.sh` | Generic runner: generate deck (+ `input_sounding` for `isnd=7` scenarios) → stage binary → run → write `run_meta.txt` (binary sha256, sounding sha256, grid, provenance). |
+| `probes/` | Throwaway diagnostic runs, never exported — the T5 multicell probes and the T5s external-sounding controls + shear sweep (`probes/README.md`). |
+| `cm1-patches/` | The CM1 fork: patches over the pinned upstream tarball, with the provenance hash table that every other file quoting a binary hash is gated against. |
 | `single_cell/namelist.input` | The hand-written Phase 1 deck. **Kept as the generator's regression reference** (`gen_deck.py --verify`), not as an input to any run. |
 | `validation/`, `benchmark/` | Phase 0 artifacts. |
 
@@ -61,3 +63,15 @@ construction rather than by luck.
 |---|---|---|
 | `single_cell_500m` | 160² × 40 @ 500 m | Phase 1 spike dataset. Zero-shear pulse cell. |
 | `single_cell_333m` | 240² × 40 @ 333 m | Phase 2 T6. The **same** cell at finer resolution — vertical grid, sounding, shear, initiation, microphysics, duration and output cadence are all identical, so resolution is the only variable and any visible difference is attributable to it. |
+| `supercell_333m` | 540² × 40 @ 333 m, `imove=1` | Phase 3 T1. The Phase 0 WK splitting supercell on NSSL microphysics in a Bunkers-tracked moving frame; measured box = the full domain (the anvil fills it). Run + box validated; package export is T2/T3 territory. |
+
+### Scenarios with an external sounding (`isnd=7`)
+
+From Phase 3 T5s on, a scenario may carry a `sim.sounding` block instead of relying on
+CM1's analytic `isnd=5` sounding and its three fixed `iwnd` wind profiles. The block is
+rendered to `input_sounding` by `pipeline/gen_sounding.py` (WK82 thermodynamics, a
+capping-inversion CIN knob with CAPE held, tanh/linear wind profiles with free shear
+magnitude and depth); `run_scenario.sh` stages the file beside the deck and records its
+sha256. Rules, enforced by `deck.py`: the block and `isnd=7` appear together or not at
+all, and `iwnd` must be 0. See `sim/probes/configs/t5s_*.json` for worked examples and
+`docs/plan-science-hurdles-2026-09-02.md` for the gates a first `isnd=7` run must pass.

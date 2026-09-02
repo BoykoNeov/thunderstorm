@@ -34,16 +34,19 @@ scenario keys genuinely differ between template and target, so reproducing
 `single_cell_500m` exercises every substitution instead of no-oping against a copy
 of itself.
 
-## The four key categories
+## The key categories
 
-Only the first lives in the scenario JSON.
+The first lives in the scenario JSON (required), the fifth optionally, and the sixth
+is not a namelist key at all.
 
 | Category | Where it comes from | Keys |
 |---|---|---|
-| **Scenario identity** | JSON `sim.namelist`, **required** | grid (`nx/ny/nz/dx/dy/dz`), timing (`timax/tapfrq/dtl/adapt_dt`), storm design (`isnd/iwnd/iinit/irandp/icor/imove/iorigin`), microphysics (`ptype/ihail`), terrain (`terrain_flag/itern/stretch_z`) |
-| **Geometry-derived** | computed by the generator | `dx_inner`, `dy_inner`, `tot_x_len`, `tot_y_len` |
-| **Motion-coupled** | computed when `imove=0`, required when `imove=1` | `umove`, `vmove` |
-| **Output block** | this template, verbatim | `&param9` |
+| **1. Scenario identity** | JSON `sim.namelist`, **required** | grid (`nx/ny/nz/dx/dy/dz`), timing (`timax/tapfrq/dtl/adapt_dt`), storm design (`isnd/iwnd/iinit/irandp/icor/imove/iorigin`), `seed` (semantic → `var7`, Phase 3 T4), microphysics (`ptype/ihail`), terrain (`terrain_flag/itern/stretch_z`) |
+| **2. Geometry-derived** | computed by the generator | `dx_inner`, `dy_inner`, `tot_x_len`, `tot_y_len` |
+| **3. Motion-coupled** | computed when `imove=0`, required when `imove=1` | `umove`, `vmove` |
+| **4. Output block** | this template, verbatim | `&param9` |
+| **5. Optional run-control** | JSON `sim.namelist`, optional; template default otherwise | `rstfrq`, `sbc`, `nbc` |
+| **6. External sounding** | JSON `sim.sounding` → `input_sounding` file, NOT a namelist key | with `isnd=7` CM1 reads θ/qv/u/v from the file; deck.py requires the block ⇔ `isnd=7` and `iwnd=0`; `pipeline/gen_sounding.py` renders it (docs/plan-science-hurdles-2026-09-02.md) |
 
 Scenario-identity keys are **required, never defaulted from the template** — so a
 scenario that forgets one fails loudly instead of silently inheriting Phase 0's

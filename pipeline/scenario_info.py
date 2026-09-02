@@ -10,6 +10,7 @@ the pipeline exports from.
     python3 pipeline/scenario_info.py --scenario <name> --run-dir
     python3 pipeline/scenario_info.py --scenario <name> --grid-line
     python3 pipeline/scenario_info.py --scenario <name> --provenance
+    python3 pipeline/scenario_info.py --scenario <name> --has-sounding   # prints 0/1
 """
 import argparse
 import os
@@ -35,6 +36,8 @@ def main():
     p.add_argument("--grid-line", action="store_true")
     p.add_argument("--provenance", action="store_true",
                    help="the sim.provenance block as aligned 'key : value' lines")
+    p.add_argument("--has-sounding", action="store_true",
+                   help="1 if the scenario declares sim.sounding (isnd=7), else 0")
     args = p.parse_args()
 
     try:
@@ -50,6 +53,8 @@ def main():
     if args.provenance:
         for k, v in sc.provenance.items():
             print(f"{k:<17}: {v}")
+    if args.has_sounding:
+        print("1" if sc.sounding else "0")
     return 0
 
 
