@@ -124,6 +124,49 @@ knobs, so a future task could hold CM1's validated `iwnd=2` wind while sweeping 
 through the file. It also **inverts** the `iwnd=0` rule, and no gate covers it, so
 `deck.py` refuses it by name rather than letting it pass Category 6 vacuously.
 
+#### §4.1 neutrality controls — **PASSED 2026-09-02, 11/11.** `isnd=7` is what the plan believed.
+
+Two runs, `-np 4`, ~13 min each, concurrent. Scored by `sim/probes/gate_t5s_neutrality.py`,
+committed before the runs with section 4.1's thresholds unchanged.
+
+| Claim | Measured | Tolerance |
+|---|---|---|
+| recovery identity (`th-thpert`, `qv`, `prs`, `uinterp` at t=0 **are** CM1's own base state) | **0.000e+00** on all five fields | — |
+| **PLUMBING** — CM1's base state IS the file it was given | theta 2.2e-05 K, qv 8.5e-07 g/kg, u 1.9e-06 m/s | 0.1 K, 0.05 g/kg, 0.2 m/s |
+| **IMPLEMENTATION** — this project's WK82 == CM1's WK82 | theta 6.1e-05 K, qv 0.0048 g/kg | 0.1 K, 0.05 g/kg |
+| wind is NOT zeroed at `iwnd=0` (it comes from the file) | max abs u0 20.09 m/s grid-relative (35.0 absolute) | > 1 m/s |
+| wind matches `t5probe_a`'s at every level | 5.1e-05 m/s | 0.2 m/s |
+| CM1's own t=0 CAPE | 1943.0 vs 1942.4 J/kg (**0.03 %**) | 10 % |
+| same pulse cell as `t5probe_pc` | peak w 61.55 vs 61.60 m/s (0.07 %), both at t=1500 s | 5 %, 300 s |
+| same supercell as `t5probe_a` | peak w 54.18 vs 52.88 m/s (2.45 %), both at t=7200 s | 5 %, 300 s |
+
+**What this settles.** The environment reaches CM1 through a generated text file, with the
+binary unchanged. The PLUMBING numbers are at floating-point noise, which also means this
+project's reimplementation of `base.F`'s interpolation (in the gate script) and CM1's own
+agree — two independent paths to the same base state. The IMPLEMENTATION residual is the
+0.0048 g/kg predicted offline before the runs, and its cause is known (the 100 m-to-model-
+level interpolation across the mixed-layer kink, now at 50 m spacing).
+
+**The supercell's 2.45 % is the largest number here and it is expected**: a supercell is
+chaotic, so a base state differing in the 5th decimal diverges over 2 h far more than the
+pulse cell's 0.07 %. It is inside the pre-registered 5 % and the peak time is identical.
+This is why section 4.1 asked for "the same storm family", not bitwise equality — CM1
+interpolates the file, so bitwise was never on offer (section 2's table said so).
+
+**Consequence for owner decision 2:** option (i), the `0002-` shear patch and its third
+binary hash, is now **measured to be unnecessary** — the gap is reachable with the pinned
+fork binary and a text file. Recommend dropping it. That is the owner's call, not this
+document's.
+
+**One defect found and fixed while scoring:** the gate's frame glob also matched CM1's
+`cm1out_stats.nc` (a domain-statistics file with no 3D fields), which crashed the storm
+comparison. A file-matching bug, not a threshold change; the thresholds are untouched.
+Also fixed: `run_probe.sh` hardcoded `pre-registration : docs/phase3-t5-multicell.md` in
+every `run_meta.txt`, so the T5s runs named the wrong document. It now reads the config's
+own `provenance.probe_of`. (The two runs above have the wrong line in their `run_meta.txt`
+and are not re-run for it; this note is the correction.)
+
+
 ## Running one
 
 ```sh

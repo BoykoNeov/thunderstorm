@@ -39,6 +39,11 @@ if [[ "$HAS_SOUNDING" == "1" ]]; then
   python3 "$REPO/pipeline/gen_sounding.py" --scenario "$CONFIG" -o "$SND" --report "$SND_REPORT"
 fi
 
+# The pre-registration document is the config's own, not a constant: T5 probes point
+# at the T5 doc, T5s probes at the 2026-09-02 plan. A run_meta.txt naming the wrong
+# document is a provenance defect of exactly the kind this file exists to prevent.
+PREREG="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['sim']['provenance'].get('probe_of','docs/phase3-t5-multicell.md'))" "$CONFIG")"
+
 mkdir -p "$RUNDIR"
 cp "$CM1_EXE" "$RUNDIR/cm1.exe"
 cp "$DECK" "$RUNDIR/namelist.input"
@@ -64,7 +69,7 @@ cd "$RUNDIR"
   fi
   echo "nranks           : $NRANKS"
   echo "config           : $CONFIG"
-  echo "pre-registration : docs/phase3-t5-multicell.md"
+  echo "pre-registration : $PREREG"
 } | tee run_meta.txt
 
 rm -f cm1out*.nc cm1out.nc

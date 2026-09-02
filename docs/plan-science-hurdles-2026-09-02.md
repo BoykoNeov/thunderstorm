@@ -205,6 +205,13 @@ unlikely: the two WK82s share constants, formulas and the moisture clip — see
 `sim/probes/README.md`. The two known differences, a saturated-surface first half-step
 at `isnd=5` and the 100 m-to-model-level interpolation, are expected in the residual.)
 
+**RESULT 2026-09-02 -- BOTH GATES PASSED, 11/11.** Plumbing at floating-point noise
+(theta 2.2e-05 K, qv 8.5e-07 g/kg); implementation at the offline-predicted 0.0048 g/kg;
+CM1's own t=0 CAPE within 0.03 %; the wind is the file's and is not zeroed by `iwnd=0`;
+the pulse cell reproduces to 0.07 % and the supercell to 2.45 %, both at identical peak
+times. Full table in `sim/probes/README.md`. **§4.2's sweep is unblocked, and option (i)
+is now measured to be unnecessary (owner decision 2).**
+
 **Either gate failing stops T5s.** A base-state mismatch means `isnd=7` is not what §2
 says; a wind mismatch with `u0 ≡ 0` means `iwnd` *is* applied and the deck rule must
 change to "iwnd=0 is forbidden at isnd=7, declare the file's own profile" — a

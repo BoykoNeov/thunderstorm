@@ -42,6 +42,7 @@ only then applies it to the references. If the verification fails, the gate stop
 the comparison would be measuring the recovery, not the door.
 """
 import os
+import re
 import sys
 
 import netCDF4 as nc
@@ -182,11 +183,16 @@ def umove_of(run):
     return out.get("umove", 0.0), out.get("vmove", 0.0)
 
 
+# CM1 writes one numbered file per output time PLUS a `cm1out_stats.nc` domain-
+# statistics file, which carries none of the 3D fields. Match the numbered frames only.
+FRAME_RE = re.compile(r"^cm1out_\d{6}\.nc$")
+
+
 def peak_w(run):
     """(peak updraft over the run, its time in s) from winterp."""
     best, best_t = -1e30, None
     for f in sorted(os.listdir(os.path.join(RUNS, run))):
-        if not (f.startswith("cm1out_") and f.endswith(".nc")):
+        if not FRAME_RE.match(f):
             continue
         d = nc.Dataset(os.path.join(RUNS, run, f))
         w = float(np.asarray(d.variables["winterp"][0]).max())
