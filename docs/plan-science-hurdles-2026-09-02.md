@@ -249,16 +249,52 @@ geometry (180² @ 999 m, 2 h).
 3. **Prediction table:** us15 → MULTICELL by both (1) and (2); us20, us25 → SUPERCELL by
    both. Recorded here and in each config's `provenance.brn_regime_prediction`.
 
+**SCORING AMENDED 2026-09-02, BEFORE THE SWEEP WAS READ.** Criterion 2 above **failed
+its own control validation** and is therefore **not promoted and does not label
+anything** (full record: `sim/probes/README.md`). In one line: its trigger could not
+fire on five of six runs; with the trigger replaced and two threshold-free
+implementation defects fixed, the supercell control scores 2 births against a bar of
+<= 1, and the single-cell control's 0 is not a pass but a non-exercise -- its
+gust-front ring appears four times over, identical to the decimal, in the censored
+tail, and fifteen minutes earlier it would have labelled the single-cell control
+MULTICELL. Criterion 2 is reported as a descriptor with its control numbers attached.
+
+**What this leaves, stated in advance.** Scoring falls back to the existing classifier
+(criterion 1-prime persistence, 2-prime organisation, 3 sustained system), thresholds
+unchanged. **And criterion 1-prime is expected to saturate**: `P1` is measured over the
+mature window (t >= 40 min of a 120 min run), so its ceiling is 80 min, T5 section 13.4
+measured every one of its six storms at that ceiling, and the SUPERCELL band starts at
+35 min. So:
+
+- **`P1 = 80` is the ceiling, not evidence.** A member reading 80 has told us its
+  rotation did not break for the whole mature window; it has *not* told us it is a
+  supercell rather than a multicell whose successive cells each rotate. This is
+  written down now so that an 80 cannot later be read as a result.
+- **If all three members read `P1 = 80`,** criterion 1-prime has no discriminating
+  power on this sweep, criterion 2 is unavailable, and the honest outcome is **"no
+  discriminator" -- not "three supercells."** That lands in section 4.2's own 500 m
+  contingency, which is then about resolution *and* about H3, not about the
+  environment.
+- **The environment question is separately answerable and is the point of the sweep.**
+  BRN, bulk shear and the base state are properties of the file, already verified. What
+  the three runs add is the *descriptor family* across U_s = 15/20/25 -- updraft counts,
+  cold-pool area, echo organisation `R`/`E`, `P2` path-to-net ratio, births as a
+  descriptor -- read as a TREND across a controlled one-parameter sweep. A monotone
+  trend across three members is evidence about the regime even when no single member
+  can be labelled, and it is the first time this project has had a one-parameter
+  environmental sweep to read at all.
+
 **What would falsify what.** All three SUPERCELL → BRN does not predict regime at
 1 km/NSSL in this family, and the next step is a 500 m re-run of `t5s_us15` (T5 §6.1's
 resolution caveat: 1 km under-resolves 5–10 km cells) *before* concluding the
 environment is wrong — not a lower U_s, which would be §7.4's trap with a config as
-victim. us15 MULTICELL by (2) but SUPERCELL by (1) → criterion 1′ is structurally blind
-to lines of regenerating cells, which T5 §13.4 already narrowed toward; (2) is then the
-discriminator and is promoted **by pre-registration, on new runs**, which is the only
-promotion T5 left open. us15 MULTICELL by both → T5 has its multicell, T6 exports it,
-and the shipped Phase 3 progression is WK82's own regime diagram, which is the
-teaching point.
+victim. ~~us15 MULTICELL by (2) but SUPERCELL by (1)~~ and ~~us15 MULTICELL by
+both~~ -- **both branches are VOID**: they turn on criterion 2, which did not clear its
+control and cannot promote anything. What replaces them, pre-registered above: read the
+descriptor family as a trend across U_s, and treat a saturated `P1` as a ceiling rather
+than a supercell finding. If the descriptors trend toward multicell structure while no
+member can be labelled, that is a *result about the classifier* (H3) sitting on top of
+a *result about the environment*, and both get recorded as what they are.
 
 ### 4.3 Cost
 

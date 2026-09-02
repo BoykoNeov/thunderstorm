@@ -137,6 +137,7 @@ committed before the runs with section 4.1's thresholds unchanged.
 | wind is NOT zeroed at `iwnd=0` (it comes from the file) | max abs u0 20.09 m/s grid-relative (35.0 absolute) | > 1 m/s |
 | wind matches `t5probe_a`'s at every level | 5.1e-05 m/s | 0.2 m/s |
 | CM1's own t=0 CAPE | 1943.0 vs 1942.4 J/kg (**0.03 %**) | 10 % |
+| base-state pressure (named in §4.1, no tolerance given) | **7.04 Pa** at z=250 m, falling with height — the saturated-surface first half-step at `isnd=5` vs the file header's 14 g/kg, predicted by the source read | reported, not gated |
 | same pulse cell as `t5probe_pc` | peak w 61.55 vs 61.60 m/s (0.07 %), both at t=1500 s | 5 %, 300 s |
 | same supercell as `t5probe_a` | peak w 54.18 vs 52.88 m/s (2.45 %), both at t=7200 s | 5 %, 300 s |
 
@@ -166,6 +167,56 @@ every `run_meta.txt`, so the T5s runs named the wrong document. It now reads the
 own `provenance.probe_of`. (The two runs above have the wrong line in their `run_meta.txt`
 and are not re-run for it; this note is the correction.)
 
+
+
+#### §4.2 criterion 2 (discrete propagation) — **control validation FAILED 2026-09-02. NOT promoted.**
+
+Implemented in `births_t5s.py` and validated on the two controls **before** any sweep
+member was scored, which is what the validation was for. Two rounds, both on the
+controls, no threshold moved in either:
+
+**Round 1 — the plan's trigger cannot fire.** §4.2's birth was gated on "after the
+first cell's updraft maximum decays below half its peak". Measured on all six T5 runs,
+that fires on **one** of them (PC), and *not* on the supercell control: SC and A both
+peak at the final frame. The clause reads the domain-wide peak updraft, a running
+maximum over whichever cell is strongest, which does not fall when a cell dies. Every
+sheared run would have scored 0 births and §4.2's "us20, us25 → SUPERCELL by (2)"
+would have been **correct and vacuous**. Re-pre-registered with the trigger replaced
+by "not a continuation, and convection already present"; 8 km, 15 min, 3 births and
+every field threshold left as the plan wrote them.
+
+**Round 2 — two defects in clause (d), both threshold-free.** The first version scored
+SC at 3 births. Both extra births rested on the implementation, not the storm:
+*right censoring* (the run ends at t=120 and they were born at t=105, so they
+"persisted 15.0 min" because the data ran out — and any birth after t=105 was being
+silently dropped), and *greedy hopping* (the forward walk chose the nearest of several
+candidates, which is the argmax tracker T4 §5.2 retired and `chain_stats` explicitly
+refuses; SC carries 3→5→7→9 components in its last four frames). Fixed: births in the
+final 15 min are **unscorable** and reported apart, and two or more candidates within
+`LINK_KM` **end** the chain rather than being resolved by proximity.
+
+**The corrected control result:**
+
+| control | §4.2's bar | measured | reading |
+|---|---|---|---|
+| `t5probe_sc` | ≤ 1 birth | **2** | over the bar. The label is still right (2 < 3) but the margin to MULTICELL is **one birth**. |
+| `t5probe_pc` | ≤ 1 birth | **0** — with **3** clause-(c)-gated re-initiations | **NOT EXERCISED.** PC's updrafts run `… 1 1 0 0 0 4 4 4 4 …`; the zero frames mean clause (c) gates the entire daughter ring, so nothing was rejected — there was simply nothing to propagate *from*. A 0 here is not a pass. |
+
+**And the finding that settles it.** PC's censored tail holds **four entries at t=110
+that are identical to the decimal** — 9.07 km separation, peak 18.28 m/s, area
+5.99 km², all four. That is T5 §7.3's axisymmetric gust-front ring, four lobes
+quantised by a square grid, arriving here through a completely independent
+construction. **Had that ring formed fifteen minutes earlier it would have scored four
+births and labelled the SINGLE-CELL control MULTICELL.** Criterion 2 is foolable by the
+same artifact that retired T5's original count-based criterion 2.
+
+**Consequence, pre-registered before the sweep is read:** criterion 2 is **not
+promoted** and does not score the sweep. It is reported as a descriptor with its
+control numbers attached, never as a label. **H3 stands, and is now confirmed by an
+independent construction** — two different entity definitions (≥40 dBZ cells in T5,
+≥10 m/s updrafts here) are each documented-fooled by the same axisymmetric ring. Per
+the standing method rule, the entity definition is *not* iterated a third time: that
+would be shopping for a construction that flatters the controls.
 
 ## Running one
 

@@ -51,11 +51,37 @@ Re-pre-registered here, in full, before any sweep member is scored:
           -- the plan's 8 km, unchanged;
       (c) frame i-1 contains at least one component -- the first convection of the
           run is INITIATION, not propagation, and must not be counted;
-      (d) it persists >= BIRTH_PERSIST_MIN by forward linking at LINK_KM -- the
-          plan's 15 min, unchanged.
+      (d) it persists >= BIRTH_PERSIST_MIN by UNAMBIGUOUS forward linking at
+          LINK_KM -- the plan's 15 min, unchanged; "unambiguous" and the censoring
+          rule below are stated in full because clause (d) is where the first
+          implementation got it wrong twice (see AMENDMENTS).
     MULTICELL by this criterion if births >= 3 over the run (the plan's threshold,
     unchanged: a supercell's split is ONE birth ~20 km away, so 3 sits above it,
     while a multicell regenerating every 20-30 min gives 3-5 in 2 h).
+
+AMENDMENTS TO CLAUSE (d), 2026-09-02, BOTH BEFORE THE SWEEP AND BOTH THRESHOLD-FREE
+------------------------------------------------------------------------------------
+The first implementation of (d) scored SC at 3 births -- a control failure that would
+have retired the criterion. Both of its extra births turned out to rest on defects in
+(d) itself, not on the storm. Neither fix moves a threshold; both were argued from the
+project's own record before the corrected numbers were seen.
+
+  (d.1) RIGHT CENSORING. The run ends at t=120 min and both extra births were at
+        t=105, where the maximum observable duration is exactly BIRTH_PERSIST_MIN.
+        They "persisted 15.0 min" because the data ran out. Worse, a birth after
+        t=105 can NEVER satisfy (d), so late births were being silently dropped. A
+        birth in the final BIRTH_PERSIST_MIN is therefore UNSCORABLE -- not a pass,
+        not a fail -- and is reported in `censored_births`, apart from the count.
+
+  (d.2) NO GREEDY HOPPING. The forward walk chose the nearest of several candidates.
+        That is the argmax tracker T4 section 5.2 retired, and `chain_stats`'s own
+        docstring refuses it: "A LINKER, NOT A TRACKER ... it refuses to hop, and a
+        broken chain IS the measurement." SC carries 3->5->7->9 components in its
+        last four frames, so hopping is not hypothetical there. Two or more
+        candidates within LINK_KM now END the chain: the continuation is not
+        identifiable, so there is no track. `reach_min` reports the LENIENT reading
+        (any candidate continues it) beside every birth, so the strict rule's cost
+        is a number rather than an assumption.
 
 What changed is ONLY the trigger clause, and it changed because it was measured
 inoperable. Everything else -- 8 km, 15 min, 3 births, and every field threshold --
@@ -73,6 +99,15 @@ WHAT IS REPORTED BESIDE EVERY COUNT (so a 0 is never ambiguous)
                         Those brackets are only 0.5 km apart, so if this number
                         approaches 7.5 the separation is doing less work than it
                         looks -- it is REPORTED, every run, not assumed away.
+  n_censored            births inside the right-censored tail (d.1) -- unscorable.
+  reinitiations_gated_by_clause_c
+                        frames whose predecessor had NO component. Clause (c) gates
+                        every component in such a frame vacuously, so a count of 0
+                        births with a NON-ZERO value here means the criterion was
+                        never exercised on that run -- which is exactly what happens
+                        to PC (its updrafts run ... 1 1 0 0 0 4 4 4 4 ..., so its
+                        daughter ring is gated, not rejected). "PC scored 0" is
+                        therefore NOT a validation of the single-cell side.
   void                  `classify_t5.drift_fit`'s section-5 rule: a run whose storm
                         came within BOUNDARY_KM of an OPEN wall in a mature frame is
                         NOT SCORABLE at any birth count. A multicell propagates on
@@ -171,7 +206,7 @@ def births(name, runs=C.DEFAULT_RUNS):
 
     first_conv = next((t for t, ns in zip(times, frames) if ns), None)
 
-    found = []
+    found, censored_out = [], []
     for i in range(1, len(frames)):
         if not frames[i - 1]:
             continue                                   # (c) initiation, not a birth
@@ -181,33 +216,71 @@ def births(name, runs=C.DEFAULT_RUNS):
                 continue                               # (a) a continuation
             if min(seps) < BIRTH_SEP_KM:
                 continue                               # (b) not far enough
-            # (d) forward persistence by the same linking rule
+            # (d) forward persistence -- UNAMBIGUOUS linking only. Picking the
+            # nearest of several candidates is the argmax tracker T4 section 5.2
+            # retired and chain_stats's docstring refuses ("a broken chain IS the
+            # measurement"); with SC carrying 3->5->7->9 components in its last four
+            # frames, hopping is not hypothetical. Two or more candidates within
+            # LINK_KM means the continuation is not identifiable, and the chain ends.
+            # `reach_min` is the LENIENT reading (any candidate continues it),
+            # reported so the strict rule's cost is visible rather than assumed.
             cur, j, end = c, i + 1, times[i]
+            ambiguous_at = None
             while j < len(frames):
                 nxt = [n for n in frames[j] if _sep(n, cur, xh, yh, periodic) <= C.LINK_KM]
                 if not nxt:
                     break
-                cur = min(nxt, key=lambda n: _sep(n, cur, xh, yh, periodic))
-                end = times[j]
-                j += 1
+                if len(nxt) > 1:
+                    ambiguous_at = times[j]
+                    break
+                cur, end, j = nxt[0], times[j], j + 1
             dur = end - times[i]
-            if dur >= BIRTH_PERSIST_MIN:
-                found.append({"t_min": round(times[i], 1),
-                              "sep_km": round(min(seps), 2),
-                              "persist_min": round(dur, 1),
-                              "peak_ms": c["peak"],
-                              "area_km2": c["area_km2"],
-                              "x_km": round(c["x_km"], 1), "y_km": round(c["y_km"], 1)})
+
+            reach, jr = [c], i + 1
+            while jr < len(frames):
+                nxt = [n for n in frames[jr]
+                       if any(_sep(n, r, xh, yh, periodic) <= C.LINK_KM for r in reach)]
+                if not nxt:
+                    break
+                reach, jr = nxt, jr + 1
+            reach_min = times[jr - 1] - times[i] if jr - 1 > i else 0.0
+
+            # RIGHT CENSORING: a birth in the last BIRTH_PERSIST_MIN of the run
+            # cannot be tested -- the most it can show is the time remaining. It is
+            # not a pass and not a fail; it is unscorable, and is reported apart.
+            censored = times[i] > times[-1] - BIRTH_PERSIST_MIN
+            rec = {"t_min": round(times[i], 1),
+                   "sep_km": round(min(seps), 2),
+                   "persist_min": round(dur, 1),
+                   "reach_min": round(reach_min, 1),
+                   "ambiguous_at_min": None if ambiguous_at is None else round(ambiguous_at, 1),
+                   "peak_ms": c["peak"],
+                   "area_km2": c["area_km2"],
+                   "x_km": round(c["x_km"], 1), "y_km": round(c["y_km"], 1),
+                   "censored": censored}
+            if censored:
+                censored_out.append(rec)
+            elif dur >= BIRTH_PERSIST_MIN:
+                found.append(rec)
 
     mature_births = [b for b in found if b["t_min"] >= C.MATURE_MIN]
+    # Clause (c) can be satisfied vacuously: if the frame before a re-initiation has
+    # NO components, none of the new ones can be a birth however far apart they are.
+    # That is how PC scores 0, so the count alone would misread as "the criterion was
+    # exercised and passed". Report the gating explicitly.
+    gated = sum(1 for i in range(1, len(frames)) if frames[i] and not frames[i - 1])
     return {
         "name": name,
         "n_frames": len(files),
+        "t_end_min": round(times[-1], 1),
         "first_convection_min": None if first_conv is None else round(first_conv, 1),
         "max_link_step_km": round(max_step, 2),
         "births": found,
         "n_births": len(found),
         "n_births_mature": len(mature_births),
+        "censored_births": censored_out,
+        "n_censored": len(censored_out),
+        "reinitiations_gated_by_clause_c": gated,
         "n_updrafts_per_frame": [len(ns) for ns in frames],
         "multicell_by_crit2": len(found) >= MIN_BIRTHS_MULTICELL,
     }
@@ -256,9 +329,19 @@ def main():
               f"(LINK_KM {C.LINK_KM:g}, birth separation {BIRTH_SEP_KM:g})")
         print(f"  updrafts per frame     "
               + " ".join(str(n) for n in r["n_updrafts_per_frame"]))
-        for b in r["births"]:
-            print(f"    birth t={b['t_min']:>6} min  {b['sep_km']:>5} km from the "
-                  f"nearest existing updraft, persisted {b['persist_min']:>5} min, "
+        print(f"  unscorable (censored)  {r['n_censored']}  "
+              f"(born after t={r['t_end_min'] - BIRTH_PERSIST_MIN:g} min, so "
+              f"{BIRTH_PERSIST_MIN:g} min of persistence cannot be observed)")
+        print(f"  re-initiations gated   {r['reinitiations_gated_by_clause_c']}  "
+              f"(frames whose predecessor had NO component -- clause (c) gates these "
+              f"vacuously; 0 here means the criterion WAS exercised)")
+        for b in r["births"] + r["censored_births"]:
+            amb = ("" if b["ambiguous_at_min"] is None
+                   else f", link ambiguous from t={b['ambiguous_at_min']}")
+            tag = "CENSORED" if b["censored"] else "birth   "
+            print(f"    {tag} t={b['t_min']:>6} min  {b['sep_km']:>5} km from the "
+                  f"nearest existing updraft, persisted {b['persist_min']:>5} min "
+                  f"(lenient reach {b['reach_min']:g}){amb}, "
                   f"peak {b['peak_ms']} m/s, area {b['area_km2']} km2")
         verdict = "MULTICELL by criterion 2" if r["multicell_by_crit2"] else \
                   "NOT multicell by criterion 2"
@@ -273,7 +356,9 @@ def main():
     for r in rows:
         v = "VOID" if r["void"] else ("MULTICELL" if r["multicell_by_crit2"] else "not multicell")
         print(f"{r['name']:<18}{r['n_births']:>7}{r['n_births_mature']:>8}"
-              f"{r['max_link_step_km']:>12}{str(r['first_convection_min']):>12}  {v}")
+              f"{r['max_link_step_km']:>12}{str(r['first_convection_min']):>12}  {v}"
+              f"   [censored {r['n_censored']}, clause-(c) gated "
+              f"{r['reinitiations_gated_by_clause_c']}]")
     return 0
 
 
