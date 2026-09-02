@@ -296,6 +296,22 @@ than a supercell finding. If the descriptors trend toward multicell structure wh
 member can be labelled, that is a *result about the classifier* (H3) sitting on top of
 a *result about the environment*, and both get recorded as what they are.
 
+**SWEEP RESULT 2026-09-02 (full record: `sim/probes/README.md`).** All three ran,
+all three contained (60-71 km clearance vs a 15 km floor). All three label SUPERCELL
+**on a criterion at its ceiling** -- `P1 = 80` for every sheared storm this project has
+run, against 5 for the unsheared control, so `P1` separates sheared from unsheared and
+not multicell from supercell: H3, sharpened by a controlled sweep. The descriptors are
+**monotone** in shear (`R` 0.364 -> 0.526 -> 0.560, `E` 2.721 -> 1.948 -> 1.546), and
+criterion 2-prime read alone on UNCHANGED thresholds puts **`us15` decisively on the
+multicell side on both statistics** while `us20`, `us25` and the supercell control are
+all INDETERMINATE. **The structural transition lands between U_s 15 and 20 -- exactly
+where BRN crosses 50**, as section 3.3 predicted from the sounding before any run.
+NOT claimed: that `us15` is a multicell. Its own descriptors complicate it -- fewest
+updrafts, zero births -- so its signature is line-like (elongated, incoherent) rather
+than discrete-cell multiplicity, and those are different objects. Next step is this
+section's own contingency, a 500 m re-run of `us15`, with the hypothesis stated in
+advance: does `P1` break once 5-10 km cells are resolved, while `E` stays high?
+
 ### 4.3 Cost
 
 Five 1 km probes × ~13 min at `np=4`; one classifier addition (discrete propagation)

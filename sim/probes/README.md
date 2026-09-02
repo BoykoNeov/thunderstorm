@@ -218,6 +218,83 @@ independent construction** — two different entity definitions (≥40 dBZ cells
 the standing method rule, the entity definition is *not* iterated a third time: that
 would be shopping for a construction that flatters the controls.
 
+
+#### §4.2 the shear sweep — **RUN AND SCORED 2026-09-02.** The environment behaves as predicted; the classifier still cannot say so.
+
+Three runs, `-np 4`, ~13 min each (two concurrent, then the third). All three finished
+clean, all three are **contained** (minimum clearance 60–71 km against a 15 km void
+floor), and each carries its own `input_sounding` sha256 in `run_meta.txt`. Scored by
+`score_t5s.py` under the amendment above — criterion 2 as a descriptor only, `P1 = 80`
+flagged as the ceiling, containment checked first.
+
+**The labels, and why they are not the result.**
+
+All three members label SUPERCELL. **`P1 = 80 min` for all three — the ceiling** (the
+mature window is 80 min of a 120 min run), which the amendment pre-registered as *not
+evidence*. What P1 actually separates is visible the moment the controls are put beside
+them: the unsheared single-cell control reads **5**, and every sheared storm this
+project has ever run reads **80**. So P1 discriminates *sheared from unsheared*, not
+*multicell from supercell*. That is **H3, sharpened by an independent one-parameter
+sweep** rather than argued.
+
+**The trend across the sweep — thermodynamics held fixed, only U_s varies.**
+
+| run | 0–6 km shear | BRN | WK82 predicts | R (coherence) | E (elongation) | max updrafts | cold pool | births |
+|---|---|---|---|---|---|---|---|---|
+| `t5s_us15` | 14.5 | 58.6 | **multicell** | **0.364** | **2.721** | 4 | 445 km² | 0 |
+| `t5s_us20` | 19.3 | 33.0 | supercell | 0.526 | 1.948 | 6 | 459 km² | 2 |
+| `t5s_us25` | 24.1 | 21.1 | supercell | 0.560 | 1.546 | 8 | 810 km² | 2 |
+| `t5probe_sc` *(reference)* | 31.8 | — | — | 0.485 | 1.840 | 12 | 2012 km² | 2 |
+| `t5probe_pc` *(reference)* | 0.0 | — | — | 0.005 | 1.000 | 12 | 44 km² | 0 |
+
+Echo coherence `R` rises monotonically with shear (0.364 → 0.526 → 0.560) and
+elongation `E` falls monotonically (2.721 → 1.948 → 1.546). Updraft count and cold-pool
+area rise with shear. **The sweep is monotone in the descriptors the classifier already
+had.**
+
+**Criterion 2′ read on its own** — T5 §8's floors and two-sided bands, *unchanged*,
+evaluated without criterion 1′ because criterion 1′ is at its ceiling and the
+amendment pre-registered that it cannot speak there:
+
+| run | criterion 2′ alone |
+|---|---|
+| `t5s_us15` | **MULTICELL signature, decisively** — `E`=2.721 past the decisive edge 2.40 *and* `R`=0.364 below the decisive edge 0.40 |
+| `t5s_us20` | INDETERMINATE (inside the pre-registered band) |
+| `t5s_us25` | INDETERMINATE (inside the pre-registered band) |
+| `t5probe_sc` | INDETERMINATE (inside the pre-registered band) |
+| `t5probe_pc` | no multicell signature — `R`=0.005 |
+
+**`us15` is the only member on either decisive side, and it is decisive on both.** The
+structural transition therefore lands **between U_s 15 and 20 m/s — exactly where BRN
+crosses 50**, which is what §3.3's table predicted from the sounding alone, before any
+run. The environment reached the gap and the gap behaves as WK82 says it should.
+
+**WHAT IS NOT CLAIMED.** `us15` is **not** declared a multicell. Three reasons, all
+pre-registered rather than discovered:
+
+1. The live rule's own answer is SUPERCELL, on a criterion sitting at its ceiling.
+   A criterion that cannot fail cannot confirm either.
+2. Criterion 2 (births) is retired for cause and cannot corroborate.
+3. Criterion 2′'s negative side is weak: it puts the *known supercell control* at
+   INDETERMINATE, not at "no signature". It separates `us15` from everything else;
+   it does not separately establish that the others are supercells.
+
+**And one honest complication the descriptors raise.** `us15` has the **fewest**
+updrafts (4 vs 6 and 8) and **zero** births, not the most. Its signature is
+*elongation and incoherence* — line-like — not *cell multiplicity*. A WK82 multicell
+regenerating discrete cells on a gust front and a squall-line-like structure are not
+the same object, and these descriptors currently point at the second. That distinction
+is now the open scientific question, and it is a better one than "can we reach the
+gap", which is answered.
+
+**Next step, which is §4.2's own contingency and now has a specific hypothesis.** Re-run
+`t5s_us15` at 500 m (T5 §6.1: 1 km under-resolves 5–10 km cells; ~2 h of machine time).
+The hypothesis to test is stated before the run: **does `P1` break at 500 m** — i.e.
+does the rotation stop persisting once individual cells are resolved — **while `E` stays
+high?** If yes, the 1 km ceiling was a resolution artifact and `us15` classifies
+MULTICELL on unchanged thresholds. If `P1` still reads 80 at 500 m, the ceiling is
+structural, H3 needs a criterion this project does not have, and that is the finding.
+
 ## Running one
 
 ```sh
