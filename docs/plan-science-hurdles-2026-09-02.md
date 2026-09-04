@@ -409,6 +409,83 @@ things at once would make the sweep unreadable. Its uses, in order of value:
    lower target. That interaction is real physics and the tool says so instead of
    clipping.
 
+### 5.2 The capped single-cell control — PRE-REGISTERED 2026-09-04, before either member ran
+
+Two members, run **concurrently at `-np 4` each** (the charter's concurrency note; all
+six T5 probes ran this way, so wall clock is the ~13 min the owner priced, not 26).
+`sim/probes/configs/t5s_capped_dt3.json` and `t5s_capped_dt6.json`. Both are
+`t5s_neutral_pc` with a cap block added and **nothing else changed**: deck generation
+produces a file **byte-identical** to `t5s_neutral_pc`'s (8173 bytes, verified by
+`diff`), so `input_sounding_sha256` is the only difference between the runs. This is
+what makes it a one-variable control.
+
+**Bracket, not an optimum.** `z_cap_m = 600` is held (§5.1 measured depth as the
+*weakening* knob) and Δθ is varied: 3 K (SB CIN −59.9) and 6 K (−81.6). §5.1's table
+bottom-right is unusable — 900 m/2 K gives −39, **weaker than the uncapped −48
+reference** — so nothing below about −53 suppresses more than doing nothing.
+
+**Three things measured offline before any compute was spent**
+(`sim/probes/bubble_feasibility.py`, tracked for the same reason the probe configs
+are — it is what makes these numbers reproducible; its elevated-parcel routine is
+gated to reproduce `sounding.parcel(kind="sb")` to 0.000e+00 before it is used for
+anything):
+
+1. **`z_blend_m = 500` is not a free choice.** §5.1's table records `z_cap_m` and
+   `dtheta_k` only, and CIN depends on the blend depth. 500 m reproduces all twenty
+   entries to max |err| **0.46 J/kg** (rounding); 400 m is off by 10.1 and 100 m by
+   39.2. Without this the run would have been at a cap nobody could reproduce.
+2. **CAPE holds by construction, and §5.1's own claim was slightly optimistic.**
+   Measured SB CAPE 1858.4 (3 K) and 1855.9 (6 K) against the uncapped 1859.7 — so
+   **3.8 J/kg**, not the "within 2 J/kg" §5.1 claims. `hold_cape_jkg` stays unset, per
+   §5.1's measured finding that the solver's response is backwards.
+3. **The "cap too strong to initiate" failure mode does not exist here, and the reason
+   is structural.** §5.1's table is the CIN of an *unperturbed surface* parcel; what has
+   to break the cap is a parcel carrying the warm bubble's θ excess. CM1's bubble
+   (`iinit=1`, `init3d.F:456-479`) is centred at **z = 1400 m** with **`bptpert` = 1.0 K**
+   — its warm core sits **above** a 600 m cap. On CM1's own scalar levels the bubble
+   carries θ′ = 0.077 K at 250 m, 0.556 K at 750 m and 0.972 K at 1250 m, and the bubble
+   parcel's CIN is **0.00 J/kg from 750 m or 1250 m in both members**, while the 250 m
+   parcel still carries the full −60 / −82. So the cap acts on **surface-based
+   (gust-front) parcels only** and leaves initiation alone — which is exactly the
+   separation the control wants, and it means the live risk is entirely on the *too
+   weak* side. Recorded now so a surviving storm is not later read as the cap having
+   failed to bite.
+
+**The two-sided criterion, direction-only, no new thresholds.** The comparison run is
+**`t5s_neutral_pc`** (26 frames, on disk) — *not* `t5probe_pc` — because it is the same
+`isnd=7` path, so the cap is the only variable.
+
+- **Initiation.** The run produces deep moist convection: peak `w` ≥ 15 m/s and peak
+  `dbz` ≥ 49 dBZ at some frame. Both numbers are **T5 §7.5's own** ("peak w 15–32 m/s and
+  49–56 dBZ — that is convection, not speckle"), reused rather than invented. Note that
+  the capped storm may be *stronger*, not weaker: the 750 m bubble parcel gains CAPE
+  (2545 → 3226 J/kg at 6 K) because its source air sits inside the inversion. The
+  criterion is therefore one-sided by design.
+- **Singleness.** Strictly fewer secondary convective entities than `t5s_neutral_pc` at
+  every frame after **t = 70 min** (T5 §7.5's own onset time), ideally zero.
+
+**The instrument, and the honesty problem with using it.** Singleness is scored with
+`sim/probes/births_t5s.py`, which §4.2 **retired for cause**. Using it here is stated in
+those terms rather than quietly: §4.2 retired it as a *regime label* — it cannot
+separate an axisymmetric ring from N discrete cells, and its control failed on exactly
+that. It is **not** retired as a detector of *whether secondary convection exists at
+all*, and "0 against the uncapped run's 4" is precisely the use the retirement did not
+touch. The comparison is between two runs scored by the identical instrument, so a
+shared bias cancels; only the difference is read.
+
+**Explicitly forbidden**, because it is T5 §7.5's mistake verbatim: inventing a new
+radial-symmetry or ring-detection metric *after* seeing the capped output. If the
+existing instrument cannot separate the two runs, that is the result.
+
+**The outcome branches, fixed now.**
+
+| Outcome | Reading |
+|---|---|
+| Both members initiate and both suppress the ring | The control exists. §5.1 item 1 is delivered; the classifier gets the "one bubble, one cell" control it was designed against. Prefer the **3 K** member as the shipped control (weakest cap that works). |
+| 3 K still rings, 6 K does not | Same, with the threshold bracketed between −60 and −82. Ship the 6 K member. |
+| Both still ring | The cap does not suppress gust-front regeneration at this CAPE. A real negative finding about the pulse-cell control, **not** licence to strengthen the cap until something works — the envelope above −82 is not reachable at 14 g/kg (§5.1). |
+| A member fails initiation | Contradicts finding 3 above, which is arithmetic on CM1's own source. That would mean the bubble parcel argument is wrong and the offline check is the thing to fix, not the cap. |
+
 ---
 
 ## 6. Plan amendments (supersede the Phase 3 task table for T5/T6)
