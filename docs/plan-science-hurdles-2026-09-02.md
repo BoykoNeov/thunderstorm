@@ -461,8 +461,22 @@ anything):
   the capped storm may be *stronger*, not weaker: the 750 m bubble parcel gains CAPE
   (2545 → 3226 J/kg at 6 K) because its source air sits inside the inversion. The
   criterion is therefore one-sided by design.
-- **Singleness.** Strictly fewer secondary convective entities than `t5s_neutral_pc` at
-  every frame after **t = 70 min** (T5 §7.5's own onset time), ideally zero.
+- **Singleness.** Fewer secondary convective entities than `t5s_neutral_pc` after
+  **t = 70 min** (T5 §7.5's own onset time), ideally zero. **Sharpened 2026-09-04 while
+  the two members were still running and before any of their output existed to read**,
+  because the first wording ("strictly fewer … at every frame") had two readings and
+  the literal one is unfair: if the uncapped run shows a single updraft in some frame,
+  nothing but "no storm at all" can be strictly fewer *there*. The precise form, still
+  direction-only and still with no new thresholds:
+  - **Primary, on the named instrument.** Births after t = 70 min, `births_t5s.py`:
+    the capped member has **strictly fewer** than `t5s_neutral_pc`, ideally 0.
+  - **Secondary, per frame.** The count of updraft components (`classify_t5.py`'s own
+    definition — column-max `w` ≥ 10 m/s, area ≥ 4 km²) is **≤** the uncapped run's in
+    **every** frame after t = 70 min, and strictly fewer in at least one. Reported as a
+    paired per-frame sequence, not a summary statistic.
+
+  Frame sets are aligned by construction (identical deck: `timax` 7200 s, `tapfrq`
+  300 s → the same 26 frames), so the pairing is exact rather than interpolated.
 
 **The instrument, and the honesty problem with using it.** Singleness is scored with
 `sim/probes/births_t5s.py`, which §4.2 **retired for cause**. Using it here is stated in
