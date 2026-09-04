@@ -468,8 +468,17 @@ anything):
   the literal one is unfair: if the uncapped run shows a single updraft in some frame,
   nothing but "no storm at all" can be strictly fewer *there*. The precise form, still
   direction-only and still with no new thresholds:
-  - **Primary, on the named instrument.** Births after t = 70 min, `births_t5s.py`:
-    the capped member has **strictly fewer** than `t5s_neutral_pc`, ideally 0.
+  - **Primary, on the named instrument.** Births after t = 70 min, `births_t5s.py`,
+    counting **confirmed *plus* censored**: the capped member has **strictly fewer**
+    than `t5s_neutral_pc`, ideally 0. The "plus censored" is §4.2's own lesson, and it
+    was fixed by scoring the **uncapped reference alone** while both capped members
+    were still integrating and had produced no output. That scoring is why it is not a
+    free choice: `t5s_neutral_pc` returns **0 confirmed births and 8 censored**, every
+    one of them at t = 110 min, `8.64` km from the nearest updraft, `18.08` m/s peak,
+    `5.99` km² — **identical to the decimal**, which is T5 §7.3's axisymmetric
+    gust-front ring resolved into eight lobes. Counting confirmed births only would
+    have compared 0 against 0 and called a vacuum a pass, which is precisely the
+    right-censoring trap §4.2 documented.
   - **Secondary, per frame.** The count of updraft components (`classify_t5.py`'s own
     definition — column-max `w` ≥ 10 m/s, area ≥ 4 km²) is **≤** the uncapped run's in
     **every** frame after t = 70 min, and strictly fewer in at least one. Reported as a
