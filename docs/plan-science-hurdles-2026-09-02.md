@@ -509,6 +509,59 @@ existing instrument cannot separate the two runs, that is the result.
 | Both still ring | The cap does not suppress gust-front regeneration at this CAPE. A real negative finding about the pulse-cell control, **not** licence to strengthen the cap until something works — the envelope above −82 is not reachable at 14 g/kg (§5.1). |
 | A member fails initiation | Contradicts finding 3 above, which is arithmetic on CM1's own source. That would mean the bubble parcel argument is wrong and the offline check is the thing to fix, not the cap. |
 
+#### 5.2.1 AMENDMENT 2026-09-04 — the first execution was contaminated; the clean re-run is the run of record
+
+**Written before any capped output had been scored.** No number from either
+attempt existed when this was fixed.
+
+**What happened.** The launcher was fired twice. WSL cold-boots in ~20 s; the
+first launch was still starting when its run directory was checked for, absence
+was read as "the launch did nothing", and a second launcher went out. Both
+reached the box, so **each capped member ran as two concurrent CM1 jobs in one
+persistent run directory**. `run_probe.sh` shares `RUNDIR` by probe name and
+rewrites everything in it, so the two jobs interleaved one `cm1.out` on
+independent file offsets and contended over the first output file — that is the
+`netcdf status returned an error: 13 ... Permission denied` on
+`cm1out_000001.nc` that appears in both capped logs and in **neither** the
+uncapped reference (which ran alone) nor any earlier T5s probe.
+
+Evidence preserved in `runs/t5s_capped_launch/incident_snapshot/`
+(both raced `cm1.out`, both `PROBE_STATUS` including dt6's `PROBE_FAIL` before
+the surviving job overwrote it, the launcher `RC`, and the process table).
+
+**The ruling, and why it is written now rather than after scoring.** The raced
+runs are **not** the run of record and cannot become it, whatever they say.
+Both members are re-run cleanly, one launcher, and **the clean set is the only
+data §5.2's criteria are applied to.** The raced output is moved aside and kept
+for exactly one purpose: a **reproducibility check** — same config, same forked
+binary, same `np=4` and same decomposition, which is the condition Phase 0
+verified bitwise. Holding two datasets and scoring after the fact would hand
+back the freedom to prefer the nicer one, which is the whole thing §5.2 exists
+to close.
+
+**What the check is expected to show, stated in advance.** The aborting job died
+at 33 s having written no output file except the contended frame-1 attempt, and
+both jobs' `rm -f cm1out*.nc` ran before either `mpirun` produced anything — so
+no frame was deleted and frames 2 onward came from a single job. The scrambled
+`cm1.out` is therefore expected to be the worst of the damage, and the clean and
+raced frames are expected to **agree at data level**. That is the prediction, not
+a reason to skip the test. The comparison is made on decoded variable arrays, not
+with `cmp`: netCDF-4 files can differ byte-wise for benign reasons (creation
+attributes, chunk layout, deflate nondeterminism).
+
+**The one hazard that is physics rather than bookkeeping**, recorded so it is not
+lost: the second job's `cp input_sounding` could have raced the first job's read
+of it at initialisation, giving CM1 a silently truncated profile. Re-generating
+the sounding and matching the recorded sha256 proves the file is right *now*, not
+what CM1 read at 09:49:28. The clean-run data comparison covers this; if it does
+not agree, this is the first thing to check.
+
+**Harness defect, fixed in the same batch:** `run_probe.sh` now takes an
+exclusive `flock` on `/home/boiko/thunderstorm/runs/.<name>.lock` for the life of
+the script and refuses to start (`PROBE_LOCKED`, exit 3) if another invocation
+holds it. "Be careful next time" is not a fix for a race whose trigger is a slow
+cold start.
+
 ---
 
 ## 6. Plan amendments (supersede the Phase 3 task table for T5/T6)

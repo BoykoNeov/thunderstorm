@@ -22,6 +22,23 @@ CM1_EXE=/home/boiko/thunderstorm/runs/cm1.exe
 NAME="$(basename "$CONFIG" .json)"
 RUNDIR="/home/boiko/thunderstorm/runs/$NAME"
 
+# Probe run dirs are PERSISTENT and shared by name, and this script deletes and
+# rewrites everything in one ("rm -f input_sounding", "rm -f cm1out*.nc",
+# "> cm1.out"). Two invocations for the same probe therefore silently run two CM1
+# jobs in one directory: they truncate each other's inputs and interleave one log
+# on independent file offsets. That happened on 2026-09-04 to BOTH members of the
+# capped single-cell control -- the trigger was a ~20 s WSL cold start being read
+# as a failed launch and the launcher being fired a second time, so "be careful"
+# is not a fix. Take an exclusive lock for the life of the script instead; fd 9 is
+# released by the kernel on exit, including on a crash.
+LOCKFILE="/home/boiko/thunderstorm/runs/.${NAME}.lock"
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
+  echo "PROBE_LOCKED $NAME -- another run_probe.sh already holds $LOCKFILE." >&2
+  echo "Refusing to share the run dir. Wait for it, or kill it BY PID." >&2
+  exit 3
+fi
+
 echo "=== $NAME: generating deck from $CONFIG ==="
 DECK="$(mktemp)"
 SND="$(mktemp)"; SND_REPORT="$(mktemp)"
