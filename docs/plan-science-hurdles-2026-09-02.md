@@ -562,6 +562,44 @@ the script and refuses to start (`PROBE_LOCKED`, exit 3) if another invocation
 holds it. "Be careful next time" is not a fix for a race whose trigger is a slow
 cold start.
 
+#### 5.2.2 AMENDMENT 2026-09-05 — two further interrupted attempts; only a completed run is data
+
+**Written before any capped output existed to score**, for the same reason §5.2.1 was:
+a ruling recorded after a number is visible is a choice, not a rule. Neither attempt
+below produced a scorable frame set, and neither can become the run of record.
+
+- **Attempt 2 (2026-09-04 10:29, the clean re-run §5.2.1 ordered).** Reached `mpirun`
+  and integrated normally; it stopped at **frame 4 of 25** at 10:35 when the WSL VM was
+  shut down (`journalctl --list-boots`: boot −1 ends 10:36:11). `cm1.out` carries no CM1
+  error — the last line is a normal `cflmax` report at 15.7 min of storm time. Preserved
+  at `runs/t5s_capped_clean.aborted-0904/`.
+- **Attempt 3 (2026-09-05 22:49).** Both members failed **before** `mpirun`, so no frame
+  of either exists. `gen_deck.py` wrote the deck to a `mktemp` path under `/tmp` and the
+  file was gone ~10 s later at the `cp` that stages it into the run dir
+  (`cp: cannot stat '/tmp/tmp.D0CWPlTljn'`), identically on both members; `run_probe.sh`
+  exited 1 under `set -e`. `/tmp` is not durable on this box at present — every entry in
+  it, including the systemd private directories, carried a timestamp minutes newer than
+  the boot. Preserved at `runs/t5s_capped_clean.failed-tmpdir-0905/`.
+
+**The fix, and what it deliberately does not touch.** The launcher exports
+`TMPDIR=/home/boiko/thunderstorm/tmp` (ext4, under `$HOME`) before invoking
+`run_probe.sh`. **`run_probe.sh` is not edited**: `mktemp` honours `TMPDIR`, so the
+tracked script — and with it the provenance of every probe already run against it —
+is unchanged. The launcher itself is a throwaway wrapper on `M:\claud_projects\temp`,
+per the detached-launch pattern (a harness background task or a `wsl` session that can
+close is what killed attempt 2's kind of run before).
+
+**A correction this forced, recorded rather than quietly fixed.** §5.2 says the two
+members and `t5s_neutral_pc` share "the same 26 frames". The reference on disk has
+**25** (`cm1out_000001`…`000025`), and the deck says so: `timax 7200 / tapfrq 300` is
+24 intervals plus the initial write. **25, not 26.** The pairing the secondary criterion
+needs is still exact by construction — identical deck, identical output cadence — so
+nothing in §5.2 changes except the count.
+
+**Everything else in §5.2 and §5.2.1 stands**: the criteria are applied once, to a
+*completed* clean set; the raced set remains a reproducibility check only; an
+interrupted attempt is not a dataset and is not scored, in either direction.
+
 ---
 
 ## 6. Plan amendments (supersede the Phase 3 task table for T5/T6)

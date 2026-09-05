@@ -156,7 +156,11 @@ A/B under `M:\claud_projects\temp\diorama-perf\shots\`.
 Three defaults changed with measured near-identity: `?hazelc=1`, `?step=auto`,
 `?dither=ign`. Show the owner the A/B pairs in
 `M:\claud_projects\temp\diorama-perf\shots\` (`haze_on/off_*`, `step_off/auto_*`,
-`dith_crop_*`). Revert params exist for each. Also ask: should `?rs=auto` be the
+`dith_crop_*`). Revert params exist for each. **DONE 2026-09-05: published as a
+decision page —** https://claude.ai/code/artifact/96f08cea-0e5e-450f-b0b1-e640fef9b4f0
+(crops at the measured diff centroids, the numbers beside each, and — per the
+advisor — the dither pair shown as each variant's *error against the converged
+still* rather than A-vs-B, since A-vs-B only shows that the noise moved). Also ask: should `?rs=auto` be the
 default for the shipped viewer (recommended for outreach machines; it never
 changes anything on a GPU that holds the cap)? If yes: flip `rsParam`'s default
 in `main.ts`, update README's param table, and note it in `STATUS.md`.
@@ -260,7 +264,7 @@ stays blocked on the Phase 4 event-list exporter.
 - **Supercell package vs the staging slab (pre-existing, seen in this pass):**
   `supercell_333m` is 180 km wide, so at the default `sx=2` its box is 360 km on
   a 110 km slab — the anvil hangs far past the diorama and the sea (capture:
-  `M:\claud_projects	emp\diorama-perf\shotsinal_sc.png`). Options for the
+  `M:\claud_projects\temp\diorama-perf\shots\final_sc.png`). Options for the
   owner: per-package default display scale in the picker (`sx=1` when the box
   exceeds the slab), or a slab sized from the manifest grid (`land.ts`
   `GROUND_HALF` becomes a parameter; forests/towns/massifs scale with it).
