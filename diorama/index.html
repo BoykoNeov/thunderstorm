@@ -114,6 +114,14 @@
       }
       #sbLabel { font-variant-numeric: tabular-nums; margin-top: 2px; }
       #sbNote { color: #46707c; }
+      /* ?stats perf readout (fps + per-pass GPU ms) — bottom-right, hidden by default */
+      #stats {
+        position: absolute; right: 12px; bottom: 12px;
+        font: 11px/1.4 ui-monospace, monospace; color: #2b3a3d;
+        background: rgba(255, 255, 255, 0.55); border-radius: 6px;
+        padding: 5px 8px; pointer-events: none; display: none;
+        font-variant-numeric: tabular-nums;
+      }
     </style>
   </head>
   <body>
@@ -141,6 +149,7 @@
       <div id="sbNote">across the storm, at centre depth</div>
     </div>
     <div id="err"></div>
+    <div id="stats"></div>
     <div id="rightcol">
       <div id="layers" style="display: none">
         <div id="layersTitle">Data layer</div>

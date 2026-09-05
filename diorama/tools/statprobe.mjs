@@ -65,10 +65,21 @@ async function main() {
     // reset the deltas buffer, then let it run to collect a clean window
     await S("Runtime.evaluate", { expression: "window.__stats && (window.__stats.deltas.length=0)" });
     await sleep(4000);
-    const r = await S("Runtime.evaluate", { expression: "JSON.stringify(window.__stats ? window.__stats.deltas : null)", returnByValue: true });
-    const d = JSON.parse(r.result.value);
+    const r = await S("Runtime.evaluate", { expression: "JSON.stringify(window.__stats ? {deltas: window.__stats.deltas, gpu: window.__stats.gpu, gpuSamples: window.__stats.gpuSamples, fps: window.__stats.fps} : null)", returnByValue: true });
+    const st = JSON.parse(r.result.value);
+    const d = st?.deltas;
     if (!d || d.length === 0) { console.log(`${label}: NO STATS (buffering=${buffering})`); }
-    else { const w = d.slice(2); console.log(`${label}: n=${w.length} median=${median(w).toFixed(2)}ms mean=${mean(w).toFixed(2)}ms min=${Math.min(...w).toFixed(2)} max=${Math.max(...w).toFixed(2)}`); }
+    else {
+      const w = d.slice(2);
+      // per-pass GPU ms (EMA, EXT_disjoint_timer_query_webgl2) is the honest
+      // cost signal; rAF spacing is kept for pacing/stall context only.
+      const g = st.gpu ?? {};
+      const total = Object.values(g).reduce((a, b) => a + b, 0);
+      const gpuTxt = st.gpuSamples > 0
+        ? `gpu=${total.toFixed(2)}ms [${Object.entries(g).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(", ")}]`
+        : "gpu=n/a";
+      console.log(`${label}: ${gpuTxt} | raf median=${median(w).toFixed(2)}ms mean=${mean(w).toFixed(2)}ms n=${w.length}`);
+    }
     await b.send("Target.closeTarget", { targetId });
   }
   b.close();

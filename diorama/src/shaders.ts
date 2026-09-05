@@ -81,6 +81,14 @@ void main() {
 // gates particle spawn on the same resident 3D textures). One definition, one
 // set of uniform names — main.ts sets them per program.
 
+// PERF RULE (2026-09-05): every fetch in the fragment shaders is `textureLod(…, 0.0)`,
+// never `texture(…)`. Implicit-LOD sampling needs screen-space derivatives, and on
+// ANGLE's D3D11 backend a derivative-dependent fetch inside a per-pixel branch forces
+// the compiler to FLATTEN that branch — so the 28-step sun march ran for every
+// primary sample of every pixel in the box, cloud or not (measured: cost linear in
+// sun steps on a completely EMPTY frame; 36 ms → 7 ms at 3200×1800 after the fix).
+// All these textures have exactly one mip level, so LOD 0 is the identical texel
+// filter and the image is bit-for-bit unchanged; only the branches become real.
 const VOL_COMMON = `
 uniform vec3  uSunDir;        // unit, toward the sun
 uniform vec3  uCamPos;
@@ -94,6 +102,7 @@ uniform vec4  uK;
 uniform vec4  uWeights;       // per-species extinction weights
 uniform float uExtScale;      // km^-1 per weighted (kg/kg)
 uniform float uShadowKm;      // sun-march occluder cap, km (scales with sx)
+uniform int   uSunSteps;      // secondary sun-march samples (?sun=, default 28)
 
 const float PI = 3.14159265;
 
@@ -114,9 +123,9 @@ float sigmaAt(vec3 p) {
   vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
   // temporal crossfade: decode each frame, then mix — mixing ratios are
   // linear quantities, so the blend happens in q space, not code space
-  vec4 q = qDecode(texture(uVolA, uvw) * 255.0);
+  vec4 q = qDecode(textureLod(uVolA, uvw, 0.0) * 255.0);
   if (uMix > 0.0001) {
-    q = mix(q, qDecode(texture(uVolB, uvw) * 255.0), uMix);
+    q = mix(q, qDecode(textureLod(uVolB, uvw, 0.0) * 255.0), uMix);
   }
   float sig = uExtScale * dot(uWeights, q);
   // trim the faint decode halo so edges stay cloud, not fog (keeps the anvil:
@@ -130,22 +139,25 @@ float sigmaAt(vec3 p) {
 // single-fetch here nearly halves the whole march during playback.
 float sigmaShadowAt(vec3 p) {
   vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
-  vec4 v = (uMix < 0.5 ? texture(uVolA, uvw) : texture(uVolB, uvw)) * 255.0;
+  vec4 v = (uMix < 0.5 ? textureLod(uVolA, uvw, 0.0) : textureLod(uVolB, uvw, 0.0)) * 255.0;
   float sig = uExtScale * dot(uWeights, qDecode(v));
   return max(sig - 0.04, 0.0);
 }
 
+int gSunSamples = 0;         // cost diagnostic (?debug=cost): sun-march samples this pixel
 float sunTau(vec3 p) {
   vec2 tb = rayBox(p, uSunDir, uBoxMin, uBoxMax);
   // ~15 km of occluder (× display scale) is plenty — capping it keeps the
   // steps dense where the shadow forms instead of across the whole box.
   float end = min(max(tb.y, 0.0), uShadowKm);
-  const int M = 28;
+  int M = uSunSteps;
   float ds = end / float(M);
   float tau = 0.0;
   float s = ds * 0.5;
-  for (int i = 0; i < M; i++) {
+  for (int i = 0; i < 64; i++) {
+    if (i >= M) break;
     tau += sigmaShadowAt(p + uSunDir * s) * ds;
+    gSunSamples++;
     if (tau > 9.0) break;
     s += ds;
   }
@@ -178,13 +190,16 @@ uniform float uUseCache;      // ?lc=0 falls back to the live march
 // Points OUTSIDE the box advance to the sun ray's box entry: the cache voxel
 // there already integrates the remaining path to the sun. Rays that miss the
 // box are unshadowed.
-float sunTrans(vec3 p) {
-  if (uUseCache < 0.5) return exp(-sunTau(p));
+float sunTransCache(vec3 p) {
   vec2 tb = rayBox(p, uSunDir, uBoxMin, uBoxMax);
   if (tb.y <= max(tb.x, 0.0)) return 1.0;
   vec3 q = p + uSunDir * max(tb.x, 0.0);
   vec3 uvw = clamp((q - uBoxMin) / (uBoxMax - uBoxMin), 0.0, 1.0);
-  return uMix < 0.5 ? texture(uShadowA, uvw).r : texture(uShadowB, uvw).r;
+  return uMix < 0.5 ? textureLod(uShadowA, uvw, 0.0).r : textureLod(uShadowB, uvw, 0.0).r;
+}
+float sunTrans(vec3 p) {
+  if (uUseCache < 0.5) return exp(-sunTau(p));
+  return sunTransCache(p);
 }
 `;
 
@@ -256,6 +271,8 @@ uniform float uXmax;
 // (5b), 2 = updraft w (T8). Drives BOTH the volume march (emissive radar/updraft
 // MIP vs the cloud shading) and the cross-section cut-face source. dBZ reads its
 // own plane (uDbzA); w reads uWA (signed decode, diverging palette).
+uniform float uDebug;         // 0 off; 1 = cost heat map (sun-march samples per pixel)
+uniform float uHazeCache;     // 1: haze-only samples read the baked sun cache (?hazelc=0 → live march)
 uniform float uLayer;
 uniform sampler3D uDbzA;      // dBZ diagnostic plane, nearest bound frame
 uniform float uDbzThr;        // dBZ threshold: code 0 = below = empty air
@@ -278,7 +295,7 @@ ${wColorGLSL()}
 // the radar read tolerates it (slice-2 sun-march precedent).
 float dbzAt(vec3 p) {
   vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
-  float v = texture(uDbzA, uvw).r * 255.0;
+  float v = textureLod(uDbzA, uvw, 0.0).r * 255.0;
   if (v < 0.5) return 0.0;
   return uDbzThr + (uDbzMax - uDbzThr) * ((v - 1.0) / 254.0);
 }
@@ -287,7 +304,7 @@ float dbzAt(vec3 p) {
 // value = (byte-128)/127*scale). Nearest bound frame like dbz.
 float wAt(vec3 p) {
   vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
-  float v = texture(uWA, uvw).r * 255.0;
+  float v = textureLod(uWA, uvw, 0.0).r * 255.0;
   return (v - 128.0) / 127.0 * uWScale;
 }
 // -- palette (placeholder; owner tunes by eye) ---------------------------------
@@ -318,16 +335,16 @@ vec2 sigma2At(vec3 p) {
   float nFine = 0.5;
   if (uErosion > 0.001) {
     vec3 c = pS * 0.125;
-    vec2 nA = texture(uNoise, c).rg;
-    float ny = texture(uNoise, c + vec3(0.37, 0.71, 0.19)).r;
-    float nz = texture(uNoise, c + vec3(0.61, 0.13, 0.47)).r;
+    vec2 nA = textureLod(uNoise, c, 0.0).rg;
+    float ny = textureLod(uNoise, c + vec3(0.37, 0.71, 0.19), 0.0).r;
+    float nz = textureLod(uNoise, c + vec3(0.61, 0.13, 0.47), 0.0).r;
     nFine = nA.g;
     vec3 warp = (vec3(nA.r, ny, nz) - 0.5) * (uErosion * 1.7);
     uvw += warp / uSizeStorm;
   }
-  vec4 q = qDecode(texture(uVolA, uvw) * 255.0);
+  vec4 q = qDecode(textureLod(uVolA, uvw, 0.0) * 255.0);
   if (uMix > 0.0001) {
-    q = mix(q, qDecode(texture(uVolB, uvw) * 255.0), uMix);
+    q = mix(q, qDecode(textureLod(uVolB, uvw, 0.0) * 255.0), uMix);
   }
   float sigC = max(uExtScale * dot(uWeightsCld, q) - 0.04, 0.0);
   if (sigC > 1e-4) {
@@ -344,7 +361,7 @@ vec2 sigma2At(vec3 p) {
   if (sigR > 1e-4) {
     // vertically-stretched sheets, scrolling down on wall time (presentation,
     // like the water ripples — storm time at 300× would strobe)
-    float v = texture(uNoise, vec3(pS.xy * 0.33, pS.z * 0.07 + uTime * 0.05)).r;
+    float v = textureLod(uNoise, vec3(pS.xy * 0.33, pS.z * 0.07 + uTime * 0.05), 0.0).r;
     sigR *= 0.15 + 1.7 * v * v; // squared: crisper sheet/gap contrast
   }
   return vec2(sigC, sigR);
@@ -389,8 +406,8 @@ vec2 waveGrad(vec2 xy) {
 }
 
 vec3 shadeSurface(vec2 uv, vec3 p, vec3 rd) {
-  vec4 galb = texture(uAlbedo, uv);
-  vec3 n = normalize(texture(uNormalTex, uv).xyz * 2.0 - 1.0);
+  vec4 galb = textureLod(uAlbedo, uv, 0.0);
+  vec3 n = normalize(textureLod(uNormalTex, uv, 0.0).xyz * 2.0 - 1.0);
   // the storm's shadow sweeping the toy landscape — the miniature illusion's
   // highest-value effect (design doc §5.2)
   float shadow = sunTrans(p);
@@ -426,8 +443,8 @@ float hash12(vec2 p) {
 // which switches palette + units with uLayer).
 float xsecField(vec3 p) {
   vec3 uvw = (p - uBoxMin) / (uBoxMax - uBoxMin);
-  vec4 q = qDecode(texture(uVolA, uvw) * 255.0);
-  if (uMix > 0.0001) q = mix(q, qDecode(texture(uVolB, uvw) * 255.0), uMix);
+  vec4 q = qDecode(textureLod(uVolA, uvw, 0.0) * 255.0);
+  if (uMix > 0.0001) q = mix(q, qDecode(textureLod(uVolB, uvw, 0.0) * 255.0), uMix);
   return (q.x + q.y + q.z + q.w) * 1000.0; // total condensate, g/kg
 }
 
@@ -455,7 +472,7 @@ void main() {
 
   // staging surface from the g-buffer depth (d = 1 means backdrop); the
   // reconstruction (depth → eye z → ray distance) mirrors mat.ts, tested
-  float d = texture(uDepthTex, uv).r;
+  float d = textureLod(uDepthTex, uv, 0.0).r;
   float tSurf = 1e9;
   vec3 bg;
   if (d < 1.0) {
@@ -583,7 +600,12 @@ void main() {
       float haze = uRays * exp(-hfrac * uSizeStorm.z / uHazeH) * edge;
       float sig = s2.x + s2.y + haze;
       if (sig > 1e-4) {
-        float Tsun = sunTrans(p);
+        // Sun transmittance: the live 28-step march inside cloud/rain (the
+        // baked half-res R8 cache stair-steps dense cores — see main.ts ?lc=),
+        // but ONE cache fetch for haze-only samples. Open air is exactly where
+        // the cache is faithful (T is smooth there), and the haze deck is where
+        // most in-box samples live: measured 14.5 → ~6 ms at 3200×1800.
+        float Tsun = (s2.x + s2.y > 1e-4 || uHazeCache < 0.5) ? sunTrans(p) : sunTransCache(p);
         vec3 amb = mix(AMB_LOW, AMB_HIGH, hfrac) * (0.25 + 0.45 * hfrac);
         float powder = 1.0 - 0.7 * exp(-s2.x * 1.2);
         // sum the octaves: each deeper order attenuates the sun path less
@@ -676,7 +698,7 @@ void main() {
     vec3 pG = ro + rd * tSurf;                       // the shaded surface point
     vec2 fuv = (pG.xy - uBoxMin.xy) / (uBoxMax.xy - uBoxMin.xy);
     if (fuv.x >= 0.0 && fuv.x <= 1.0 && fuv.y >= 0.0 && fuv.y <= 1.0) {
-      float v = texture(uCref, fuv).r * 255.0;
+      float v = textureLod(uCref, fuv, 0.0).r * 255.0;
       if (v > 0.5) {                                 // code 0 = below threshold = no echo
         float dbz = uDbzThr + (uDbzMax - uDbzThr) * ((v - 1.0) / 254.0);
         float a = smoothstep(uDbzThr, uDbzThr + 8.0, dbz) * 0.92;
@@ -713,6 +735,13 @@ void main() {
       col = mix(col, viridis(tn), a);
     }
   }
+  if (uDebug > 0.5) {
+    // cost heat map: black = no sun march, blue→green→red→white = more samples
+    // (full scale 280 primary steps × uSunSteps). Presentation-only diagnostic.
+    float c = float(gSunSamples) / (280.0 * float(uSunSteps));
+    col = c < 0.02 ? vec3(0.0) : mix(mix(vec3(0.1, 0.2, 1.0), vec3(0.2, 1.0, 0.2), min(c * 4.0, 1.0)),
+                                     mix(vec3(1.0, 0.2, 0.1), vec3(1.0), clamp(c * 2.0 - 1.0, 0.0, 1.0)), clamp(c * 4.0 - 1.0, 0.0, 1.0));
+  }
   fragColor = vec4(col, 1.0);
 }
 `;
@@ -746,14 +775,14 @@ void main() {
   float r = cocAt(uv.y);
   vec3 col;
   if (r < 0.5) {
-    col = texture(uTex, uv).rgb;
+    col = textureLod(uTex, uv, 0.0).rgb;
   } else {
     col = vec3(0.0);
     float wsum = 0.0;
     for (int i = -6; i <= 6; i++) {
       float o = float(i) / 6.0;
       float w = exp(-o * o * 2.2);
-      col += texture(uTex, uv + uDir * (o * r) / uRes).rgb * w;
+      col += textureLod(uTex, uv + uDir * (o * r) / uRes, 0.0).rgb * w;
       wsum += w;
     }
     col /= wsum;
@@ -891,7 +920,7 @@ out vec4 fragColor;
 
 void main() {
   // same viewProj as the G-pass, so window depths compare directly
-  float d = texture(uDepthTex, gl_FragCoord.xy / uRes).r;
+  float d = textureLod(uDepthTex, gl_FragCoord.xy / uRes, 0.0).r;
   if (d < 1.0 && gl_FragCoord.z > d + 1e-5) discard;
   float lat = 1.0 - vUV.x * vUV.x;                                  // soft sides
   float lon = smoothstep(0.0, 0.15, vUV.y) * (1.0 - smoothstep(0.85, 1.0, vUV.y));
@@ -920,27 +949,27 @@ float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 void main() {
   vec2 px = 1.0 / uRes;
   vec2 uv = gl_FragCoord.xy * px;
-  vec3 cM = texture(uTex, uv).rgb;
+  vec3 cM = textureLod(uTex, uv, 0.0).rgb;
   float lM = luma(cM);
-  float lN = luma(texture(uTex, uv + vec2(0.0,  px.y)).rgb);
-  float lS = luma(texture(uTex, uv - vec2(0.0,  px.y)).rgb);
-  float lE = luma(texture(uTex, uv + vec2(px.x, 0.0)).rgb);
-  float lW = luma(texture(uTex, uv - vec2(px.x, 0.0)).rgb);
+  float lN = luma(textureLod(uTex, uv + vec2(0.0,  px.y), 0.0).rgb);
+  float lS = luma(textureLod(uTex, uv - vec2(0.0,  px.y), 0.0).rgb);
+  float lE = luma(textureLod(uTex, uv + vec2(px.x, 0.0), 0.0).rgb);
+  float lW = luma(textureLod(uTex, uv - vec2(px.x, 0.0), 0.0).rgb);
   float lMin = min(lM, min(min(lN, lS), min(lE, lW)));
   float lMax = max(lM, max(max(lN, lS), max(lE, lW)));
   if (lMax - lMin < max(0.0312, lMax * 0.125)) { fragColor = vec4(cM, 1.0); return; }
-  float lNW = luma(texture(uTex, uv + vec2(-px.x,  px.y)).rgb);
-  float lNE = luma(texture(uTex, uv + vec2( px.x,  px.y)).rgb);
-  float lSW = luma(texture(uTex, uv + vec2(-px.x, -px.y)).rgb);
-  float lSE = luma(texture(uTex, uv + vec2( px.x, -px.y)).rgb);
+  float lNW = luma(textureLod(uTex, uv + vec2(-px.x,  px.y), 0.0).rgb);
+  float lNE = luma(textureLod(uTex, uv + vec2( px.x,  px.y), 0.0).rgb);
+  float lSW = luma(textureLod(uTex, uv + vec2(-px.x, -px.y), 0.0).rgb);
+  float lSE = luma(textureLod(uTex, uv + vec2( px.x, -px.y), 0.0).rgb);
   vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
   float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
   float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
   dir = clamp(dir * rcp, vec2(-8.0), vec2(8.0)) * px;
-  vec3 a = 0.5 * (texture(uTex, uv + dir * (1.0 / 3.0 - 0.5)).rgb
-                + texture(uTex, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
-  vec3 b = a * 0.5 + 0.25 * (texture(uTex, uv + dir * -0.5).rgb
-                           + texture(uTex, uv + dir *  0.5).rgb);
+  vec3 a = 0.5 * (textureLod(uTex, uv + dir * (1.0 / 3.0 - 0.5), 0.0).rgb
+                + textureLod(uTex, uv + dir * (2.0 / 3.0 - 0.5), 0.0).rgb);
+  vec3 b = a * 0.5 + 0.25 * (textureLod(uTex, uv + dir * -0.5, 0.0).rgb
+                           + textureLod(uTex, uv + dir *  0.5, 0.0).rgb);
   float lB = luma(b);
   fragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
 }

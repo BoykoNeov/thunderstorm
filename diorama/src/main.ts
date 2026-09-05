@@ -39,6 +39,7 @@ import {
   type ColorTarget,
   type GBuffer,
 } from "./gl";
+import { GpuTimer } from "./gputimer";
 import { buildStaging, GROUND_HALF } from "./land";
 import { buildNoise3D, NOISE_SIZE } from "./noise3d";
 import { multiply, perspective, project, view } from "./mat";
@@ -96,10 +97,19 @@ const scenarioSel = document.getElementById("scenario") as HTMLSelectElement;
 const sbBox = document.getElementById("scalebar") as HTMLDivElement;
 const sbRule = document.getElementById("sbRule") as HTMLDivElement;
 const sbLabel = document.getElementById("sbLabel") as HTMLDivElement;
+const statsEl = document.getElementById("stats") as HTMLDivElement;
 
 const params = new URLSearchParams(location.search);
 const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
+// march step budgets (perf instruments; the defaults ARE the shipped look):
+// ?steps= primary march samples per ray (uSteps), ?sun= secondary sun-march
+// samples per primary sample. Exposed so a cost breakdown can be measured
+// without editing the shader — never lower the defaults from a single probe.
+// ?debug=cost paints a per-pixel sun-march sample count heat map (perf diagnostic)
+const debugMode = params.get("debug") === "cost" ? 1 : 0;
+const stepsParam = Math.min(512, Math.max(8, Math.round(Number(params.get("steps") ?? "280") || 280)));
+const sunSteps = Math.min(64, Math.max(2, Math.round(Number(params.get("sun") ?? "28") || 28)));
 const stagingSeed = Number(params.get("seed") ?? "1337") || 1337;
 const tiltShift = params.get("ts") !== "0"; // ?ts=0 disables the DOF pass
 // FXAA on the final LDR image (beauty step 5): de-jaggies the aliased staging
@@ -118,6 +128,10 @@ const accumOn = params.get("acc") !== "0";
 // landscape reads smaller under the bigger storm — that contrast is the point
 const stormScale = Math.min(3, Math.max(1, Number(params.get("sx") ?? "2") || 2));
 const precipOn = params.get("precip") !== "0"; // ?precip=0 disables the particles
+// ?anim=0 pins the wall-clock animation (water ripples, rain-veil scroll, precip
+// fall) at t=0 so two captures of the same URL are bit-comparable — the A/B
+// verification recipe needs it; it never affects storm time or playback.
+const animOn = params.get("anim") !== "0";
 // numeric param where 0 is a legitimate value (the `|| default` idiom eats it)
 const numParam = (name: string, def: number) => {
   const raw = params.get(name);
@@ -138,6 +152,11 @@ const veilW = Math.max(0, numParam("veil", 0.12));
 // broken image; a real weak-GPU fix means storing tau (or R16F), not just more
 // texels (8-bit quantization is a co-cause resolution alone won't touch).
 const lightCache = params.get("lc") === "1";
+// haze-only samples read the baked cache (one fetch) instead of the live sun
+// march: ON by default — open air is where the cache is faithful, and those
+// samples were ~60 % of the march after the LOD fix. ?hazelc=0 for the A/B.
+// The cache is therefore ALWAYS baked at upload now (≈0.5 ms GPU per brick).
+const hazeCache = params.get("hazelc") !== "0";
 // multi-scatter octaves (beauty 1): octave weight (?msw=0 → single scatter) and
 // per-octave optical-depth attenuation (?msa=). msw lifts shadowed cores from
 // black to luminous grey; msNorm keeps the sunlit side at the same level.
@@ -243,6 +262,9 @@ async function start() {
   // no-op (accEnabled false ⇒ no float target, no clock freeze, live look).
   const floatOK = !!gl.getExtension("EXT_color_buffer_float");
   const accEnabled = accumOn && floatOK;
+  // per-pass GPU timers (?stats only — the query objects are not free)
+  const gpu = new GpuTimer(gl, collectStats);
+  statsEl.style.display = collectStats ? "block" : "none";
   const progGeo = compileProgram(gl, GEO_VERT, GEO_FRAG);
   const progVol = compileProgram(gl, VERT, FRAG);
   const progPost = compileProgram(gl, VERT, POST_FRAG);
@@ -789,7 +811,10 @@ async function start() {
   // scale (and the sun-march cap grows with it). The 2× storm then looks like
   // the same cloud shown bigger — not a denser one.
   gl.uniform1f(loc(progVol, "uExtScale"), EXT_SCALE / stormScale);
-  gl.uniform1f(loc(progVol, "uSteps"), 280);
+  gl.uniform1f(loc(progVol, "uSteps"), stepsParam);
+  gl.uniform1i(loc(progVol, "uSunSteps"), sunSteps);
+  gl.uniform1f(loc(progVol, "uDebug"), debugMode);
+  gl.uniform1f(loc(progVol, "uHazeCache"), hazeCache ? 1 : 0);
   gl.uniform1f(loc(progVol, "uExposure"), 0.75);
   gl.uniform1f(loc(progVol, "uShadowKm"), 15 * stormScale);
   gl.uniform1i(loc(progVol, "uNoise"), 5);
@@ -845,6 +870,7 @@ async function start() {
   gl.uniform1i(loc(progPrecip, "uShadowA"), 6);
   gl.uniform1i(loc(progPrecip, "uShadowB"), 7);
   gl.uniform1f(loc(progPrecip, "uUseCache"), lightCache ? 1 : 0);
+  gl.uniform1i(loc(progPrecip, "uSunSteps"), sunSteps);
   gl.uniform2f(loc(progPrecip, "uTilt"), 0.1, 0.04); // slight wind-shear lean
   gl.uniform1f(loc(progPrecip, "uGateZ"), 2.5 / nz); // ~625 m: the near-surface layers
   gl.uniform1f(loc(progPrecip, "uMaxR"), GROUND_HALF - 1); // rain stays on the diorama slab
@@ -885,6 +911,7 @@ async function start() {
   gl.uniform1f(loc(progBake, "uExtScale"), EXT_SCALE / stormScale);
   gl.uniform1f(loc(progBake, "uShadowKm"), 15 * stormScale);
   gl.uniform2f(loc(progBake, "uCacheXY"), cacheX, cacheY);
+  gl.uniform1i(loc(progBake, "uSunSteps"), sunSteps);
 
   // Bake one ring slot's sun-transmittance cache: a fullscreen draw per z-slice
   // (framebufferTextureLayer selects the layer). Called from the upload block,
@@ -911,7 +938,12 @@ async function start() {
     drawn: 0,
     uploadMs: [] as number[], // texSubImage3D wall cost per upload
     stallInfo: [] as { ready: number; inflight: number; resident: number }[],
+    gpu: {} as Record<string, number>, // EMA GPU ms per pass (see gputimer.ts)
+    gpuSamples: 0,
+    fps: 0, // EMA of rendered frames per second
   };
+  let fpsEma = 0;
+  let lastHudStats = 0;
   if (collectStats) (window as unknown as { __stats: typeof stats }).__stats = stats;
 
   // ---- frame loop -----------------------------------------------------------
@@ -931,6 +963,11 @@ async function start() {
     const rawDtMs = now - lastNow;
     const dtWall = Math.min(rawDtMs / 1000, 0.1); // clamp tab-away gaps
     lastNow = now;
+    if (collectStats) {
+      gpu.poll(); // harvest last frame's queries before issuing new ones
+      const inst = 1000 / Math.max(rawDtMs, 0.01);
+      fpsEma = fpsEma === 0 ? inst : fpsEma + (inst - fpsEma) * 0.1;
+    }
 
     // 1. what does the play head need?
     let pos = locate(times, tStorm);
@@ -957,6 +994,7 @@ async function start() {
       const slot = pool.assign(f, keep);
       if (slot !== null) {
         const u0 = performance.now();
+        gpu.begin("upload");
         uploadVolume(gl, textures[slot], nx, ny, nz, data.rgba);
         // dbz plane into the SAME slot, so the bound pair always has dbz
         // resident when the layer is active (streamGen guarantees data.dbz is
@@ -964,7 +1002,8 @@ async function start() {
         if (dbzActive && data.dbz && dbzTex) uploadDbz(gl, dbzTex[slot], nx, ny, nz, data.dbz);
         if (wActive && data.w && wTex) uploadDbz(gl, wTex[slot], nx, ny, nz, data.w);
         if (crefActive && data.cref && crefTex) uploadCref(gl, crefTex[slot], nx, ny, data.cref);
-        if (lightCache) bakeShadow(slot); // fill the slot's cache in the same rAF
+        bakeShadow(slot); // fill the slot's sun cache in the same rAF (haze + ?lc=1)
+        gpu.end();
         if (collectStats && stats.uploadMs.length < 2000) stats.uploadMs.push(performance.now() - u0);
         ready.delete(f);
         stats.uploads++;
@@ -1020,7 +1059,7 @@ async function start() {
     prevKey = key;
     accN = nextCount(same, accN);
     if (!same) tFrozen = now / 1000;
-    const tAnim = same ? tFrozen : now / 1000;
+    const tAnim = !animOn ? 0 : same ? tFrozen : now / 1000;
     const converged = same && accN >= ACC_CAP;
 
     if (bind && gbuf) {
@@ -1042,6 +1081,7 @@ async function start() {
       // image and only the cheap present below re-runs, so idle GPU load drops.
       if (!converged) {
         // -- pass 1: staging mesh into the g-buffer ----------------------------
+        gpu.begin("geo");
         gl.bindFramebuffer(gl.FRAMEBUFFER, gbuf.fbo);
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.enable(gl.DEPTH_TEST);
@@ -1055,6 +1095,7 @@ async function start() {
         gl.disable(gl.DEPTH_TEST);
 
         // -- pass 2: volume raymarch + surface shading + backdrop --------------
+        gpu.begin("march");
         gl.bindFramebuffer(gl.FRAMEBUFFER, compositeFbo);
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.useProgram(progVol);
@@ -1111,6 +1152,7 @@ async function start() {
         //    the DOF treats rain like everything else; volume + depth textures are
         //    still bound on units 0/1/4) ---------------------------------------
         if (precipOn && layer === "hydro") {
+          gpu.begin("precip");
           gl.enable(gl.BLEND);
           gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
           gl.useProgram(progPrecip);
@@ -1131,6 +1173,7 @@ async function start() {
         // new render with weight 1/accN → a true running average. Because we
         // overwrite on every non-`same` frame, accT is never stale entering a
         // still period (no ghost from the previous convergence).
+        gpu.begin("post");
         if (accEnabled && sceneT && accT) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, accT.fbo);
           gl.viewport(0, 0, canvas.width, canvas.height);
@@ -1154,6 +1197,7 @@ async function start() {
 
       // -- present to screen (ALWAYS — even when the march was skipped, so the
       //    default framebuffer is never left undefined) -----------------------
+      if (converged) gpu.begin("post"); // else still inside the post query
       if (!directToScreen) {
         const postSrc = accEnabled && accT ? accT.tex : sceneT!.tex;
         // FXAA (when on) is the final pass and owns the present-to-screen, so
@@ -1225,6 +1269,7 @@ async function start() {
           drawFullscreen(gl);
         }
       }
+      gpu.end();
       stats.drawn++;
     }
 
@@ -1259,6 +1304,16 @@ async function start() {
     if (collectStats) {
       stats.deltas.push(rawDtMs); // raw rAF spacing, ms
       if (stats.deltas.length > 4000) stats.deltas.shift();
+      stats.gpu = gpu.snapshot();
+      stats.gpuSamples = gpu.count;
+      stats.fps = fpsEma;
+      // ?stats HUD line, refreshed 4×/s (a per-frame textContent write forces layout)
+      if (now - lastHudStats > 250) {
+        lastHudStats = now;
+        statsEl.textContent =
+          `${fpsEma.toFixed(0)} fps · ${canvas.width}×${canvas.height} · ${gpu.hudLine()}` +
+          (converged ? " · converged (march skipped)" : "");
+      }
     }
   }
   requestAnimationFrame(frame);
