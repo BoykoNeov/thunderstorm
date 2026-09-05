@@ -65,7 +65,7 @@ async function main() {
     // reset the deltas buffer, then let it run to collect a clean window
     await S("Runtime.evaluate", { expression: "window.__stats && (window.__stats.deltas.length=0)" });
     await sleep(4000);
-    const r = await S("Runtime.evaluate", { expression: "JSON.stringify(window.__stats ? {deltas: window.__stats.deltas, gpu: window.__stats.gpu, gpuSamples: window.__stats.gpuSamples, fps: window.__stats.fps} : null)", returnByValue: true });
+    const r = await S("Runtime.evaluate", { expression: "JSON.stringify(window.__stats ? {deltas: window.__stats.deltas, gpu: window.__stats.gpu, gpuSamples: window.__stats.gpuSamples, fps: window.__stats.fps, stalls: window.__stats.stalls, uploads: window.__stats.uploads, uploadMs: window.__stats.uploadMs} : null)", returnByValue: true });
     const st = JSON.parse(r.result.value);
     const d = st?.deltas;
     if (!d || d.length === 0) { console.log(`${label}: NO STATS (buffering=${buffering})`); }
@@ -78,7 +78,9 @@ async function main() {
       const gpuTxt = st.gpuSamples > 0
         ? `gpu=${total.toFixed(2)}ms [${Object.entries(g).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(", ")}]`
         : "gpu=n/a";
-      console.log(`${label}: ${gpuTxt} | raf median=${median(w).toFixed(2)}ms mean=${mean(w).toFixed(2)}ms n=${w.length}`);
+      const p95 = [...w].sort((x, y) => x - y)[Math.floor(w.length * 0.95)];
+      const um = st.uploadMs ?? [];
+      console.log(`${label}: ${gpuTxt} | raf median=${median(w).toFixed(2)}ms mean=${mean(w).toFixed(2)}ms p95=${p95.toFixed(1)} max=${Math.max(...w).toFixed(1)} n=${w.length} | stalls=${st.stalls} uploads=${st.uploads} uploadMs median=${um.length ? median(um).toFixed(2) : "-"} max=${um.length ? Math.max(...um).toFixed(1) : "-"}`);
     }
     await b.send("Target.closeTarget", { targetId });
   }

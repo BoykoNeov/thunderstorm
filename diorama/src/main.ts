@@ -36,9 +36,11 @@ import {
   uploadCref,
   uploadDbz,
   uploadVolume,
+  uploadVolumeSlab,
   type ColorTarget,
   type GBuffer,
 } from "./gl";
+import { planRing, RING_BUDGET_BYTES, uploadSlabs } from "./budget";
 import { GpuTimer } from "./gputimer";
 import { buildStaging, GROUND_HALF } from "./land";
 import { buildNoise3D, NOISE_SIZE } from "./noise3d";
@@ -69,14 +71,18 @@ const EXT_SCALE = 2000.0;
 // shade — that ratio is what makes the cauliflower read as 3D.
 const SUN = direction((100 * Math.PI) / 180, (40 * Math.PI) / 180);
 
-// Streaming envelope. 24 slots × 12.5 MB (208·208·72·4) ≈ 300 MB GPU — the
-// ring, not full residency, is the design (must work on lesser GPUs too).
-// Capacity must comfortably exceed the protected window (READ_AHEAD + 2 wanted
+// Streaming envelope. The ring, not full residency, is the design (must work
+// on lesser GPUs too). Slot count + read-ahead come from a GPU byte budget
+// (budget.ts planRing): 24 slots × 12.5 MB for the 208³-class bricks ≈ 300 MB,
+// fewer for the 63 MB supercell bricks (which would otherwise pin 1.5 GB).
+// Capacity must comfortably exceed the protected window (read-ahead + 2 wanted
 // + 2 last-bound): texSubImage3D into a texture the GPU drew from moments ago
 // forces a driver sync-wait (measured 50–77 ms spikes with only 2 rotating
-// slots); ~10 rotating slots keep every upload ~1–2 ms.
-const RING_CAPACITY = 24;
-const READ_AHEAD = 10; // frames beyond the current pair kept warm
+// slots); ~10 rotating slots keep every upload ~1–2 ms. ?vram=MB overrides.
+// One texSubImage3D call blocks the main thread for the whole copy; bricks
+// bigger than this are uploaded as z-slabs over consecutive rAFs (budget.ts
+// uploadSlabs). 16 MB keeps the 12.5 MB Phase-1 brick on the single-call path.
+const UPLOAD_CHUNK_BYTES = 16 * 1024 * 1024;
 const MAX_INFLIGHT = 4; // concurrent fetch+gunzip requests in the worker
 
 // Mesh-pass projection planes (rays are generated analytically; these only
@@ -102,6 +108,9 @@ const statsEl = document.getElementById("stats") as HTMLDivElement;
 const params = new URLSearchParams(location.search);
 const renderScale = Number(params.get("rs") ?? "1") || 1;
 const collectStats = params.has("stats");
+// GPU byte budget for the rgba ring (?vram=MB; see the streaming envelope above)
+const vramMB = Number(params.get("vram"));
+const ringBudget = Number.isFinite(vramMB) && vramMB > 0 ? Math.max(64, vramMB) * 1024 * 1024 : RING_BUDGET_BYTES;
 // march step budgets (perf instruments; the defaults ARE the shipped look):
 // ?steps= primary march samples per ray (uSteps), ?sun= secondary sun-march
 // samples per primary sample. Exposed so a cost breakdown can be measured
@@ -376,6 +385,9 @@ async function start() {
   let buffering = true;
 
   // ---- streaming state ------------------------------------------------------
+  const ring = planRing(frameBytes, ringBudget);
+  const RING_CAPACITY = ring.slots;
+  const READ_AHEAD = ring.readAhead; // frames beyond the current pair kept warm
   const pool = new SlotPool(RING_CAPACITY);
   const textures: WebGLTexture[] = [];
   for (let i = 0; i < RING_CAPACITY; i++) textures.push(createVolumeTexture(gl, nx, ny, nz));
@@ -422,6 +434,16 @@ async function start() {
     { rgba: Uint8Array; dbz: Uint8Array | null; w: Uint8Array | null; cref: Uint8Array | null }
   >();
   let lastGood: { fa: number; fb: number; mix: number } | null = null;
+  // an in-progress multi-slab upload (big bricks only; null on the Phase-1 path)
+  let uploading: {
+    frame: number;
+    slot: number;
+    slabs: [number, number][];
+    next: number;
+    data: { rgba: Uint8Array; dbz: Uint8Array | null; w: Uint8Array | null; cref: Uint8Array | null };
+  } | null = null;
+  // resident = assigned a slot AND fully uploaded (a slab job in flight is not)
+  const resident = (f: number) => pool.slotOf(f) !== null && uploading?.frame !== f;
   // stream generation: bumped on a layer toggle so in-flight requests from the
   // previous layer (which may lack the dbz plane) are discarded on arrival
   // rather than uploaded as a stale rgba-only frame.
@@ -485,6 +507,7 @@ async function start() {
     inflight.clear();
     ready.clear();
     pool.clear();
+    uploading = null; // its data lacks the new layer's plane; the frame re-streams
     lastGood = null;
     buffering = true;
     updateLayerUI();
@@ -948,17 +971,26 @@ async function start() {
 
   // ---- frame loop -----------------------------------------------------------
   let lastNow = performance.now();
-  let lastRender = lastNow;
+  let lastRaf = lastNow; // every heartbeat, rendered or not — for the period estimate
+  let rafPeriod = 0; // EMA of the display's rAF spacing, ms
+  let nextRender = lastNow; // scheduled time of the next rendered frame
   function frame(now: number) {
     requestAnimationFrame(frame); // schedule next heartbeat before any early-out
 
-    // frame-rate cap: skip this heartbeat if the target interval hasn't elapsed.
-    // The 1 ms slack absorbs rAF quantization so a 60 cap on a 60 Hz display
-    // holds 60 (not 30). lastNow (which drives dtWall) advances only on rendered
-    // frames, so playback speed stays correct regardless of the cap.
+    // frame-rate cap. rAF only fires on the display's own grid, so a 60 cap
+    // cannot be "16.7 ms since the last render": on a 144 Hz panel that rule
+    // rendered every THIRD tick (20.8 ms → 48 fps, measured). Instead keep an
+    // ideal schedule (nextRender advances by exact intervals) and render on the
+    // heartbeat that lands CLOSEST to it — ticks alternate 2/3 apart but the
+    // average is exactly the cap. Falling behind (tab hidden) resets the
+    // schedule rather than accumulating a debt. lastNow (which drives dtWall)
+    // advances only on rendered frames, so playback speed stays correct.
     const minInterval = 1000 / fpsCap;
-    if (now - lastRender < minInterval - 1) return;
-    lastRender = now;
+    const rawRaf = now - lastRaf;
+    lastRaf = now;
+    if (rawRaf > 0 && rawRaf < 100) rafPeriod = rafPeriod === 0 ? rawRaf : rafPeriod + (rawRaf - rafPeriod) * 0.1;
+    if (now + 0.5 * rafPeriod < nextRender) return;
+    nextRender = Math.max(nextRender, now - minInterval) + minInterval;
 
     const rawDtMs = now - lastNow;
     const dtWall = Math.min(rawDtMs / 1000, 0.1); // clamp tab-away gaps
@@ -988,27 +1020,59 @@ async function start() {
       keep.add(lastGood.fa);
       keep.add(lastGood.fb);
     }
-    for (const f of wanted) {
-      const data = ready.get(f);
-      if (!data) continue;
-      const slot = pool.assign(f, keep);
-      if (slot !== null) {
-        const u0 = performance.now();
-        gpu.begin("upload");
-        uploadVolume(gl, textures[slot], nx, ny, nz, data.rgba);
-        // dbz plane into the SAME slot, so the bound pair always has dbz
-        // resident when the layer is active (streamGen guarantees data.dbz is
-        // present here whenever dbzActive — stale rgba-only frames were orphaned)
-        if (dbzActive && data.dbz && dbzTex) uploadDbz(gl, dbzTex[slot], nx, ny, nz, data.dbz);
-        if (wActive && data.w && wTex) uploadDbz(gl, wTex[slot], nx, ny, nz, data.w);
-        if (crefActive && data.cref && crefTex) uploadCref(gl, crefTex[slot], nx, ny, data.cref);
-        bakeShadow(slot); // fill the slot's sun cache in the same rAF (haze + ?lc=1)
-        gpu.end();
-        if (collectStats && stats.uploadMs.length < 2000) stats.uploadMs.push(performance.now() - u0);
-        ready.delete(f);
+    if (uploading) keep.add(uploading.frame); // a half-filled slot must not be evicted
+    // The extra planes + the sun-cache bake land with the LAST slab, so a slot
+    // is complete (rgba + planes + cache) the moment `uploading` clears.
+    const finishUpload = (slot: number, data: NonNullable<ReturnType<typeof ready.get>>) => {
+      // dbz plane into the SAME slot, so the bound pair always has dbz
+      // resident when the layer is active (streamGen guarantees data.dbz is
+      // present here whenever dbzActive — stale rgba-only frames were orphaned)
+      if (dbzActive && data.dbz && dbzTex) uploadDbz(gl, dbzTex[slot], nx, ny, nz, data.dbz);
+      if (wActive && data.w && wTex) uploadDbz(gl, wTex[slot], nx, ny, nz, data.w);
+      if (crefActive && data.cref && crefTex) uploadCref(gl, crefTex[slot], nx, ny, data.cref);
+      bakeShadow(slot); // fill the slot's sun cache in the same rAF (haze + ?lc=1)
+    };
+    if (uploading) {
+      // continue a multi-slab upload: one slab per rAF, then finish
+      const u0 = performance.now();
+      gpu.begin("upload");
+      const [z0, z1] = uploading.slabs[uploading.next++];
+      uploadVolumeSlab(gl, textures[uploading.slot], nx, ny, z0, z1, uploading.data.rgba);
+      if (uploading.next >= uploading.slabs.length) {
+        finishUpload(uploading.slot, uploading.data);
         stats.uploads++;
+        uploading = null;
       }
-      break;
+      gpu.end();
+      if (collectStats && stats.uploadMs.length < 2000) stats.uploadMs.push(performance.now() - u0);
+    } else {
+      for (const f of wanted) {
+        const data = ready.get(f);
+        if (!data) continue;
+        const slot = pool.assign(f, keep);
+        if (slot !== null) {
+          const u0 = performance.now();
+          gpu.begin("upload");
+          const slabs = uploadSlabs(nz, nx * ny * 4, UPLOAD_CHUNK_BYTES);
+          if (slabs.length === 1) {
+            // the whole brick in one call (the Phase-1 path, unchanged)
+            uploadVolume(gl, textures[slot], nx, ny, nz, data.rgba);
+            finishUpload(slot, data);
+            stats.uploads++;
+          } else {
+            // big brick: first slab now, the rest over the next rAFs. The slot
+            // is assigned (so nothing else claims it) but NOT resident until
+            // the job completes — see resident() below.
+            const [z0, z1] = slabs[0];
+            uploadVolumeSlab(gl, textures[slot], nx, ny, z0, z1, data.rgba);
+            uploading = { frame: f, slot, slabs, next: 1, data };
+          }
+          gpu.end();
+          if (collectStats && stats.uploadMs.length < 2000) stats.uploadMs.push(performance.now() - u0);
+          ready.delete(f);
+        }
+        break;
+      }
     }
 
     // 4. advance the clock — but never past frames that aren't resident yet
@@ -1016,7 +1080,7 @@ async function start() {
     if (playing && !scrubbing) {
       const tNext = advance(tStorm, dtWall * speed, 0, tEnd);
       const posNext = locate(times, tNext);
-      const ok = pool.slotOf(posNext.i0) !== null && pool.slotOf(posNext.i1) !== null;
+      const ok = resident(posNext.i0) && resident(posNext.i1);
       if (ok) tStorm = tNext;
       else {
         stats.stalls++;
@@ -1028,8 +1092,8 @@ async function start() {
     }
 
     // 5. bind the pair (falling back to the last complete pair while buffering)
-    const sa = pool.slotOf(pos.i0);
-    const sb = pool.slotOf(pos.i1);
+    const sa = resident(pos.i0) ? pool.slotOf(pos.i0) : null;
+    const sb = resident(pos.i1) ? pool.slotOf(pos.i1) : null;
     let bind: { fa: number; fb: number; mix: number } | null = null;
     if (sa !== null && sb !== null) {
       bind = { fa: pos.i0, fb: pos.i1, mix: pos.f };

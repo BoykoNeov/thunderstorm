@@ -164,6 +164,28 @@ export function uploadVolume(
   gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, nx, ny, nz, gl.RGBA, gl.UNSIGNED_BYTE, data);
 }
 
+/** Upload z-slices [z0, z1) of a decoded brick (budget.ts uploadSlabs splits a
+ *  big brick so no single call blocks the main thread for the whole copy).
+ *  Brick byte order is x-fastest, then y, then z (webvol.py reshape(nz,ny,nx)),
+ *  so a z-slab is one contiguous run of (z1-z0)·ny·nx·4 bytes. */
+export function uploadVolumeSlab(
+  gl: WebGL2RenderingContext,
+  tex: WebGLTexture,
+  nx: number,
+  ny: number,
+  z0: number,
+  z1: number,
+  data: Uint8Array,
+): void {
+  const slice = nx * ny * 4;
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texSubImage3D(
+    gl.TEXTURE_3D, 0, 0, 0, z0, nx, ny, z1 - z0, gl.RGBA, gl.UNSIGNED_BYTE,
+    data.subarray(z0 * slice, z1 * slice),
+  );
+}
+
 /** One clip-space triangle covering the screen; no buffers needed. */
 export function drawFullscreen(gl: WebGL2RenderingContext): void {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
