@@ -669,6 +669,95 @@ unsheared cells usually reach. Worth one look at which level the maximum sits on
 spike at or above the `zd` = 15 km damping layer would explain it). Initiation is
 one-sided and `cref` clears its floor independently, so this cannot change a PASS.
 
+### 5.4 RESULT — the control is NOT delivered, and the blocker is the instrument plus the symmetry
+
+Two findings, deliberately kept apart, because one of them is a judgement made after
+seeing the data and must be legible as one.
+
+**(a) §5.3's test yields NO verdict: its positive control failed.** By the letter of
+the rule, all three frames read `CELLS` — including `t5s_neutral_pc`, the frame this
+document had *already* established is one gust-front ring in eight lobes (§5.2: eight
+births at 8.64 km, 18.08 m/s, 5.99 km², "identical to the decimal"). A test that
+mislabels its own known positive control says nothing about the two unknowns. The
+defect is in the rule, not the data: §5.3 assumed a **circular** annulus and tested
+radius clustering, and the ring here is **square-ish** — axis lobes at 6.83 km,
+diagonal lobes at 8.95 km, a ratio of 1.31 where a circle gives 1.00 and a square
+1.414. Two orbits of one ring, which a ±10 % radius band cannot hold. This is the
+fourth entry in this project's run of control-design failures and it belongs beside
+the others: *a control that cannot fail proves nothing, and a control that fails when
+it should pass invalidates the test rather than the subject.*
+
+**(b) §5.2's secondary criterion is void anyway — on evidence that does not route
+through §5.3. Flagged: this reading was reached after the numbers were seen.** The
+configuration is *exactly* symmetric — `irandp=0` (no perturbation at all in the T5s
+probes), a bubble on the domain centre, a square domain — so CM1 evolves the field
+under exact four-fold symmetry and every feature appears as **4 copies** (on an axis or
+a diagonal) or **8** (generic). The output confirms it to the decimal:
+
+| frame | components | the orbits |
+|---|---|---|
+| `t5s_neutral_pc` t=120 | 8 | 4 at r=6.83 km, each 5.99 km², each peak w 22.09 m/s · 4 at r=8.95, each 23.95 km², each 26.64 m/s |
+| `t5s_capped_dt3` t=105 | 12 | 4 at r=5.89 (5.99 km², 11.69 m/s) · 4 at r=6.99 (11.98, 18.90) · 4 at r=11.75 (10.98, 24.82) |
+| `t5s_capped_dt6` t=95 | 48 | groups of 4 and 8, e.g. **8** at r=25.14 all 5.99 km² / 16.90 m/s, **8** at r=88.53 all 4.99 km² / 23.44 m/s |
+
+Eight independent cells cannot agree to two decimals on **both** area and peak updraft.
+`n_updrafts` is counting symmetry copies. Capped and uncapped runs are both
+copy-inflated, but the factor is **per feature** (4 on an axis or diagonal, 8 generic),
+so the frame-by-frame comparison is not even inflated by a common factor — it is not
+stable in kind. **Void.**
+
+**Not promoted, deliberately:** counting *orbits* instead is not the fix. The
+reference's single ring yields **two** orbits (axes and diagonals), so orbit-counting
+over-counts a non-circular ring exactly as component-counting does, one level up —
+the project's own "component counting cannot tell N cells from one ring in N lobes"
+lesson repeating. The only defensible statement is bounded: **distinct features ≤
+count / 4**, and that is an upper bound, not an estimate.
+
+**(c) A second, independent reason the late `dt6` frames are not a clean interior
+count:** components at r = 81.41, 88.53 and 103.36 km on a domain of half-width
+89.4 km. The disturbance is at and past the open boundary, whatever instrument reads it.
+
+**What the control delivered, stated without rescue.**
+
+- **Initiation: PASS for both members.** That criterion is sound and one-sided.
+- **Primary singleness: exactly as scored** — `dt3` 4 vs 8 PASS, `dt6` 28 vs 8 FAIL.
+  Births inherit the same copy inflation, so the part that carries information is the
+  **composition**: `dt3` is 4 confirmed + 0 censored where the reference is 0 + 8.
+  That remains **weak evidence** that the cap bit early and was then overrun. It is
+  **not** promoted to a finding.
+- **Secondary singleness: void** — (b).
+
+⇒ **The capped single-cell control is NOT delivered.** The blocker is the instrument
+plus the configuration's symmetry, **not the cap**. Nothing measured here says the CIN
+knob failed; it says this experiment cannot see whether it worked.
+
+**Owed before any third capped member** — this is §5.3's pre-registered RING
+consequence, unchanged by the route taken to it: either **break the symmetry** (the T4
+`var7` seed hook, or shear) **or build an instrument that does not count copies**.
+**No third capped member runs until one of those exists.** Running one now would buy
+another set of copy-inflated counts.
+
+**The §5.2.1 reproducibility check: PASSES, exactly as predicted.** For each member,
+**24 of 25 frames compare bitwise identical on every shared variable**; the one
+exclusion is the raced copy of `cm1out_000001.nc`, unreadable (HDF error) — the file
+the two jobs contended over, named in advance on 2026-09-04. `compare_raced.py` now
+**reports** an unreadable frame and keeps it in the denominator instead of crashing on
+it; a known casualty must not become an invisible one. This closes the one hazard in
+the race that was physics rather than bookkeeping: had the second job's
+`cp input_sounding` raced the first job's read at initialisation, the fields would
+differ. They do not.
+
+**Logged closed (non-blocking).** Peak `w` sits at the undiluted parcel ceiling in all
+three runs — 61.55 / 63.14 / 59.92 m/s against √(2·1858) = 61.0 — at z = 11.25 /
+11.25 / 12.75 km, all at t = 25 min. That is well below the `zd` = 15 km damping
+layer, so it is **not** a damping artifact. Initiation is one-sided and `cref` clears
+its floor independently, so it cannot move a verdict either way.
+
+**Artefacts.** `runs/t5s_capped_clean/SCORE.txt`, `RING_TEST.txt`, `RACED_CHECK.txt`;
+instrument `sim/probes/ring_test.py` (tracked, so the arrangement measurement is
+reproducible); the interrupted attempts at `runs/t5s_capped_clean.aborted-0904/` and
+`runs/t5s_capped_clean.failed-tmpdir-0905/`.
+
 ---
 
 ## 6. Plan amendments (supersede the Phase 3 task table for T5/T6)

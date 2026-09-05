@@ -59,12 +59,25 @@ def main():
             continue
         member_ok = True
         worst = 0.0
+        unreadable = []
         for f in common:
-            any_compared = True
             msgs = []
-            ok, d, nvar = compare_files(os.path.join(clean, f),
-                                        os.path.join(raced, f),
-                                        report=msgs.append)
+            try:
+                ok, d, nvar = compare_files(os.path.join(clean, f),
+                                            os.path.join(raced, f),
+                                            report=msgs.append)
+            except OSError as e:
+                # PREDICTED 2026-09-04 (plan section 5.2.1): the two jobs contended
+                # over cm1out_000001.nc -- "netcdf status returned an error: 13 ...
+                # Permission denied" -- so the raced copy of frame 1 is damaged. An
+                # unreadable frame is a HANDLED PREDICTION and is reported as such;
+                # it must never silently leave the denominator, which would turn a
+                # known casualty into an invisible one.
+                unreadable.append(f)
+                print(f"  {f}: UNREADABLE in the raced set ({type(e).__name__}) "
+                      "-- the contended file, predicted in section 5.2.1")
+                continue
+            any_compared = True
             if not ok:
                 member_ok = False
                 worst = max(worst, d)
@@ -73,8 +86,14 @@ def main():
                     print("   " + line)
                 if len(msgs) > 6:
                     print(f"    ... and {len(msgs) - 6} more variables")
+        if unreadable:
+            print(f"  unreadable   : {len(unreadable)} of {len(common)} "
+                  f"({', '.join(unreadable)}) -- excluded from the comparison, "
+                  "counted here so the exclusion is visible")
         if member_ok:
-            print(f"  ALL {len(common)} comparable frames agree bitwise on every shared variable.")
+            print(f"  ALL {len(common) - len(unreadable)} readable frames agree bitwise "
+                  f"on every shared variable ({len(common)} comparable, "
+                  f"{len(unreadable)} unreadable).")
         else:
             print(f"  DISAGREES -- worst max|delta| over the member = {worst:g}")
             overall_ok = False

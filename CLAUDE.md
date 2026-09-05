@@ -236,11 +236,19 @@ task records THERE; keep this table to one line per phase.
   route to a multicell *label*. Its three outcome branches are already fixed in
   docs/plan-science-hurdles-2026-09-02.md §4.2 and are **not to be renegotiated when it
   runs**.
-- **Capped single-cell control: APPROVED, deferred — not today.** 13 min. Feasibility
-  settled offline so it cannot fail on a `SoundingError`: a 1 km mixed layer is
-  **unavailable** at 14 g/kg, and holding CAPE against the cap makes it *worse* (the
-  solver raises moisture). Runnable envelope and the CIN table are in §5.1 of the plan;
-  pick from it when scheduling.
+- **Capped single-cell control: RAN 2026-09-05/06 — NOT DELIVERED.** Both members
+  completed (25 frames each) and were scored once against the criteria fixed before
+  they ran: initiation **PASS** for both; singleness **fails**, and the *secondary*
+  criterion turned out **void**. The configuration is exactly symmetric (`irandp=0`,
+  centred bubble, square domain), so CM1 evolves it under four-fold symmetry and every
+  feature appears as 4 or 8 copies — confirmed to the decimal (eight components sharing
+  one area and one peak `w`). `n_updrafts` counts copies, so no threshold on it means
+  what it says. **The blocker is the instrument plus the symmetry, not the cap:** nothing
+  measured says the CIN knob failed, only that this experiment cannot see whether it
+  worked. **Owed before any third capped member** (pre-registered): break the symmetry
+  (the T4 `var7` seed hook, or shear) **or** build an instrument that does not count
+  copies. Bitwise reproducibility re-confirmed on the way (24/25 frames per member;
+  the one exclusion was predicted in advance). Record: plan §§5.2–5.4, docs/STATUS.md.
 
 - **Squall line (C2): KEEP.** It does not retire with T5s, so T5 §11.7's crop-box
   hazard is **live work owed before C2 can ship as a package** (not before T6).

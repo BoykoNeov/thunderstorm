@@ -893,3 +893,66 @@ is a pipeline task with its own go.
 empty-frame control (frame 0) exposed it in one probe; without a control the July
 pass concluded "the shadow march is not the bottleneck" from a true measurement
 of a flattened shader.
+
+## Capped single-cell control — RAN 2026-09-05/06, NOT DELIVERED
+
+Owner had approved it deferred on 2026-09-02 (13 min priced). Full record:
+`docs/plan-science-hurdles-2026-09-02.md` §§5.2–5.4. Commits 01e2c11, 2b1f11b and
+the result commit.
+
+**It had already been run twice, and neither attempt survived.** §5.2.1's clean
+re-run (2026-09-04) integrated normally and stopped at **frame 4 of 25** when the
+WSL VM went away — no CM1 error. A relaunch on 2026-09-05 never reached `mpirun`:
+`gen_deck.py`'s `mktemp` deck vanished from `/tmp` ~10 s after being written, on
+both members (`cp: cannot stat`). **`/tmp` is not durable on this box**; the fix is
+`TMPDIR` on ext4 under `$HOME`, set in the launcher, with `run_probe.sh` left
+untouched so no earlier probe's provenance moves. Both recorded in §5.2.2 *before*
+any capped number existed — as was the correction that the members share **25**
+frames, not the 26 §5.2 claimed (`timax` 7200 / `tapfrq` 300 = 24 intervals + the
+initial write).
+
+**Scored once, on the completed set** (both `PROBE_OK`, 25 frames): `dt3` initiation
+PASS, primary singleness PASS (4 births vs the uncapped 8), secondary FAIL; `dt6`
+initiation PASS, primary FAIL (28 vs 8), secondary FAIL.
+
+**Then the counts were read before they were interpreted, and that is the finding.**
+Thirty of the thirty per-frame component counts are divisible by 4. §5.3 pre-registered
+a ring-or-cells test with both readings fixed in writing first — and **the test failed
+its own positive control**: by its letter the *reference*, already established as one
+gust-front ring in eight lobes, reads `CELLS`. The rule assumed a **circular** annulus;
+the ring is square-ish (axis lobes 6.83 km, diagonal lobes 8.95 km, ratio 1.31). The
+test therefore returns nothing.
+
+**What does decide it is the configuration, not a rule.** `irandp=0`, a centred bubble,
+a square domain ⇒ exact four-fold symmetry ⇒ every feature appears as 4 or 8 copies,
+and the output confirms it **to the decimal** (dt6 has eight components at r=25.14 km,
+all 5.99 km² and all peak 16.90 m/s). Eight independent cells cannot agree to two
+decimals on area *and* peak. `n_updrafts` counts copies, the inflation factor is per
+feature (4 or 8), so §5.2's per-frame comparison is **void** — a judgement made after
+seeing the data and flagged as one. Orbit-counting is **not** promoted as the fix: the
+reference's one ring gives two orbits, so it over-counts the same way. Bounded
+statement only: distinct features ≤ count / 4, an upper bound.
+
+**Verdict: the control is NOT delivered, and the blocker is the instrument plus the
+symmetry, not the cap.** Nothing measured says the CIN knob failed — it says this
+experiment cannot see whether it worked. **Owed before any third capped member**
+(pre-registered): break the symmetry (the T4 `var7` seed hook, or shear) **or** build
+an instrument that does not count copies. No third member until one exists.
+
+**§5.2.1's reproducibility check PASSES exactly as predicted:** 24 of 25 frames per
+member bitwise identical on every shared variable, the single exclusion being the raced
+copy of `cm1out_000001.nc` — unreadable, the contended file, named in advance.
+`compare_raced.py` now reports an unreadable frame and keeps it in the denominator
+instead of crashing. That closes the race's one physics hazard (a truncated
+`input_sounding` read would have shown up as differing fields).
+
+**Logged closed:** peak `w` sits at the undiluted parcel ceiling in all three runs
+(61.55 / 63.14 / 59.92 vs √(2·1858) = 61.0) at z = 11.25–12.75 km, well below the
+`zd` = 15 km damping layer — not a damping artifact, and non-blocking either way.
+
+**Lessons.** (i) A control that fails when it should pass invalidates the *test*, not
+the subject — the fourth control-design failure in this project's record, and the first
+where the flawed control caught itself. (ii) An exactly symmetric configuration makes
+every count a count of copies; no threshold on such a count means what it says. (iii)
+`/tmp` durability is now a documented property of this box, not a discovery to make
+twice.
