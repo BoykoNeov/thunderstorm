@@ -114,9 +114,12 @@
       }
       #sbLabel { font-variant-numeric: tabular-nums; margin-top: 2px; }
       #sbNote { color: #46707c; }
-      /* ?stats perf readout (fps + per-pass GPU ms) — bottom-right, hidden by default */
+      /* ?stats perf readout (fps + per-pass GPU ms) — top centre, between the
+         HUD and the layer panel (bottom-right collided with the control bar);
+         hidden unless ?stats. */
       #stats {
-        position: absolute; right: 12px; bottom: 12px;
+        position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+        max-width: 44vw; white-space: normal; text-align: center;
         font: 11px/1.4 ui-monospace, monospace; color: #2b3a3d;
         background: rgba(255, 255, 255, 0.55); border-radius: 6px;
         padding: 5px 8px; pointer-events: none; display: none;

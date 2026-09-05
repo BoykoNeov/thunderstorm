@@ -19,6 +19,7 @@ log (the charter's former status section, verbatim) is `STATUS.md`.
 | `phase2-plan-2026-07-20.md` | Phase 2 — scenario system, selectable layers, radar plan view (COMPLETE). |
 | `phase3-plan-2026-07-20.md` | Phase 3 — flat convective regimes: supercell, seed, multicell (IN PROGRESS; §10 amendment points to the 2026-09-02 plan). |
 | `plan-diorama-beauty-2026-07-17.md` | Diorama visual plan. |
+| `plan-diorama-perf-2026-09-05.md` | Diorama performance pass — what was measured and fixed (36 → 3.4 ms march), the verification recipe, and the ranked remaining plan written for a lesser model. |
 
 ## Decision records and reviews
 

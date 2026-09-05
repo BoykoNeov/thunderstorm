@@ -193,6 +193,15 @@ lever (cost falls with its square; drawn pixels stay exactly as authored), same 
 Black Hole Lab; HUD canvas keeps true DPR. Optional cheap win if ever needed: half-res
 volume pass + bilateral upsample. Not designed in until measured.
 
+**Amended 2026-09-05 (perf pass, `plan-diorama-perf-2026-09-05.md`):** the march
+was measured, and ~2.5× of its cost was not the design's "only inside the small
+volume interior" at all — an ANGLE/D3D11 branch flattening (implicit-LOD `texture()`
+inside a per-pixel `if`) ran the sun march for every sample of every in-box pixel.
+With explicit-LOD fetches, the haze reading the baked cache and a step-length floor,
+the hero frame's march is 3.4 ms at 3200×1800 (was 36). Render scale is now also
+available as `?rs=auto` (dynamic, 0.5–1, holds the fps cap). The half-res volume
+pass remains the next lever if a target GPU needs it.
+
 ## 7. UI / education layer (thin at first)
 
 - Storm-time clock (frames carry storm-time stamps; playback speed is a pure UI

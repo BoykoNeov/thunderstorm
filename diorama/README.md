@@ -21,7 +21,7 @@ load-bearing for this — comments at both ends guard the rename.
 
 ```
 npm install
-npm run dev     # http://localhost:5173  (?frame=NNN, ?rs=0.5 render scale)
+npm run dev     # http://localhost:5173  (?frame=NNN, ?rs=0.5 render scale, ?rs=auto)
 npm test        # CPU mirrors: quantization decode, camera math, placement
 npm run build   # typecheck + production build
 ```
@@ -73,8 +73,10 @@ middle-drag awkward. The target is clamped to the diorama (ground floor at
 z = 0, up to 40 km, ±60 km horizontally) so a stray drag cannot lose the storm.
 
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
-the quality/fps lever), `?stats` (expose `window.__stats` rAF/upload pacing
-for the verification driver), `?az=45&el=11&d=145&fov=34` (starting view,
+the quality/fps lever; **`?rs=auto`** holds the fps cap by moving it between
+0.5 and 1 — the lesser-GPU mode), `?stats` (bottom-right readout of fps and
+per-pass GPU ms, plus `window.__stats` for the probe driver), `?anim=0` (freeze
+the wall-clock animation so two captures of one URL are bit-comparable), `?az=45&el=11&d=145&fov=34` (starting view,
 deg/km), `?seed=1337` (staging), `?ts=0` (disable tilt-shift), `?sx=2`
 (uniform display scale of the storm volume — proportions stay true; render-time
 only, clamped 1–3; default 2 — the HUD states it, staging stays 1×),
@@ -183,6 +185,53 @@ stays true at any zoom, so it supersedes the ratio.
 The clock is prefixed **"storm time"** — it counts simulated time in the storm,
 never wall time; the speed select is a pure multiplier over it (charter).
 
+### Performance (2026-09-05 perf pass)
+
+Measured with per-pass GPU timers (`?stats`; `tools/statprobe.mjs` prints them —
+`EXT_disjoint_timer_query_webgl2`, an EMA per pass). Hero frame 150 of
+`single_cell_500m`, default view, RTX 5090:
+
+| Config | 3200×1800 (`rs=2`) composite march | notes |
+|---|---|---|
+| before the pass | 36 ms | the same on an EMPTY frame — cost did not depend on cloud content |
+| explicit-LOD fetches | 14.5 ms | image bit-identical |
+| + haze reads the baked sun cache | 6.2 ms | A/B `?hazelc=0`: 0.12 % of pixels, mean 1/255 |
+| + step-length floor | 3.4 ms | A/B `?step=0`: 1–8 % of pixels, mean 1/255 |
+
+At 1600×900 the whole frame is now ~2.5 ms of GPU (was ~10), so the viewer is
+vsync-bound on this machine and has ~6× more headroom for lesser GPUs.
+
+**The rule that found 2.5× of it:** every fetch in a fragment shader is
+`textureLod(…, 0.0)`, never `texture(…)`. Implicit-LOD sampling needs
+screen-space derivatives, and ANGLE's D3D11 backend cannot sample with
+derivatives inside a per-pixel branch, so it *flattens* the branch — the 28-step
+sun march ran for every primary sample of every pixel in the box, cloud or not
+(diagnosed with `?debug=cost`, a heat map of sun-march samples per pixel, and the
+fact that cost was linear in `?sun=` even where the heat map was black). All
+volume/cache/noise/g-buffer textures have one mip level, so LOD 0 is the identical
+filter.
+
+Instruments and knobs (all presentation/perf, never physics):
+
+| Param | Default | Effect |
+|---|---|---|
+| `?stats` | off | bottom-right readout: fps, drawn size, render scale, per-pass GPU ms; `window.__stats.gpu` |
+| `?debug=cost` | off | heat map of sun-march samples per pixel (black → blue → green → red → white) |
+| `?steps=` | 280 | primary march samples per ray |
+| `?sun=` | 28 | sun-march samples per shaded sample (also the cache bake) |
+| `?step=` | `auto` | primary step-length floor, display km; `auto` = box horizontal extent / steps (no ray coarser than the shipped worst case); `0` = the fixed-count march |
+| `?hazelc=` | 1 | haze-only samples read the baked sun cache (one fetch) instead of marching; `0` = live march everywhere |
+| `?dither=` | `ign` | march start-offset pattern: interleaved gradient noise (7 % less low-frequency residue vs the converged still) or `hash` (the original white noise) |
+| `?rs=auto` | off | dynamic render scale 0.5–1 from the measured GPU frame time (rAF-spacing fallback where the timer extension is missing) |
+| `?vram=` | 300 | GPU byte budget (MB) for the brick ring: slot count + read-ahead follow it (`budget.ts`); the 63 MB supercell bricks get 10 slots instead of 24 |
+| `?anim=0` | on | freeze the wall-clock animation (ripples, veil, precip) for bit-comparable captures |
+| `?fps=` | 60 | frame-rate cap. Fixed 2026-09-05: it used to render every third rAF tick on a 144 Hz display (48 fps); now it tracks the cap on average |
+
+Streaming: bricks over 16 MB upload as z-slabs over consecutive rAFs (the
+supercell's worst frame gap went 222 → 28 ms), and gunzip runs in a pool of
+workers (half the cores, max 4). Full record + the remaining plan:
+`docs/plan-diorama-perf-2026-09-05.md`.
+
 ### Beauty knobs (2026-07-18 beauty pass, steps 0–6)
 
 Every visual-beauty effect is presentation-only (never physics) and each is
@@ -190,7 +239,7 @@ disableable from the URL for A/B comparison. Defaults are what ship.
 
 | Param     | Default | Effect |
 |-----------|---------|--------|
-| `?lc=`    | `0`     | Baked sun-transmittance light cache (28-step sun march → 1 fetch). Correct but no measured fps win on this GPU; **off by default** because half-res trilinear softened the shadow terminator (`lc=1` re-enables the cache). |
+| `?lc=`    | `0`     | Use the baked sun-transmittance cache for **cloud** samples too (the cache is always baked now and serves the haze — see Performance). Off: the half-res 8-bit cache stair-steps dense cores; the live 28-step march inside cloud is cheap since the 2026-09-05 fix. |
 | `?msw=`   | `0.55`  | Multi-scatter octave weight — lifts shadowed cloud cores from black to luminous grey (`msw=0` = single scatter). |
 | `?msa=`   | `0.35`  | Per-octave optical-depth attenuation for the multi-scatter octaves. |
 | `?silver=`| `0.15`  | Silver-lining forward spike on thin sun-facing edges (`silver=0` off). |
@@ -254,3 +303,8 @@ pans across the ground while middle-drag changes height (`camera.ts::panGround`
 in the accumulation `ViewKey`, the same trap slice 5a hit with the cut plane.
 **Slice 5 is complete.**
 Slice 6 = lightning event list (blocked on the Phase 4 pipeline exporter).
+Perf pass (2026-09-05): composite march 36 → 3.4 ms at 3200×1800 on the hero
+frame (explicit-LOD fetches un-flattened the sun-march branch; haze reads the
+baked cache; step-length floor), per-pass GPU timers, `?rs=auto`, GPU byte
+budget + slab uploads for big bricks, decoder pool, fps-cap fix — see
+"Performance" above and `docs/plan-diorama-perf-2026-09-05.md`.

@@ -244,6 +244,7 @@ uniform float uFar;
 uniform float uTime;          // wall seconds — water ripple only, never physics
 
 uniform float uSteps;         // primary march step count
+uniform float uMinStep;       // ?step=: floor on the primary step length, display km (0 = fixed count)
 uniform float uExposure;
 uniform float uTonemap;       // 1 = AgX, 0 = ACES fit (?tm=aces)
 
@@ -435,6 +436,19 @@ float hash12(vec2 p) {
   return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+// March start-offset dither (?dither=): interleaved gradient noise (Jimenez,
+// "Next Generation Post Processing in Call of Duty: Advanced Warfare", 2014)
+// is a screen-space pattern whose per-pixel residue is high-frequency — the
+// same error energy as white noise, but arranged so the eye reads fine grain
+// instead of blotches. hash12 is the white noise the viewer shipped with.
+// Either averages to the same still under idle accumulation (uJitter walks
+// the offset through [0,1) regardless of the base pattern).
+uniform float uDither;
+float ditherAt(vec2 p) {
+  if (uDither > 0.5) return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y));
+  return hash12(p);
+}
+
 // -- cross-section field + colormap (slice 5a) ---------------------------------
 // The sliced field is the RAW decoded data — NO erosion/veil noise, no phase
 // shading: a cross-section must report what the simulation holds, not the
@@ -522,7 +536,7 @@ void main() {
   if (uLayer > 0.5 && uLayer < 1.5 && t1 > t0) {
     float N = uSteps;
     float dt = (t1 - t0) / N;
-    float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
+    float t = t0 + dt * fract(ditherAt(gl_FragCoord.xy) + uJitter);
     for (int i = 0; i < 512; i++) {
       if (float(i) >= N || t >= t1) break;
       dbzPeak = max(dbzPeak, dbzAt(ro + rd * t));
@@ -539,7 +553,7 @@ void main() {
   if (uLayer > 1.5 && uLayer < 2.5 && t1 > t0) {
     float N = uSteps;
     float dt = (t1 - t0) / N;
-    float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
+    float t = t0 + dt * fract(ditherAt(gl_FragCoord.xy) + uJitter);
     for (int i = 0; i < 512; i++) {
       if (float(i) >= N || t >= t1) break;
       float w = wAt(ro + rd * t);
@@ -551,11 +565,15 @@ void main() {
   vec3 acc = vec3(0.0);
   float T = 1.0;
   if (uLayer < 0.5 && t1 > t0) {
-    float N = uSteps;
-    float dt = (t1 - t0) / N;
+    // Step length: (span / uSteps), but never finer than uMinStep — a ray that
+    // clips a box corner or hits the ground early otherwise spends the full
+    // 280 samples on a few km. The longest rays are unchanged; short rays get
+    // fewer, equally-spaced samples (main.ts derives the floor from the box).
+    float dt = max((t1 - t0) / uSteps, uMinStep);
+    float N = min(uSteps, ceil((t1 - t0) / dt));
     // per-pixel jitter, offset per accumulation pass so the grain averages out
     // when the view is held still (uJitter=0 ⇒ bit-for-bit the live image)
-    float t = t0 + dt * fract(hash12(gl_FragCoord.xy) + uJitter);
+    float t = t0 + dt * fract(ditherAt(gl_FragCoord.xy) + uJitter);
     float cosSun = dot(rd, uSunDir);
     // multi-scatter octaves (Wrenninge-style): octave i sees optical depth
     // scaled by uMsA^i (pow of the cached transmittance) and phase eccentricity

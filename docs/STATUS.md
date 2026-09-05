@@ -827,3 +827,49 @@ control separates one member without establishing anything about the others.
   axis's extent is the full domain by construction" as a *valid measured route* rather
   than an unmeasured placeholder. The SVT static-centre rule is easier on a periodic
   axis, not harder. Owed before C2 ships as a package, not before T6. Not started.
+
+## Diorama performance pass — 2026-09-05
+
+Scope: "improve project visuals/performance, especially the diorama". Record +
+remaining plan: `docs/plan-diorama-perf-2026-09-05.md`. Commits 6191717, ff0f64f
+and the follow-up (dither / `?rs=auto` / step floor / docs).
+
+**Instrument first.** Per-pass GPU timers (`EXT_disjoint_timer_query_webgl2`,
+`diorama/src/gputimer.ts`, `?stats`) replaced rAF spacing as the cost signal — the
+rAF numbers were vsync-quantized and had a 7–111 ms spread on one config.
+
+**Finding 1 (2.5×): a flattened branch.** The composite march cost 36 ms at
+3200×1800 on the hero frame — and the same 36 ms on a *completely empty* frame with
+the haze off, linear in the sun-step count (2 → 6.5 ms, 64 → 81 ms) while a new
+`?debug=cost` heat map showed zero sun marches executing. `texture()` (implicit
+LOD) inside a per-pixel `if` makes ANGLE's D3D11 backend flatten the branch, so the
+28-step sun march ran for every sample of every in-box pixel regardless of content.
+Every fragment fetch is now `textureLod(…, 0.0)` (one mip level → identical filter):
+36 → 14.5 ms, bit-identical on 2 of 3 views (71 px within 2/255 on the third). The
+July "light cache is marginally slower" measurement was the same flattening.
+
+**Finding 2 (2.3×): the haze deck.** `rays=0` → 5.5 ms: the sunlit haze's samples
+(bottom ~30 % of the box) each ran the sun march; the cloud was cheap. Haze-only
+samples now read the always-baked half-res cache (one fetch): 14.5 → 6.2 ms, A/B
+0.12 % of pixels, mean 1/255, confined to the shadowed haze.
+
+**Finding 3 (1.6×): short rays.** A step-length floor at the longest ray's step
+(`?step=auto`, default): 6.2 → 3.4 ms; A/B 1–8 % of pixels, mean 1/255, diffuse.
+
+**Streaming/pacing.** GPU byte budget for the ring (`budget.ts`; supercell bricks
+10 slots ≈ 630 MB instead of 1.5 GB), z-slab uploads (worst rAF gap 222 → 28 ms),
+gunzip worker pool, fps-cap fix (rendered every third tick on the 144 Hz panel:
+48 fps at a 60 cap; now 16.65 ms mean). `?rs=auto` dynamic render scale (settles at
+0.5 under a 4× artificial load; 1.0 on normal content) — **off by default, owner
+call**. `?dither=ign` (7 % less low-frequency residue than the hash). `?anim=0` for
+bit-comparable captures. 150/150 tests.
+
+**End state:** hero frame 1600×900 whole GPU frame ~2.5 ms (was ~10); zoomed
+65 → 6.7 ms at 2×. **Owner calls:** accept/revert the three measured-near-identity
+defaults (`hazelc`, `step`, `dither`); `?rs=auto` as the shipped default; a coarser
+supercell web tier (pipeline task, own go).
+
+**Lesson.** A cost that does not move with content is not a content cost. The
+empty-frame control (frame 0) exposed it in one probe; without a control the July
+pass concluded "the shadow march is not the bottleneck" from a true measurement
+of a flattened shader.

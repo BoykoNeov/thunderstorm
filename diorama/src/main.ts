@@ -9,6 +9,7 @@
 // Design: docs/design-diorama-web-viewer-2026-07-16.md §2, §4, §5.2, slice 3.
 
 import { ACC_CAP, jitterSeq, nextCount, sameView, type ViewKey } from "./accum";
+import { AutoScaler } from "./autoscale";
 import {
   basis,
   clampOrbit,
@@ -106,7 +107,12 @@ const sbLabel = document.getElementById("sbLabel") as HTMLDivElement;
 const statsEl = document.getElementById("stats") as HTMLDivElement;
 
 const params = new URLSearchParams(location.search);
-const renderScale = Number(params.get("rs") ?? "1") || 1;
+// render scale: the quality/fps lever (cost ∝ pixels). ?rs=auto holds the fps
+// cap by moving the scale between 0.5 and 1 from the measured frame cost
+// (autoscale.ts) — the lesser-GPU mode; a number pins it (rs=2 supersamples).
+const rsParam = params.get("rs") ?? "1";
+const rsAuto = rsParam === "auto";
+let renderScale = rsAuto ? 1 : Number(rsParam) || 1;
 const collectStats = params.has("stats");
 // GPU byte budget for the rgba ring (?vram=MB; see the streaming envelope above)
 const vramMB = Number(params.get("vram"));
@@ -117,6 +123,18 @@ const ringBudget = Number.isFinite(vramMB) && vramMB > 0 ? Math.max(64, vramMB) 
 // without editing the shader — never lower the defaults from a single probe.
 // ?debug=cost paints a per-pixel sun-march sample count heat map (perf diagnostic)
 const debugMode = params.get("debug") === "cost" ? 1 : 0;
+// march start-offset dither: `ign` = interleaved gradient noise (Jimenez 2014,
+// a structured screen-space pattern whose residue is high-frequency and reads
+// as fine grain), `hash` = the white-noise hash the viewer shipped with. Both
+// average to the same converged still under idle accumulation.
+const ditherIgn = (params.get("dither") ?? "ign") !== "hash";
+// ?step=: primary-march step-length floor in DISPLAY km (0 = the fixed-count
+// march the viewer shipped with). `auto` (default) = the longest in-box ray's
+// step at uSteps (box horizontal extent / steps), so no ray samples coarser
+// than the shipped worst case while short rays stop spending 280 samples on a
+// few km: march −38 % on the hero frame, A/B mean difference 1/255 over 1–8 %
+// of pixels (jitter-level; captures in the 2026-09-05 perf record).
+const stepParam = params.get("step") ?? "auto";
 const stepsParam = Math.min(512, Math.max(8, Math.round(Number(params.get("steps") ?? "280") || 280)));
 const sunSteps = Math.min(64, Math.max(2, Math.round(Number(params.get("sun") ?? "28") || 28)));
 const stagingSeed = Number(params.get("seed") ?? "1337") || 1337;
@@ -272,7 +290,10 @@ async function start() {
   const floatOK = !!gl.getExtension("EXT_color_buffer_float");
   const accEnabled = accumOn && floatOK;
   // per-pass GPU timers (?stats only — the query objects are not free)
-  const gpu = new GpuTimer(gl, collectStats);
+  const gpu = new GpuTimer(gl, collectStats || rsAuto);
+  // ?rs=auto: GPU-time mode when the timer extension exists, else the
+  // rAF-spacing fallback (down-only with periodic probes — see autoscale.ts)
+  const autoScaler = rsAuto ? new AutoScaler(gpu.available ? "gpu" : "raf") : null;
   statsEl.style.display = collectStats ? "block" : "none";
   const progGeo = compileProgram(gl, GEO_VERT, GEO_FRAG);
   const progVol = compileProgram(gl, VERT, FRAG);
@@ -835,9 +856,14 @@ async function start() {
   // the same cloud shown bigger — not a denser one.
   gl.uniform1f(loc(progVol, "uExtScale"), EXT_SCALE / stormScale);
   gl.uniform1f(loc(progVol, "uSteps"), stepsParam);
+  const minStep = stepParam === "auto"
+    ? Math.max(box.max.x - box.min.x, box.max.y - box.min.y) / stepsParam
+    : Math.max(0, Number(stepParam) || 0);
+  gl.uniform1f(loc(progVol, "uMinStep"), minStep);
   gl.uniform1i(loc(progVol, "uSunSteps"), sunSteps);
   gl.uniform1f(loc(progVol, "uDebug"), debugMode);
   gl.uniform1f(loc(progVol, "uHazeCache"), hazeCache ? 1 : 0);
+  gl.uniform1f(loc(progVol, "uDither"), ditherIgn ? 1 : 0);
   gl.uniform1f(loc(progVol, "uExposure"), 0.75);
   gl.uniform1f(loc(progVol, "uShadowKm"), 15 * stormScale);
   gl.uniform1i(loc(progVol, "uNoise"), 5);
@@ -964,6 +990,7 @@ async function start() {
     gpu: {} as Record<string, number>, // EMA GPU ms per pass (see gputimer.ts)
     gpuSamples: 0,
     fps: 0, // EMA of rendered frames per second
+    rs: 1, // current render scale (moves under ?rs=auto)
   };
   let fpsEma = 0;
   let lastHudStats = 0;
@@ -995,7 +1022,7 @@ async function start() {
     const rawDtMs = now - lastNow;
     const dtWall = Math.min(rawDtMs / 1000, 0.1); // clamp tab-away gaps
     lastNow = now;
-    if (collectStats) {
+    if (collectStats || rsAuto) {
       gpu.poll(); // harvest last frame's queries before issuing new ones
       const inst = 1000 / Math.max(rawDtMs, 0.01);
       fpsEma = fpsEma === 0 ? inst : fpsEma + (inst - fpsEma) * 0.1;
@@ -1335,6 +1362,21 @@ async function start() {
       }
       gpu.end();
       stats.drawn++;
+
+      // dynamic render scale: decide only on frames where the heavy passes
+      // ran (a converged still skips the march and would read as free).
+      if (autoScaler && !converged) {
+        const measured = autoScaler.mode === "gpu"
+          ? (gpu.ms.get("geo") ?? 0) + (gpu.ms.get("march") ?? 0) + (gpu.ms.get("precip") ?? 0) + (gpu.ms.get("post") ?? 0)
+          : rawDtMs;
+        // the target is the cap, but a display slower than the cap is the real ceiling
+        const target = Math.max(minInterval, rafPeriod);
+        const next = autoScaler.update(measured, target, now);
+        if (next !== null) {
+          renderScale = next;
+          resize();
+        }
+      }
     }
 
     // 6. UI readout
@@ -1371,11 +1413,14 @@ async function start() {
       stats.gpu = gpu.snapshot();
       stats.gpuSamples = gpu.count;
       stats.fps = fpsEma;
+      stats.rs = renderScale;
       // ?stats HUD line, refreshed 4×/s (a per-frame textContent write forces layout)
       if (now - lastHudStats > 250) {
         lastHudStats = now;
         statsEl.textContent =
-          `${fpsEma.toFixed(0)} fps · ${canvas.width}×${canvas.height} · ${gpu.hudLine()}` +
+          `${fpsEma.toFixed(0)} fps · ${canvas.width}×${canvas.height}` +
+          (rsAuto ? ` · rs auto ${renderScale.toFixed(2)} (${autoScaler!.mode})` : ` · rs ${renderScale}`) +
+          ` · ${gpu.hudLine()}` +
           (converged ? " · converged (march skipped)" : "");
       }
     }
