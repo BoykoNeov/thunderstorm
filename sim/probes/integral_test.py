@@ -33,6 +33,13 @@ The primary/secondary split is topological, not metric: the primary is the updra
 component connected to the domain centre (the bubble is centred; zero shear, so it does
 not translate), and secondary is everything else. No radius is chosen, so no radius can
 be tuned. Split-free totals are reported alongside and the verdict must survive both.
+
+READ `has_primary` NARROWLY. It means "some updraft column >= W_UPDRAFT lies within one
+cell of the domain centre" -- it does NOT mean "the pulse cell is alive". The mask is
+column-max w, so a mature cell whose downdraft has opened underneath it leaves this
+category while still producing hundreds of km2 of updraft (t5s_capped_dt6 loses its
+centre component at t=60 min with A_tot still 495 km2). Nothing in this script dates a
+cell's death, and section 5.6 does not claim it does.
 """
 import os
 import sys

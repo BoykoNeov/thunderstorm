@@ -895,7 +895,15 @@ and committed (f913be4) before the script existed.
    copy-stability of the reduction is measured, not argued.
 3. **The objects are §5.2's own.** At §5.3's three named frames the instrument's total
    area equals the sum of `ring_test.py`'s component areas exactly: 119.76 km² (8 comps),
-   115.77 (12), 431.14 (48).
+   115.77 (12), 431.14 (48). **Recorded weaker than it looks:** `integral_test.py`
+   imports `ring_test.components()`, and both build the mask from the same
+   `classify_t5` constants with the same connectivity, so exact agreement is close to
+   arithmetically forced. The gate confirms the *reduction* was not fumbled; it is not
+   independent evidence that the object set is the one `score_capped.py` counted. The
+   check that does bite is against a **different script's** recorded numbers, and it
+   passes: the instrument's kept-component counts at those frames are 8 / 12 / 48,
+   equal to the `n_updrafts` values `score_capped.py` wrote and §5.3 tabulated
+   (`t5s_neutral_pc` 120:8, `dt3` 105:12, `dt6` 95:48).
 
 **The headline, over §5.2's own window (t = 75 … 120 min, 10 frames).**
 
@@ -911,12 +919,19 @@ single-cell control at this CAPE with zero shear.** It is a physics result about
 *design*, not about the code, and not about the CIN generator.
 
 **The confound §5.2 feared does not arise, and that is measured rather than assumed.**
-The primary — the updraft component connected to the domain centre — is **absent in every
-frame of the window in all three runs**: the pulse cell dies at t = 70 min in the
-reference, t = 70 in `dt3`, t = 60 in `dt6`. So the split and split-free readings are
-*identical numbers*, not merely consistent ones (`R_A0` = `R_A`, `R_F0` = `R_F`), and no
-part of the verdict rests on the topological split. The split machinery turned out to be
-unnecessary; the fact that it was unnecessary is a measurement.
+The centre-connected component is **absent in every frame of the window in all three
+runs** — last seen at t = 65 min in the reference and in `dt3`, t = 55 in `dt6`. So the
+split and split-free readings are *identical numbers*, not merely consistent ones
+(`R_A0` = `R_A`, `R_F0` = `R_F`), and **no part of the verdict rests on the topological
+split.** That is the load-bearing statement and it is fully supported.
+
+**Stated narrowly on purpose.** "No centre-connected component" is **not** "the pulse
+cell died". The mask is column-max `w` ≥ 10 m/s and the split reads the four cells at the
+domain centre, so a mature cell whose core has tilted or whose downdraft has opened
+underneath it drops out of the *primary* category while it is still very much alive —
+`dt6` loses its centre component at t = 60 while `A_tot` is still 495 km². What the code
+supports is "no updraft column ≥ 10 m/s within ~1 km of the domain centre", and that is
+all that is claimed. Nothing here dates the pulse cell's death.
 
 **Post-hoc robustness (flagged as such, and it cannot create a verdict).** Restricting to
 the geometrically complete interior (r ≤ the inscribed radius, 89.41 km) leaves `dt3`

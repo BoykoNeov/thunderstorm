@@ -1000,10 +1000,14 @@ above it gains CAPE 2545 → 3226 J/kg, so a stronger storm makes a stronger col
 and triggers more along its gust front). The monotone dose–response is itself the
 evidence that the cap *bit*.
 
-Two supporting readings: the primary updraft is **absent in every frame of the window
-in all three runs** (the pulse cell dies at t = 70/70/60 min), so the split and
-split-free numbers are *identical*, and no part of the verdict rests on the
-primary/secondary split — measured, not assumed. And a post-hoc interior restriction
+Two supporting readings: the **centre-connected component** is absent in every frame of
+the window in all three runs, so the split and split-free numbers are *identical* and no
+part of the verdict rests on the primary/secondary split — measured, not assumed. Stated
+narrowly on purpose: what the code measures is "no updraft column ≥ 10 m/s within ~1 km
+of the domain centre", **not** "the pulse cell died" — a mature cell whose downdraft has
+opened underneath it leaves that category while still alive (`dt6` loses its centre
+component at t = 60 with `A_tot` still 495 km²). Nothing here dates the cell's death. And
+a post-hoc interior restriction
 (r ≤ the inscribed 89.41 km, flagged as post-hoc) leaves `dt3` unchanged and moves
 `dt6` to 2.43 / 2.56 — direction unchanged.
 
