@@ -374,6 +374,32 @@ python3 sim/probes/classify_t5.py --only sc,pc          # controls first
 python3 sim/probes/classify_t5.py --only sc,pc,a,b,c,c2
 ```
 
+### The capped control's instruments (T5s §§5.3–5.6)
+
+`ring_test.py` and `integral_test.py` are tracked for the same reason the configs
+are: they are what makes the arrangement and the amount measurable again.
+
+- **`ring_test.py`** — §5.3's pre-registered ring-vs-cells rule. It **failed its own
+  positive control** (it reads `CELLS` on the reference, which is one square-ish ring
+  in eight lobes) and therefore returns no verdict. Kept, not deleted: the failure is
+  part of the record, and its `components()` is imported by the instrument below.
+- **`integral_test.py`** — §5.5's copy-blind replacement, pre-registered in the plan
+  (commit f913be4) before it was written. The capped control's configuration is
+  exactly four-fold symmetric, so component *counts* are counts of copies with a
+  per-feature factor of 4 or 8; a whole-domain **integral** is exactly 4× a quadrant
+  integral regardless, so a direction-only comparison of integrated updraft area and
+  w-weighted area is valid under the symmetry. Three instrument gates run before any
+  number is read (symmetry residual, quadrant identity, and agreement with
+  `ring_test`'s object set) and all three came back exact zeros.
+
+```sh
+python3 sim/probes/integral_test.py     # reads the three runs; no new compute
+```
+
+Verdict (§5.6): both capped members **increased** secondary convection —
+`R_A` 1.42 / 3.06, `R_F` 1.60 / 3.24 — monotone in cap strength. The capped mixed
+layer fails as a single-cell control at this CAPE with zero shear.
+
 The classifier implements a **pre-registered** rule and no threshold in it may be
 moved to make a candidate come out a particular way — see its docstring and the
 doc's header. Its guards are gated by `pipeline/tests/test_classifier_t5.py`, which

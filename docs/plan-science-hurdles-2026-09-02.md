@@ -878,6 +878,98 @@ that is the only question §5.2 needed answered.
 
 ---
 
+### 5.6 RESULT — the cap did NOT suppress secondary convection; it increased it, monotonically
+
+`sim/probes/integral_test.py` (tracked), output `runs/t5s_capped_clean/INTEGRAL_TEST.txt`.
+Run once, on the three runs already on disk, no new compute. §5.5's outcomes were fixed
+and committed (f913be4) before the script existed.
+
+**All three instrument gates pass, with exact zeros.**
+
+1. **Symmetry is exact, not approximate.** `max |w − mirror(w)|` over every frame of
+   every run is **0.000e+00** under x-flip, y-flip *and* transpose (peak |w| 59.9–63.1 m/s).
+   §5.4(b)'s "every feature appears as 4 or 8 copies" is no longer an inference from
+   coincidental areas — the field is bitwise invariant under the symmetry group.
+2. **Quadrant identity holds to the bit.** whole-domain integral − 4 × one-quadrant
+   integral is **0.000e+00** for both area and flux, every frame, every run. The
+   copy-stability of the reduction is measured, not argued.
+3. **The objects are §5.2's own.** At §5.3's three named frames the instrument's total
+   area equals the sum of `ring_test.py`'s component areas exactly: 119.76 km² (8 comps),
+   115.77 (12), 431.14 (48).
+
+**The headline, over §5.2's own window (t = 75 … 120 min, 10 frames).**
+
+| member | ΣA_sec km² | `R_A` | ΣF_sec m s⁻¹ km² | `R_F` | verdict |
+|---|---|---|---|---|---|
+| `t5s_neutral_pc` (reference) | 894.2 | 1.000 | 13 263.9 | 1.000 | — |
+| `t5s_capped_dt3` (CIN −60) | 1 273.5 | **1.424** | 21 182.9 | **1.597** | **NOT SUPPRESSED** |
+| `t5s_capped_dt6` (CIN −82) | 2 738.5 | **3.062** | 42 920.3 | **3.236** | **NOT SUPPRESSED** |
+
+Both ratios exceed 1 for both members, so this is §5.5's **first** outcome, the one
+written first because it is the uncomfortable one. **The capped mixed layer fails as a
+single-cell control at this CAPE with zero shear.** It is a physics result about the
+*design*, not about the code, and not about the CIN generator.
+
+**The confound §5.2 feared does not arise, and that is measured rather than assumed.**
+The primary — the updraft component connected to the domain centre — is **absent in every
+frame of the window in all three runs**: the pulse cell dies at t = 70 min in the
+reference, t = 70 in `dt3`, t = 60 in `dt6`. So the split and split-free readings are
+*identical numbers*, not merely consistent ones (`R_A0` = `R_A`, `R_F0` = `R_F`), and no
+part of the verdict rests on the topological split. The split machinery turned out to be
+unnecessary; the fact that it was unnecessary is a measurement.
+
+**Post-hoc robustness (flagged as such, and it cannot create a verdict).** Restricting to
+the geometrically complete interior (r ≤ the inscribed radius, 89.41 km) leaves `dt3`
+unchanged (1.424 / 1.597 — none of its convection is out there) and moves `dt6` from
+3.062 / 3.236 to **2.433 / 2.562**. §5.4(c)'s boundary material is real and it is all
+`dt6`'s, but it is not what makes `dt6` worse. Direction unchanged in both members.
+
+**The dose–response is monotone, and it is the evidence that the cap bit.** −60 J/kg
+gives 1.42×, −82 J/kg gives 3.06×. A knob that did nothing would not order its members
+by its own strength. Nothing here says the CIN generator (§3.1) failed — it says the
+mechanism §5.2 predicted **in advance** is what happened: the cap acts on surface-based
+parcels only, while the bubble parcel above it *gains* CAPE (2545 → 3226 J/kg at 6 K), so
+the capped storm is stronger, its cold pool is stronger, and it triggers more along its
+gust front. `dt6`'s secondary convection starts at **t = 50 min**, twenty-five minutes
+before the reference's t = 75, and its radial reach in the window runs from 15 km out
+past 125 km against the reference's 5–15 km.
+
+**§5.4's "weak evidence that the cap bit early and was then overrun" is CONTRADICTED and
+is withdrawn.** It rested on `dt3`'s counts of 1, 1, 1 at t = 75/80/85 against the
+reference's 4, 8, 8. The integrals at those same frames are `dt3` 111.8, 119.8, 51.9 km²
+against the reference's 27.9, 87.8, 87.8. At **t = 75 the capped run has four times the
+updraft area of the reference and one quarter of its component count** — the count is
+*anti-correlated* with the amount, because a fully connected annulus counts as 1 and a
+fragmented one counts as 4 or 8. That single frame is the clearest statement of why
+§5.2's criterion had to be replaced: `n_updrafts` was measuring the *fragmentation* of a
+ring, not the number of cells and not the amount of convection.
+
+**What §5.4's gate asked for is now discharged — and the answer removes the reason to
+spend it.** The gate was "no third capped member until the symmetry is broken **or** an
+instrument exists that does not count copies". The instrument exists, has passed three
+gates and has been read. Its verdict is that a stronger cap makes this worse, so a third
+capped member at any Δθ is not worth running: the design, not the setting, is what fails.
+**The clean single-cell control that `classify_t5.py` was written against must come from
+somewhere other than a capping inversion at this CAPE with no shear.** No option is
+proposed here and no go is asked for.
+
+**What this result does NOT say**, so it cannot be over-read later: it does not classify
+ring versus cells (§5.5 declined to build that, for want of a negative control); it does
+not count distinct features (§5.4's bound *distinct features ≤ count / 4* stands); it
+carries no multicell label; and it says nothing about the capped sounding in a **sheared**
+environment, where the symmetry does not exist and a cold pool does not close a ring.
+
+**Artefacts.** `runs/t5s_capped_clean/INTEGRAL_TEST.txt`; instrument
+`sim/probes/integral_test.py`, tracked for the same reason `ring_test.py` is.
+
+**Lesson.** *A count of connected components measures fragmentation, not quantity, and
+under a symmetry it measures neither.* The project already knew the first half — "component
+counting cannot tell N cells from one ring in N lobes" — and this is the frame where it
+inverted: fewer components, four times the convection. The fix was not a better classifier
+but a different reduction, and the reduction that survives a symmetry is the integral.
+
+---
+
 ## 6. Plan amendments (supersede the Phase 3 task table for T5/T6)
 
 | Task | Was | Now |

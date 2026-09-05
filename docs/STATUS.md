@@ -956,3 +956,75 @@ where the flawed control caught itself. (ii) An exactly symmetric configuration 
 every count a count of copies; no threshold on such a count means what it says. (iii)
 `/tmp` durability is now a documented property of this box, not a discovery to make
 twice.
+
+
+## Capped control — the copy-blind instrument, and the control DELIVERED as a negative
+
+2026-09-06. Full record: `docs/plan-science-hurdles-2026-09-02.md` §§5.5–5.6.
+Pre-registration commit f913be4, result commit follows it.
+
+**§5.4 left a gate**: no third capped member until either the symmetry is broken or an
+instrument exists that does not count copies. Two routes were considered and one was
+**rejected for a stated reason**: a shape-agnostic ring-vs-cells classifier has **no
+negative control available on disk** — an axisymmetric configuration cannot produce
+genuinely distinct cells, so nothing must read `CELLS` and the classifier could only
+ever be exercised on the side it is guaranteed to pass. That is the project's *control
+that cannot fail* mode, and it is why it was not built. Breaking the symmetry
+(`irandp=1` + `var7`) was priced at **three** members, not one — it destroys §5.2's
+one-variable design, so a new uncapped reference at the same seed is owed too — and it
+does not fix the instrument anyway, because a lumpy ring is still a ring.
+
+**What was built instead** turns on the exact wording of §5.4(b)'s defect: the copy
+factor is 4 or 8 **per feature**, which breaks *counts*, while a whole-domain
+**integral** is exactly 4× a one-quadrant integral regardless of how many features
+there are or where they sit. So a direction-only comparison of integrated quantities is
+valid under the symmetry, **on the data already on disk, with no new compute**.
+Precondition measured first: with `nx = ny = 180` the centre must fall *between* cells,
+and it does — 0.5000 cells from the nearest cell centre, coordinate mirror residual
+0.000e+00 on both axes.
+
+**Three instrument gates, all exact zeros.** `max |w − mirror(w)|` = 0.000e+00 under
+x-flip, y-flip and transpose on every frame of every run (so the four-fold symmetry is
+*bitwise*, not coincidental); whole-domain minus 4× quadrant = 0.000e+00 for area and
+flux; and the instrument's totals equal `ring_test.py`'s component-area sums exactly at
+§5.3's three named frames.
+
+**RESULT — §5.5's first-written outcome, the uncomfortable one.** Over §5.2's own
+window (t = 75…120 min): `t5s_capped_dt3` **R_A 1.424, R_F 1.597**; `t5s_capped_dt6`
+**R_A 3.062, R_F 3.236**. Both capped members produced **more** secondary convection
+than the uncapped reference, monotonically in cap strength. **The capped mixed layer
+fails as a single-cell control at this CAPE with zero shear** — a result about the
+*design*, not the code and not the CIN generator, and the mechanism is the one §5.2
+predicted in advance (the cap acts on surface-based parcels only; the bubble parcel
+above it gains CAPE 2545 → 3226 J/kg, so a stronger storm makes a stronger cold pool
+and triggers more along its gust front). The monotone dose–response is itself the
+evidence that the cap *bit*.
+
+Two supporting readings: the primary updraft is **absent in every frame of the window
+in all three runs** (the pulse cell dies at t = 70/70/60 min), so the split and
+split-free numbers are *identical*, and no part of the verdict rests on the
+primary/secondary split — measured, not assumed. And a post-hoc interior restriction
+(r ≤ the inscribed 89.41 km, flagged as post-hoc) leaves `dt3` unchanged and moves
+`dt6` to 2.43 / 2.56 — direction unchanged.
+
+**A retraction.** §5.4's "weak evidence that the cap bit early and was then overrun" is
+**withdrawn**. It rested on `dt3`'s component counts of 1, 1, 1 where the reference had
+4, 8, 8. The areas at those frames are 111.8, 119.8, 51.9 km² against 27.9, 87.8, 87.8:
+**at t = 75 the capped run has four times the updraft area and one quarter the component
+count.** A fully connected annulus counts as 1; a fragmented one counts as 4 or 8.
+
+**The gate is discharged, and the result removes the reason to spend it.** A third
+capped member at any Δθ is not worth running — the design fails, not the setting. The
+clean single-cell control `classify_t5.py` was written against has to come from
+somewhere other than a capping inversion at this CAPE with no shear. Nothing is
+proposed and no go is asked for.
+
+**Artefacts.** `runs/t5s_capped_clean/INTEGRAL_TEST.txt`; instrument
+`sim/probes/integral_test.py` (tracked).
+
+**Lesson.** A count of connected components measures **fragmentation, not quantity**,
+and under a symmetry it measures neither. The project already had the first half of
+this ("component counting cannot tell N cells from one ring in N lobes"); this is the
+frame where it inverted — fewer components, four times the convection. The fix was not
+a better classifier but a different *reduction*, and the reduction that survives a
+symmetry is the integral.

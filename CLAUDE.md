@@ -236,19 +236,33 @@ task records THERE; keep this table to one line per phase.
   route to a multicell *label*. Its three outcome branches are already fixed in
   docs/plan-science-hurdles-2026-09-02.md §4.2 and are **not to be renegotiated when it
   runs**.
-- **Capped single-cell control: RAN 2026-09-05/06 — NOT DELIVERED.** Both members
-  completed (25 frames each) and were scored once against the criteria fixed before
-  they ran: initiation **PASS** for both; singleness **fails**, and the *secondary*
-  criterion turned out **void**. The configuration is exactly symmetric (`irandp=0`,
-  centred bubble, square domain), so CM1 evolves it under four-fold symmetry and every
-  feature appears as 4 or 8 copies — confirmed to the decimal (eight components sharing
-  one area and one peak `w`). `n_updrafts` counts copies, so no threshold on it means
-  what it says. **The blocker is the instrument plus the symmetry, not the cap:** nothing
-  measured says the CIN knob failed, only that this experiment cannot see whether it
-  worked. **Owed before any third capped member** (pre-registered): break the symmetry
-  (the T4 `var7` seed hook, or shear) **or** build an instrument that does not count
-  copies. Bitwise reproducibility re-confirmed on the way (24/25 frames per member;
-  the one exclusion was predicted in advance). Record: plan §§5.2–5.4, docs/STATUS.md.
+- **Capped single-cell control: CLOSED 2026-09-06 — DELIVERED, as a negative.** Both
+  members ran (25 frames each) and initiation **PASSED** for both, but the singleness
+  criterion was **void as first written**: the configuration is exactly symmetric
+  (`irandp=0`, centred bubble, square domain), so CM1 evolves it under four-fold symmetry
+  and `n_updrafts` counts copies (4 or 8 **per feature** — not even a common factor).
+  §5.4 gated a third member behind "break the symmetry **or** build an instrument that
+  does not count copies". **The instrument was built** (`sim/probes/integral_test.py`,
+  pre-registered in the plan before it existed): counts break under the symmetry but a
+  whole-domain **integral** is exactly 4× a quadrant integral regardless, so a
+  direction-only comparison of integrated updraft area works **on the data already on
+  disk, with no new compute**. Three gates, all exact zeros — the field is *bitwise*
+  four-fold symmetric, whole-domain = 4× quadrant to the bit, and the object set matches
+  `ring_test.py` exactly. **Result: both capped members produced MORE secondary
+  convection than the uncapped reference** (area ratios 1.42 at CIN −60 and 3.06 at −82;
+  intensity-weighted 1.60 and 3.24), monotone in cap strength. **The capped mixed layer
+  fails as a single-cell control at this CAPE with zero shear** — a result about the
+  *design*, not the code and not the CIN generator, whose mechanism §5.2 had predicted in
+  advance (the cap acts on surface-based parcels only; the bubble parcel above it gains
+  CAPE 2545 → 3226 J/kg, so a stronger storm makes a stronger cold pool). A **third
+  capped member is therefore not worth running at any Δθ**, and the clean single-cell
+  control `classify_t5.py` wants must come from a different design. A ring-vs-cells
+  classifier was deliberately **not** built: an axisymmetric run cannot produce distinct
+  cells, so no frame on disk could ever fail it. §5.4's "the cap bit early then was
+  overrun" is **withdrawn** — at t = 75 min the capped run has 4× the updraft area and ¼
+  the component count. Bitwise reproducibility re-confirmed on the way (24/25 frames per
+  member; the one exclusion was predicted in advance). Record: plan §§5.2–5.6,
+  docs/STATUS.md.
 
 - **Squall line (C2): KEEP.** It does not retire with T5s, so T5 §11.7's crop-box
   hazard is **live work owed before C2 can ship as a package** (not before T6).
