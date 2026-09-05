@@ -600,6 +600,75 @@ nothing in §5.2 changes except the count.
 *completed* clean set; the raced set remains a reproducibility check only; an
 interrupted attempt is not a dataset and is not scored, in either direction.
 
+### 5.3 The capped control RAN — and the reading of it is pre-registered here, before the discriminating test
+
+**Scored once, on the completed clean set** (both members `PROBE_OK`, 25 frames each,
+`runs/t5s_capped_clean/SCORE.txt`). §5.2's verdicts, verbatim and not revisited:
+
+| member | initiation | singleness, primary (births after 70 min) | singleness, secondary (per-frame) |
+|---|---|---|---|
+| `t5s_capped_dt3` (CIN −60) | **PASS** (peak w 63.1 m/s, cref 65.3 dBZ) | **PASS** — 4 (4 confirmed + 0 censored) vs uncapped 8 (0+8) | **FAIL** |
+| `t5s_capped_dt6` (CIN −82) | **PASS** (peak w 59.9 m/s, cref 64.2 dBZ) | **FAIL** — 28 (8+20) vs 8 (0+8) | **FAIL** |
+
+Per-frame updraft components after t = 70 min (capped / uncapped):
+
+- `dt3`  75:1/4 80:1/8 85:1/8 90:8/4 95:8/8 100:8/4 105:12/1 110:4/4 115:4/4 120:8/8
+- `dt6`  75:20/4 80:16/8 85:8/8 90:20/4 95:48/8 100:56/4 105:32/1 110:12/4 115:20/4 120:28/8
+
+**The signature that has to be tested before any of this is interpreted.** Thirty of
+those counts are divisible by 4 (the exceptions are two isolated 1s). This configuration
+is **axisymmetric by construction** — zero shear, a centred bubble, a square domain — and
+§5.2 already diagnosed exactly this for the reference: its 8 births were one gust-front
+ring resolved into eight lobes, "8.64 km from the nearest updraft, 18.08 m/s peak,
+5.99 km², identical to the decimal". If the capped members' components are arcs of one
+expanding ring, then `n_updrafts` is measuring a cold pool's circumference, not a number
+of cells — and §5.2's secondary criterion, which compares those counts frame by frame,
+is measuring the same thing. dt6's 56 would then be a *bigger* cold pool, which §5.2
+predicted in advance ("the capped storm may be stronger, not weaker": the 750 m bubble
+parcel gains CAPE 2545 → 3226 J/kg at 6 K).
+
+**The test, with its readings fixed before it runs.** For `t5s_neutral_pc` at t = 120
+(8 components), `dt3` at t = 105 (12) and `dt6` at t = 95 (48), list every updraft
+component's centroid distance from the domain centre, its area, and its peak
+column-max `w`, using `classify_t5.py`'s own definitions (column-max `w` ≥ its
+`W_UPDRAFT`, ≥ 4 km², 8-connectivity) and nothing new.
+
+- **RING** — at least **75 % of a frame's components have a centroid radius within
+  ±10 % of the median radius** of that frame. One expanding annulus, chopped into arcs.
+- **CELLS** — fewer than 75 % do. Objects at genuinely different distances from the
+  ignition point, which one ring cannot produce.
+- **MIXED** — a ring plus outliers. Then the ring members and the residual are reported
+  **separately**, and the residual count is the one the criterion should have used —
+  computed by this ±10 % rule, never by picking.
+
+**What each outcome means, decided now.**
+
+- **RING ⇒ §5.2's secondary criterion is VOID on an axisymmetric configuration.** It
+  counts arcs, not cells, for capped and uncapped alike. The control is **not
+  delivered**, and the reason is the *instrument*, not the cap. The design consequence:
+  a clean single-cell control needs either symmetry breaking (shear, or seeded
+  perturbations) or an instrument that does not count arcs — the cap is not what needs
+  fixing first, and no third capped member should be run until one of those exists.
+- **CELLS ⇒ the numbers mean what they say.** The cap did not suppress secondary
+  convection; at −82 J/kg it made it markedly worse, and §5.2's own reasoning says where
+  to look (the cap acts on surface-based parcels only, while the bubble parcel above it
+  gains buoyancy — a stronger storm, a stronger cold pool, more gust-front triggering).
+  The capped-mixed-layer knob then fails as a single-cell control **at this CAPE with no
+  shear**, which is a physics result about the design, not about the code.
+- **MIXED ⇒ both are reported**, and the criterion is re-read on the residual only.
+
+**One thing the ring cannot explain either way, and it is reported as weak.** `dt3`'s
+first three frames after the window opens are 1, 1, 1 against the reference's 4, 8, 8,
+and its births are 4 confirmed + 0 censored where the reference is 0 + 8 — a different
+*composition*, not just a different count. That is weak evidence the cap did bite early
+and was then overrun. It is recorded as weak and is not promoted to a finding.
+
+**Logged, cannot move the verdict.** All three peak `w` values sit at the undiluted
+parcel ceiling (√(2·1858) = 61.0 m/s vs 61.55 / 63.14 / 59.92 measured) — higher than
+unsheared cells usually reach. Worth one look at which level the maximum sits on (a
+spike at or above the `zd` = 15 km damping layer would explain it). Initiation is
+one-sided and `cref` clears its floor independently, so this cannot change a PASS.
+
 ---
 
 ## 6. Plan amendments (supersede the Phase 3 task table for T5/T6)
