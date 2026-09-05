@@ -21,7 +21,7 @@ load-bearing for this — comments at both ends guard the rename.
 
 ```
 npm install
-npm run dev     # http://localhost:5173  (?frame=NNN, ?rs=0.5 render scale, ?rs=auto)
+npm run dev     # http://localhost:5173  (?frame=NNN, ?rs=0.5 render scale, ?rs=1 pins it)
 npm test        # CPU mirrors: quantization decode, camera math, placement
 npm run build   # typecheck + production build
 ```
@@ -73,8 +73,9 @@ middle-drag awkward. The target is clamped to the diorama (ground floor at
 z = 0, up to 40 km, ±60 km horizontally) so a stray drag cannot lose the storm.
 
 URL params: `?frame=NNN` (start paused on a frame), `?rs=0.8` (render scale,
-the quality/fps lever; **`?rs=auto`** holds the fps cap by moving it between
-0.5 and 1 — the lesser-GPU mode), `?stats` (bottom-right readout of fps and
+the quality/fps lever; the default **`auto`** holds the fps cap by moving it
+between 0.5 and 1 on a GPU that cannot hold it, and stays at 1.0 on one that
+can — `?rs=1` pins full resolution), `?stats` (bottom-right readout of fps and
 per-pass GPU ms, plus `window.__stats` for the probe driver), `?anim=0` (freeze
 the wall-clock animation so two captures of one URL are bit-comparable), `?az=45&el=11&d=145&fov=34` (starting view,
 deg/km), `?seed=1337` (staging), `?ts=0` (disable tilt-shift), `?sx=2`
@@ -222,7 +223,7 @@ Instruments and knobs (all presentation/perf, never physics):
 | `?step=` | `auto` | primary step-length floor, display km; `auto` = box horizontal extent / steps (no ray coarser than the shipped worst case); `0` = the fixed-count march |
 | `?hazelc=` | 1 | haze-only samples read the baked sun cache (one fetch) instead of marching; `0` = live march everywhere |
 | `?dither=` | `ign` | march start-offset pattern: interleaved gradient noise (7 % less low-frequency residue vs the converged still) or `hash` (the original white noise) |
-| `?rs=auto` | off | dynamic render scale 0.5–1 from the measured GPU frame time (rAF-spacing fallback where the timer extension is missing) |
+| `?rs=` | `auto` | dynamic render scale 0.5–1 from the measured GPU frame time (rAF-spacing fallback where the timer extension is missing). Default since 2026-09-05 (owner call): it never leaves 1.0 on a GPU that holds the cap. `?rs=1` pins full resolution — do that for bit-comparable captures; `?rs=2` supersamples |
 | `?vram=` | 300 | GPU byte budget (MB) for the brick ring: slot count + read-ahead follow it (`budget.ts`); the 63 MB supercell bricks get 10 slots instead of 24 |
 | `?anim=0` | on | freeze the wall-clock animation (ripples, veil, precip) for bit-comparable captures |
 | `?fps=` | 60 | frame-rate cap. Fixed 2026-09-05: it used to render every third rAF tick on a 144 Hz display (48 fps); now it tracks the cap on average |
@@ -265,9 +266,11 @@ raymarch, which shades land/water with the same sun shadow march as the cloud
 miniature read. The backdrop is a real horizon — dark storm sky over an
 infinite sea, the slab floating above it — and the storm renders at 2×
 uniform scale by default (owner request; `?sx=1` for true size — extinction
-is divided by the scale so the bigger storm keeps the same look). 78 fps @
-1600×1000 during 300× playback, zero stalls (pre-rework platter; slab mesh is
-~2.4× the triangles, cost is G-pass raster only).
+is divided by the scale so the bigger storm keeps the same look). Cost after the
+2026-09-05 speed pass, measured with per-pass GPU timers: whole frame ~2.5 ms at
+1600×900 (was ~10), composite march 3.4 ms at 3200×1800 (was 36), 6.7 ms zoomed
+in (was 65); the 63 MB supercell's worst frame gap during playback is 28 ms (was
+222). Method and every A/B: `docs/plan-diorama-perf-2026-09-05.md` §A.6.
 Slice 4 (precipitation): rain streaks and hail pellets as instanced quads,
 gated in the vertex shader by the near-surface rain/graupelhail voxels of the
 same streamed 3D textures (no CPU readback), shadow-tinted and view-attenuated

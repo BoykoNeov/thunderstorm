@@ -110,7 +110,11 @@ const params = new URLSearchParams(location.search);
 // render scale: the quality/fps lever (cost ∝ pixels). ?rs=auto holds the fps
 // cap by moving the scale between 0.5 and 1 from the measured frame cost
 // (autoscale.ts) — the lesser-GPU mode; a number pins it (rs=2 supersamples).
-const rsParam = params.get("rs") ?? "1";
+// DEFAULT since 2026-09-05 (owner call, perf plan C.1): a GPU that holds the cap
+// never leaves 1.0, so this changes nothing on this machine and is the only lever
+// that protects a machine we do not own. `?rs=1` pins full resolution — use it for
+// bit-comparable captures, where a scale that can move is not wanted.
+const rsParam = params.get("rs") ?? "auto";
 const rsAuto = rsParam === "auto";
 let renderScale = rsAuto ? 1 : Number(rsParam) || 1;
 const collectStats = params.has("stats");

@@ -151,7 +151,15 @@ A/B under `M:\claud_projects\temp\diorama-perf\shots\`.
 
 ## Part C — remaining work, ranked
 
-### C.1 Owner review of this pass's defaults (no code; first)
+### C.1 Owner review of this pass's defaults — **DONE 2026-09-05**
+
+**Ruling:** *"they seem almost if not completely identical, so go with the better
+performance."* The three defaults stay as shipped; **`?rs=auto` becomes the default**
+(`main.ts`, README). Measured no-op on this GPU: default and `?rs=1` both sit at
+`rs=1` with identical pacing (raf median 6.90 ms). `?rs=1` is now what a
+bit-comparable capture pins. The rest of this section is the record of what was
+shown.
+
 
 Three defaults changed with measured near-identity: `?hazelc=1`, `?step=auto`,
 `?dither=ign`. Show the owner the A/B pairs in

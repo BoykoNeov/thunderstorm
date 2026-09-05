@@ -869,6 +869,26 @@ bit-comparable captures. 150/150 tests.
 defaults (`hazelc`, `step`, `dither`); `?rs=auto` as the shipped default; a coarser
 supercell web tier (pipeline task, own go).
 
+**Owner review (C.1) — ANSWERED 2026-09-05.** The A/B pairs were put in front of the
+owner as a decision page (crops at the measured diff centroids, the numbers beside
+each; the dither pair shown as each variant's error against the *converged* still,
+because A-vs-B there only demonstrates that the noise moved):
+https://claude.ai/code/artifact/96f08cea-0e5e-450f-b0b1-e640fef9b4f0
+
+Ruling — *"they seem almost if not completely identical, so go with the better
+performance."* So: **the three changed defaults stay** (`?hazelc=1`, `?step=auto`,
+`?dither=ign`; revert params unchanged and documented), and **`?rs=auto` is now the
+shipped default** (`main.ts` `rsParam`, README param table + intro). Verified on the
+real GPU that the new default is a no-op here: default and `?rs=1` both report
+`rs=1`, identical pacing (raf median 6.90 ms both), march 1.42 vs 1.27 ms — i.e.
+noise, both far under the vsync floor. `?rs=1` is now the thing to pin for
+bit-comparable captures. 150/150 tests, tsc clean. README's stale "78 fps @
+1600×1000" status line is replaced by the measured A.6 numbers, and the beauty
+plan's step 0 ("light cache: no fps win") carries a superseded banner pointing at
+the flattened-branch finding. **Still open from that pass:** C.2 supercell
+streaming (decode-bound; diagnose before guessing) and the coarser web tier, which
+is a pipeline task with its own go.
+
 **Lesson.** A cost that does not move with content is not a content cost. The
 empty-frame control (frame 0) exposed it in one probe; without a control the July
 pass concluded "the shadow march is not the bottleneck" from a true measurement

@@ -1,5 +1,13 @@
 # Plan: Diorama beauty upgrades — 6 items + prerequisite (2026-07-17)
 
+> **SUPERSEDED on one point (2026-09-05).** This plan's step 0 concluded that the
+> light cache brought "no fps win" and that the sun march was therefore not the
+> bottleneck. That measurement was true and its reading was wrong: the shader
+> compiler was flattening the branch that guards the sun march, so the march ran
+> for every sample whether the cache was on or not. With real branches restored
+> (`textureLod`), the cache gives 5 ms and the sun march *was* the dominant cost
+> all along. See `docs/plan-diorama-perf-2026-09-05.md` §A.2.
+
 Implementation plan for the six visual-beauty items agreed on 2026-07-17, written
 so a less capable model can execute them mechanically. Step 0 (the sun-transmittance
 light cache) is a *prerequisite*: steps 1 and 3 consume it, and it is also the
