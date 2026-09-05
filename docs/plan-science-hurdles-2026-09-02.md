@@ -760,6 +760,124 @@ reproducible); the interrupted attempts at `runs/t5s_capped_clean.aborted-0904/`
 
 ---
 
+### 5.5 The copy-blind instrument — PRE-REGISTERED 2026-09-06, before it was written or run
+
+**Disclosure, first, because it is the thing that most weakens what follows.** This
+instrument is designed *after* §5.3's per-frame counts were read (dt3 1/1/1/8/8/8/12/4/4/8,
+dt6 20/16/8/20/48/56/32/12/20/28) and after §5.4 diagnosed why they are void. The design
+therefore knows the shape of the answer it is looking for. The mitigation is the one
+§5.4(b) already used on itself: the criterion and **both** of its outcomes are written
+here and committed **before** the script exists, and the outcome that reflects badly on
+the cap is written first.
+
+**Why not the two obvious routes.**
+
+- **A better ring-vs-cells classifier is blocked for want of a negative control.**
+  §5.3's rule failed because it assumed a circular annulus; a shape-agnostic replacement
+  (does the updraft set form a closed circuit around the ignition point?) would pass the
+  RING side on `t5s_neutral_pc`. But **there is no frame on disk that must read CELLS.**
+  An axisymmetric configuration cannot produce genuinely distinct cells — the physical
+  truth there is always a ring — so such a classifier could only ever be exercised on the
+  side it is guaranteed to pass. That is this project's *control that cannot fail* mode,
+  hit twice already. **Not built.**
+- **Breaking the symmetry costs three members, not one.** `irandp=1` with a `var7` seed
+  would destroy §5.2's one-variable design: `input_sounding_sha256` stops being the only
+  difference from the on-disk uncapped reference, so a new uncapped reference at the same
+  seed is owed too. And it does not fix the instrument anyway — a lumpy ring is still a
+  ring, and component counting still counts arcs of it. Priced at **3 members** if the
+  owner ever wants it; not proposed here.
+
+**The principle this instrument rests on.** §5.4(b)'s defect is a property of *object
+counts*: the copy factor is 4 for a feature on an axis or diagonal and 8 for a generic
+one, so it is "not even inflated by a common factor". A whole-domain **integral** of any
+field has no such problem — under exact four-fold symmetry it is exactly 4× the
+one-quadrant integral, whatever the features are or where they sit. The factor is a
+uniform 4 in the capped and uncapped runs alike, so a **direction-only comparison of
+integrated quantities is valid under the symmetry, on the data already on disk, with no
+new compute.** That is what the pre-registered gate asked for: *an instrument that does
+not count copies*.
+
+**The precondition, measured 2026-09-06 before the criterion was written.** Exact
+quadrant tiling is not automatic — with `nx = ny = 180` (even) it requires the domain
+centre to fall *between* cells, not on one. Measured on all three runs: `xh`/`yh` span
+[−89.4105, +89.4105] km at `dx` = 0.999001 km, the centre is 0.000000, the nearest cell
+centre is **0.5000 cells** away on both axes, and the coordinate mirror residual
+(`(x−c) + reverse(x−c)`) is **0.000e+00** exactly. The four quadrants tile with no shared
+centre row or column.
+
+**What is measured.** The object set is `classify_t5.py`'s own, imported and not
+restated — column-max `w` ≥ `W_UPDRAFT` (10 m/s), 8-connectivity, per-component floor
+`W_MIN_AREA_KM2` (4 km²) — i.e. exactly the objects §5.2's criterion counted. Only the
+**reduction** changes, from a count to two integrals over that mask:
+
+- **`A`** — total updraft area, km².
+- **`F`** — the same area weighted by column-max `w`, m s⁻¹ km². Extent alone could hide
+  an intensity change.
+
+**The primary/secondary split needs no radius threshold.** The confound §5.2 flagged is
+real — the cap is expected to make the *primary* storm stronger (the 750 m bubble parcel
+gains CAPE 2545 → 3226 J/kg at 6 K), so a whole-domain total would confound "more primary"
+with "more secondary". The split used here is topological, not metric: **the primary is
+the updraft component connected to the domain centre** (the bubble is centred and, with
+zero shear, does not translate); **secondary is every component that is not.** No radius
+is chosen, so no radius can be tuned. Where no component reaches the centre, the primary
+is empty and every component is secondary — reported, not patched.
+
+Because that split could in principle be unstable (a ring that touches the centre in one
+frame and not the next would move a large area between the two categories), the
+**split-free totals are reported alongside** and the verdict must survive both.
+
+**The headline reading, fixed now.** Over §5.2's own window — frames at **t = 75, 80, …,
+120 min** (`T_SECONDARY_MIN` = 70 unchanged, 10 frames) — form the time-integrated
+secondary totals and take the ratio to the uncapped reference:
+
+  `R_A = ΣA_secondary(capped) / ΣA_secondary(t5s_neutral_pc)`, and `R_F` likewise.
+
+Direction only; no new physical threshold; both members scored the same way. The per-frame
+table and the **full radial profile** (updraft area in 5 km annuli from the centre out to
+the corner) are reported unreduced beside the ratio, so the reader can see where §5.4(c)'s
+boundary contamination begins — the inscribed radius is 89.41 km and dt6 had components at
+81.41, 88.53 and 103.36 km.
+
+**The three outcomes, decided now.**
+
+- **`R_A` > 1 and `R_F` > 1 ⇒ the cap did NOT suppress secondary convection; it increased
+  it.** The capped-mixed-layer knob then **fails as a single-cell control at this CAPE with
+  zero shear** — a physics result about the *design*, not about the code, and exactly the
+  reading §5.3 already pre-registered under its CELLS branch (the cap acts on surface-based
+  parcels only, while the bubble parcel above it gains buoyancy: a stronger storm, a
+  stronger cold pool, more gust-front triggering). This outcome **delivers the control** —
+  as a negative result. It does not send the CIN knob back for repair; it says this
+  configuration is the wrong vehicle for it.
+- **`R_A` < 1 and `R_F` < 1 ⇒ the cap suppressed secondary convection** in that member,
+  and §5.2's singleness criterion is answered in the direction it hoped for, on an
+  instrument that does not count copies.
+- **`R_A` and `R_F` disagree, or the split-free totals contradict the split ones ⇒
+  AMBIGUOUS.** Reported as ambiguous with all four numbers; nothing is picked. An
+  ambiguous outcome does **not** authorise a third capped member — the §5.4 gate stands
+  until something new is on disk.
+
+**Gates the instrument must pass before any of its numbers are read** (all three are
+checks on the *instrument*, and any failure voids the run rather than the cap):
+
+1. **Symmetry is exact, measured not assumed.** The mirror residual of `winterp` under
+   x-flip, y-flip and transpose is reported per frame. If the field is only approximately
+   symmetric the integrals are still valid (the factor is still uniform), but the "counts
+   are copies" diagnosis of §5.4(b) is quantified rather than argued.
+2. **Quadrant identity.** One-quadrant integral × 4 must equal the whole-domain integral
+   to floating-point round-off. This is the copy-stability claim itself, tested directly.
+3. **Same objects as §5.2.** At the three frames §5.3 named, the instrument's total area
+   must equal the sum of `ring_test.py`'s component areas. If it does not, it is not
+   measuring the objects the criterion counted.
+
+**What this instrument does NOT do**, stated so it cannot be over-read later: it does not
+classify ring versus cells, it does not count distinct features (§5.4's bound *distinct
+features ≤ count / 4* stands untouched), and it delivers no multicell label. It answers
+one question — *did the cap increase or decrease the amount of secondary convection* — and
+that is the only question §5.2 needed answered.
+
+---
+
 ## 6. Plan amendments (supersede the Phase 3 task table for T5/T6)
 
 | Task | Was | Now |
