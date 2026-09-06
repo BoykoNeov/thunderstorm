@@ -1434,6 +1434,50 @@ render half gets ~20 %, not zero and not the ~6.5× the streaming half got.
 **"Runs on lower machines" stays half-delivered**, and §C.3 remains the honest answer to
 the other half.
 
+**VISUAL + DECODED A/B — added 2026-09-06 after the advisor pass, and it caught a real gap.**
+The 13 gates above are **all metadata**: every one of them reads `web_manifest.json` and
+**not one reads a voxel**. A transposed axis, a half-voxel origin error or a z-column
+off-by-one would have passed all 13 and shipped. Worse, this section wrote the rule —
+*"the A/B against the 333 m package is visual or on decoded values, never on bytes"* — and
+then ran bytes and stall counters only. Owner-call 5 was about to ask *"is the 666 m image
+acceptable?"* while handing over **no image**. Both gaps are closed here.
+
+**Captures** (`tools/shot.mjs`, `acc=1&anim=0&precip=0`, in
+`M:\claud_projects\temp\`): `sc_native_f150.png` / `sc_coarse_f150.png` (hero Cb),
+`sc_native_f600.png` / `sc_coarse_f600.png` (late stage), and on the coarse package
+`sc_coarse_dbz.png`, `sc_coarse_cref.png`, `sc_coarse_w.png` with `sc_native_dbz.png`
+as the pair. **All four data layers render correctly at the new grid** — which mattered
+more than it looks: `nz` is now **27**, odd and shallow, and "grid-agnostic per load" had
+only ever been exercised at 208³ and 126×126×54. `cref` (a 270×270 2D plane), the separate
+`dbz` R8 ring and signed `w` all came back right, and **no viewer change was needed**.
+Visually the storm is in the same place at the same size with the same cloud-top
+silhouette; the coarse anvil edge is softer and the native's two magenta >60 dBZ hail-core
+spots collapse to one smaller spot.
+
+**Decoded-value check** (`M:\claud_projects\temp\decode_ab.py`, frame 150, everything
+decoded to physical units first — never bytes, per the rule):
+
+- **Mass is conserved:** volume-integrated condensate `coarse/native` = **1.0020** cloud,
+  **0.9954** ice, **0.9998** rain, **1.0009** graupel/hail. Under 0.5 % on all four.
+- **Centroids agree to 5–15 m**, i.e. **0.01–0.02 of a coarse voxel**, in shared world
+  metres across all four species. This is the gate that actually rules out a transposed
+  axis, a wrong origin or a z off-by-one — and no metadata gate could have.
+- **What coarsening costs, quantified:** peak values keep **98.2 %** (cloud, ice) but only
+  **92.9 %** (rain) and **92.2 %** (graupel/hail); peak dBZ falls **63.52 → 62.13**, a loss
+  of **1.39 dBZ**. The loss is where physics says it should be — averaging hurts the
+  sharp-gradient precipitation cores, not the broad cloud field.
+- **And it smears rather than only shrinking:** echo volume ≥ 60 dBZ keeps 86.5 %, but
+  volume ≥ 50 dBZ comes back at **103.9 %** — averaging spreads a core outward while
+  clipping its tip. Worth stating plainly because a "lower resolution just loses detail"
+  intuition predicts only the first half.
+
+**Bearing on owner-call 5.** The teaching content — storm position, size, structure,
+timing, total water, the hook echo in plan view — survives intact. What degrades is the
+**peak intensity of the hail core**, by ~1.4 dBZ and ~8 % of graupel/hail peak mixing
+ratio. If the supercell is ever used to teach *hail severity specifically*, that is the
+number to weigh; for everything else the 666 m package is a faithful rendering of the
+same storm.
+
 **Opened by this shipping (plan owner-call 5, NOT decided here):** both supercell
 packages are now in the picker. (a) Is the 666 m image acceptable as the only supercell,
 or is the 333 m one worth its 1.56 GB as a quality reference? (b) If kept, should the
