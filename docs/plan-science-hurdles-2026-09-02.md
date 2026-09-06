@@ -304,7 +304,7 @@ not multicell from supercell: H3, sharpened by a controlled sweep. The descripto
 **monotone** in shear (`R` 0.364 -> 0.526 -> 0.560, `E` 2.721 -> 1.948 -> 1.546), and
 criterion 2-prime read alone on UNCHANGED thresholds puts **`us15` decisively on the
 multicell side on both statistics** while `us20`, `us25` and the supercell control are
-all INDETERMINATE. **The structural transition lands between U_s 15 and 20 -- exactly
+all INDETERMINATE. **[CORRECTED 2026-09-06, §4.2a: only `E` carried multicell-side weight through the rule -- `organised` is an OR of `R >= 0.60` and `E >= 2.40`, and `R` = 0.364 sits BELOW its floor, contributing nothing. Both statistics are outside their bands; one of them is evidence.]** **The structural transition lands between U_s 15 and 20 -- exactly
 where BRN crosses 50**, as section 3.3 predicted from the sounding before any run.
 NOT claimed: that `us15` is a multicell. Its own descriptors complicate it -- fewest
 updrafts, zero births -- so its signature is line-like (elongated, incoherent) rather
@@ -417,6 +417,94 @@ correct question is whether `P1` breaks at 500 m for a *known* supercell too. Th
 coarsening test above is the cheap first answer. If it comes back indeterminate, the
 escalation is a **500 m `t5s_us20`** — named here as the path, **not run**: the owner's
 go covers one run.
+
+#### RESULT 2026-09-06 — **BRANCH (iii) FIRED. No multicell label; the ceiling is structural, and the elongation was not.**
+
+The run completed (`PROBE_OK`, 25 frames) and the reading was taken in the order this
+subsection fixed: containment, then the instrument gates, then the verdict. Nothing was
+renegotiated and no threshold moved.
+
+**Containment, read first and measured on this run, not inherited.** `t5s_us15_500m`
+clears the open wall by **67.93 km** (echo cells) and **63.44 km** (updraft) against the
+15 km floor — contained, and therefore scorable. The 1 km member re-measured alongside
+it at 69.93 / 70.93 km.
+
+**Instrument gates, all three PASS.** G2 (block size 1 on the 1 km reference is the
+identity) — 25 frames, **0 metric differences**, run before the 500 m data existed. G1
+(reduced grid equals the 1 km grid) — max |dx| and |dy| **7.629e-06 km**, both
+reductions. G3 (block² × reduced sum equals the 500 m sum) — worst relative residual
+**9.367e-15**, on `thpert`.
+
+| run | label | `P1` | `R` | `E` | span |
+|---|---|---|---|---|---|
+| `t5s_us15` (1 km reference) | SUPERCELL | 80 | 0.364 | 2.721 | 80.0 |
+| `t5s_us15_500m` | SUPERCELL | **80** | 0.247 | **1.813** | 80.0 |
+| `t5s_us15_500m_coarse_mean` | SUPERCELL | 80 | 0.197 | 1.730 | 80.0 |
+| `t5s_us15_500m_coarse_extremum` | SUPERCELL | 80 | 0.257 | 1.770 | 80.0 |
+
+**The decision table's third row fired: raw `P1` = 80 → branch (iii).** §4.2 wrote branch
+(iii) as *"`P1` still reads 80 (the ceiling is structural and H3 needs a criterion this
+project does not have)"*, and that is what happened, without hedging. Doubling the
+resolution did not break the ceiling and did not produce a multicell. **The confound this
+subsection's instrument was built for never arose** — `P1` did not break at 500 m at all,
+so there was no chain break to attribute to fragmentation. The coarsened runs read 80 as
+well, which closes the other direction too: the ceiling is not an artifact of the
+measurement grid in either direction. §4.2's own contingency is now **spent**, and it
+returned a negative.
+
+**A correction to §4.2's wording, made here rather than left standing.** §4.2 records
+that criterion 2′ "puts `us15` decisively on the multicell side **on both statistics**".
+That is loose, and the code is the authority: `organised = (R ≥ 0.60) or (E ≥ 2.40)`
+(`classify_v2` ~line 844, `classify_v3` ~line 923 — identical), and `organised` is what
+gates MULTICELL. `R = 0.364` sits *below* its floor and contributes **nothing** to
+`organised`. Both statistics are decisive in the sense of sitting outside their §8.6
+bands, but **only `E` carried multicell-side weight through the rule.** `us15`'s
+multicell-side evidence at 1 km was one statistic, not two.
+
+**So "E stays high" is FALSE, by the number fixed above before the run was read.**
+`E = 1.813` is below 2.40 and inside the 1.667–2.40 band, which is §8.6's INDETERMINATE
+zone. **The single statistic that put `us15` on the multicell side at 1 km does not clear
+its floor at 500 m.**
+
+**And the drop is in the flow, not in the measurement — which the instrument answers by
+accident.** This is stated plainly because it is *not* what `coarsen_test.py` was
+pre-registered for: it exists for the `P1` fragmentation confound, which never fired.
+Used on `E` and `R` instead, it says something the raw comparison cannot. Block-reduced
+onto the *exact* 1 km grid and read by the *unchanged* classifier, the 500 m storm gives
+`E` = 1.730 (mean) and 1.770 (extremum) — beside the raw 500 m 1.813, and nowhere near
+the 1 km run's 2.721. Same for `R`: 0.197 / 0.257 coarsened, 0.247 raw, against 0.364 at
+1 km. **Coarsening does not restore the 1 km values.** The two reductions agree in every
+case, so the test is not indeterminate. A better-resolved storm in this environment is
+genuinely less elongated and less coherent; the 1 km elongation was a property of the
+1 km *simulation*, not of the 1 km *measurement*.
+
+**The descriptors do not move together under refinement, and that matters.** The 1 km
+sweep trends were `R` 0.364 → 0.526 → 0.560 (rising with shear) and `E` 2.721 → 1.948 →
+1.546 (falling). Refining `us15` moves **both down**: `R` to 0.247, *further* from
+`us20`/`us25`, so that separation **strengthens**; `E` to 1.813, into the *middle* of the
+1 km trend between `us20`'s 1.948 and `us25`'s 1.546, so that separation **weakens**. Any
+reading that treats the descriptor family as one coherent signal is not supported.
+
+**A bound on the resolution confound, not a measurement of it.** Refining one member
+moved `E` by **0.908**, larger than the `us15` → `us20` shear step of **0.773**. That
+**bounds** the confound on the `E` trend — a resolution change on a single member exceeds
+the shear step between members — and it is **not** a finding that the `E` trend is an
+artifact, because **only one member was refined**. The measurement that would settle it
+is a 500 m `t5s_us20`, which §4.2a named as the escalation and which is **NOT RUN**: the
+owner's go covered one run.
+
+**What survives §4.2 and what does not.** The structural-transition-between-15-and-20
+claim does **not** rest on `E` alone: the split test (§4.2, a classifier-free measurement
+of mirrored two-component echoes) is untouched by this run, and `R`'s separation gets
+*stronger* under refinement. That claim stands. What does **not** survive is any reading
+in which `us15`'s `E ≥ 2.40` at 1 km is resolution-robust evidence of a line-like regime.
+It is not.
+
+**H3 confirmed a third time.** Criterion 1′ sat at its ceiling for every sheared storm at
+1 km; it sits there at 500 m too, and it sits there for the same storm measured on two
+different grids by two different reductions. This project still has no criterion that
+separates a multicell from a supercell, and resolution is now measured — not assumed — to
+be the wrong lever for building one.
 
 ### 4.3 Cost
 

@@ -220,7 +220,7 @@ task records THERE; keep this table to one line per phase.
 | **0** benchmark gate | **COMPLETE** 2026-07-14 — 333 m default / 250 m flat hero / 500 m preview, `np=8`, bitwise reproducible; VHDX relocated to M: | docs/phase0-*.md |
 | **1** pipeline spike | **CLOSED** 2026-07-20 — 301-frame VDB→SVT end to end on a real RHI; two owner-owed live checks carried (UE SVT visual streaming sign-off, diorama 5c pan gestures) | docs/phase1-completion-2026-07-20.md |
 | **2** scenario system · layers · radar | **COMPLETE** (T1–T9) — scenario JSON drives deck AND export; linear-Z dBZ; `w`; `cref`; two packages; diorama picker/layers/plan view | docs/phase2-plan-2026-07-20.md |
-| **3** flat convective regimes | **IN PROGRESS** — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. Next: 500 m re-run of `us15`. T6–T7 pending | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · sim/probes/README.md |
+| **3** flat convective regimes | **IN PROGRESS** — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. **500 m re-run of `us15` DONE 2026-09-06 — branch (iii): the ceiling is structural, no multicell label, and `us15`'s one piece of multicell-side evidence (`E`) did not survive refinement.** T6–T7 pending | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · sim/probes/README.md |
 | **3T** terrain | not started — Cartesian regridding module, heightfield render path, static full domain, VHDX resize first | Phase 3 plan §8 |
 | **4** lightning · hail swaths · particles · polish | not started — prerequisites listed in the 2026-09-02 plan §7 | — |
 
@@ -232,10 +232,24 @@ task records THERE; keep this table to one line per phase.
   *inside* that gap on the unchanged T4 binary. **No third binary hash, no
   `sim/cm1-patches/` row, and the CM1 pin above does not move. The project's fork count
   stays at one.** Not "kept priced" — retired.
-- **500 m re-run of `t5s_us15`: APPROVED, deferred — not today.** ~2 h. The only open
-  route to a multicell *label*. Its three outcome branches are already fixed in
-  docs/plan-science-hurdles-2026-09-02.md §4.2 and are **not to be renegotiated when it
-  runs**.
+- **500 m re-run of `t5s_us15`: CLOSED 2026-09-06 — RAN, and returned BRANCH (iii).**
+  The branches were not renegotiated. Containment read first and measured on the run (67.9 /
+  63.4 km clearance vs a 15 km floor). Raw `P1` = **80** at 500 m — the ceiling held, doubling
+  the resolution produced no multicell, and **the last open route to a multicell *label* is
+  spent**. The pre-registered fragmentation confound never arose (`P1` never broke), and the
+  coarsened runs read 80 too, so the ceiling is not a grid artifact either way. Two things
+  did move, both recorded as negatives: §4.2's "decisive on **both** statistics" is **corrected**
+  — `organised = (R ≥ 0.60) or (E ≥ 2.40)` gates MULTICELL, so `R` = 0.364, being *below* its
+  floor, contributed nothing and `us15`'s multicell-side evidence was **`E` alone**; and that
+  one statistic **does not survive refinement** (`E` 2.721 → 1.813, inside the INDETERMINATE
+  band). The drop is in the **flow, not the ruler**: block-reduced back onto the exact 1 km
+  grid and read by the unchanged classifier, `E` = 1.730 / 1.770 and `R` = 0.197 / 0.257 —
+  coarsening does not restore the 1 km values, and both reductions agree. `R` and `E` move in
+  **opposite** directions under refinement, so the descriptor family is not one signal. The
+  transition-location claim stands (the split test is classifier-free and untouched; `R`'s
+  separation strengthens). **Escalation named and NOT run:** a 500 m `t5s_us20` is the only
+  thing that would measure, rather than bound, the resolution confound on the `E` trend — the
+  go covered one run. Record: plan §4.2a, docs/STATUS.md, sim/probes/README.md §4.2a.
 - **Capped single-cell control: CLOSED 2026-09-06 — DELIVERED, as a negative.** Both
   members ran (25 frames each) and initiation **PASSED** for both, but the singleness
   criterion was **void as first written**: the configuration is exactly symmetric

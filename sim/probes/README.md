@@ -359,7 +359,7 @@ structural, H3 needs a criterion this project does not have, and that is the fin
 Branch (ii) exists because without it three numbers would be interpreted after the
 fact.
 
-#### §4.2a the 500 m re-run — **LAUNCHED 2026-09-06 06:22, PRE-REGISTERED IN FLIGHT.** No field has been read.
+#### §4.2a the 500 m re-run — **RUN 2026-09-06. BRANCH (iii): no multicell label.** Pre-registered in flight, before any field was read.
 
 `t5s_us15_500m` — §4.2's own contingency, and the only open route to a multicell
 *label*. `-np 8` (one run, not a concurrent pair), ~1.5–2 h expected against the 1 km
@@ -416,6 +416,44 @@ a better-resolved storm may propagate differently.
 **The escalation is named and NOT run**: if branch (i) fires and the coarsening test
 comes back indeterminate, the next question is whether `P1` breaks at 500 m for a
 *known* supercell too, which is a 500 m `t5s_us20`. The owner's go covers one run.
+
+**RESULT 2026-09-06 — BRANCH (iii). No multicell label.** `PROBE_OK`, 25 frames. Read in
+the fixed order. **Containment first, measured on this run:** 67.93 km (echo) / 63.44 km
+(updraft) clearance against the 15 km floor — contained, scorable. **Gates:** G2 PASS
+(25 frames, 0 metric differences), G1 PASS (max |dx|, |dy| 7.629e-06 km), G3 PASS (worst
+relative residual 9.367e-15, `thpert`).
+
+| run | label | `P1` | `R` | `E` | span |
+|---|---|---|---|---|---|
+| `t5s_us15` (1 km) | SUPERCELL | 80 | 0.364 | 2.721 | 80.0 |
+| `t5s_us15_500m` | SUPERCELL | **80** | 0.247 | **1.813** | 80.0 |
+| `…_coarse_mean` | SUPERCELL | 80 | 0.197 | 1.730 | 80.0 |
+| `…_coarse_extremum` | SUPERCELL | 80 | 0.257 | 1.770 | 80.0 |
+
+Raw `P1` = 80 → **branch (iii)**: the ceiling is structural. Doubling the resolution did
+not break it and did not produce a multicell. **The confound the instrument exists for
+never arose** — `P1` never broke — and the coarsened runs read 80 too, so the ceiling is
+not a grid artifact in either direction. §4.2's contingency is spent, with a negative.
+
+**§4.2's wording corrected:** `organised = (R ≥ 0.60) or (E ≥ 2.40)` and `organised`
+gates MULTICELL, so `R = 0.364`, being *below* its floor, contributed **nothing**.
+`us15`'s multicell-side evidence at 1 km was **`E` alone**, not "both statistics".
+
+**"E stays high" is FALSE** by the bar fixed before the run was read: `E = 1.813` < 2.40
+and inside the 1.667–2.40 INDETERMINATE band. **And the drop is in the flow, not the
+measurement** — which `coarsen_test.py` answers by accident, *not* by design: reduced
+onto the exact 1 km grid and read by the unchanged classifier, `E` = 1.730 / 1.770 and
+`R` = 0.197 / 0.257, beside the raw 500 m values and nowhere near 1 km's 2.721 / 0.364.
+Coarsening does not restore them, and the two reductions agree.
+
+**The descriptors do not move together.** Refinement moves `R` *further* from
+`us20`/`us25` (separation strengthens) and `E` *into the middle* of the 1 km trend
+(separation weakens). Refining one member moved `E` by 0.908 — larger than the
+`us15` → `us20` shear step of 0.773 — which **bounds** the resolution confound on the `E`
+trend but does not measure it, since only one member was refined. The split test and
+`R`'s separation are untouched, so §4.2's transition location stands; what does not
+survive is `E ≥ 2.40` at 1 km as resolution-robust evidence of a line-like regime.
+**The 500 m `t5s_us20` that would settle it stays NOT RUN.** Full record: plan §4.2a.
 
 ## Running one
 

@@ -784,7 +784,7 @@ ceiling; the unsheared control reads 5, so `P1` separates *sheared from unsheare
 Descriptors are monotone in shear (`R` 0.364→0.526→0.560, `E` 2.721→1.948→1.546), and
 criterion 2′ read alone on unchanged thresholds puts **`us15` decisively on the
 multicell side on both statistics** while `us20`, `us25` and the supercell control are
-INDETERMINATE. **The structural transition lands between U_s 15 and 20 — exactly where
+INDETERMINATE. **[CORRECTED 2026-09-06 (500 m re-run, below): only `E` carried multicell-side weight through the rule — `organised` is an OR of `R ≥ 0.60` and `E ≥ 2.40`, and `R` = 0.364 sits *below* its floor, contributing nothing. Both statistics are outside their bands; one of them is evidence.]** **The structural transition lands between U_s 15 and 20 — exactly where
 BRN crosses 50, predicted from the sounding before any run.** Not claimed: that `us15`
 is a multicell. Complication recorded: `us15` has the *fewest* updrafts and *zero*
 births, so its signature is line-like (elongated, incoherent) rather than discrete-cell
@@ -803,9 +803,11 @@ control separates one member without establishing anything about the others.
   move. **The fork count stays at one.** T5 §13's carried "owner call" is thereby
   closed, and `docs/phase3-t5-multicell.md` carries a pointer to this resolution rather
   than being rewritten.
-- **500 m re-run of `t5s_us15` — APPROVED, deferred (not today).** ~2 h. Its three
-  outcome branches were fixed in the plan *before* the 1 km sweep was read and must not
-  be renegotiated at run time.
+- **500 m re-run of `t5s_us15` — CLOSED 2026-09-06: RAN, and returned BRANCH (iii).**
+  Its three outcome branches were fixed in the plan *before* the 1 km sweep was read and
+  were not renegotiated at run time. Raw `P1` = 80 at 500 m — the ceiling is structural,
+  doubling the resolution produced no multicell, and the last open route to a multicell
+  *label* is spent. Full record in this file below.
 - **Capped single-cell control — APPROVED, deferred (not today).** 13 min. Feasibility
   measured offline first, and it **corrected the plan's own §5.1 numbers**: a 1 km mixed
   layer is refused at 14 g/kg (RH 1.002), and the intuitive workaround is backwards —
@@ -1032,3 +1034,98 @@ this ("component counting cannot tell N cells from one ring in N lobes"); this i
 frame where it inverted — fewer components, four times the convection. The fix was not
 a better classifier but a different *reduction*, and the reduction that survives a
 symmetry is the integral.
+
+## 500 m re-run of `t5s_us15` — RAN 2026-09-06, BRANCH (iii): no multicell label
+
+The last open route to labelling a storm MULTICELL in this project. It returned a
+negative, and it returned it against a decision table written while the run was still
+stepping and before any of its fields had been opened (plan §4.2a, `sim/probes/README.md`
+§4.2a, `sim/probes/coarsen_test.py`, config `sim/probes/configs/t5s_us15_500m.json` —
+all committed as `21ff9a8` before the first frame was read).
+
+**Only resolution moved, measured before launch.** The generated deck differs from the
+1 km member's in **six lines** (`nx`, `ny`, `dx`, `dy`, and the two geometry-derived
+`dx_inner`/`dy_inner`); `tot_x_len`/`tot_y_len` are identical because
+360 × 499.5 m = 180 × 999 m **exactly** — an exact 2× refinement of the same physical
+domain on aligned cell edges. The generated `input_sounding` sha256 is byte-for-byte the
+value already in `t5s_us15`'s `run_meta.txt`. `dtl` stayed 6.0 deliberately: `adapt_dt=1`
+raised dt to 6.6 then 7.26 at the first two adaptations at 1 km, so `dtl` is a seed the
+solver leaves behind and halving it would have moved a second variable for no effect.
+
+**Read in the fixed order.** Containment first, measured on this run and not inherited:
+**67.93 km** (echo cells) / **63.44 km** (updraft) clearance against the 15 km floor —
+contained, therefore scorable. Then the three instrument gates: **G2** (block size 1 on
+the 1 km reference is the identity) PASS, 25 frames, **0 metric differences**, run while
+the 500 m job was still stepping so the instrument was validated on data whose answer was
+already known; **G1** (reduced grid equals the 1 km grid) PASS, max |dx|, |dy|
+**7.629e-06 km**; **G3** (block² × reduced sum equals the 500 m sum) PASS, worst relative
+residual **9.367e-15**.
+
+| run | label | `P1` | `R` | `E` | span |
+|---|---|---|---|---|---|
+| `t5s_us15` (1 km reference) | SUPERCELL | 80 | 0.364 | 2.721 | 80.0 |
+| `t5s_us15_500m` | SUPERCELL | **80** | 0.247 | **1.813** | 80.0 |
+| `t5s_us15_500m_coarse_mean` | SUPERCELL | 80 | 0.197 | 1.730 | 80.0 |
+| `t5s_us15_500m_coarse_extremum` | SUPERCELL | 80 | 0.257 | 1.770 | 80.0 |
+
+**Branch (iii) as §4.2 wrote it: `P1` still reads 80, the ceiling is structural, and H3
+needs a criterion this project does not have.** Doubling the resolution neither broke the
+ceiling nor produced a multicell. **The confound `coarsen_test.py` was built for never
+arose** — `P1` did not break at 500 m at all, so there was no chain break to attribute to
+fragmentation — and the coarsened runs read 80 as well, closing the other direction: the
+ceiling is not an artifact of the measurement grid either way.
+
+**A correction to the sweep's own wording.** §4.2 recorded criterion 2′ as putting `us15`
+"decisively on the multicell side **on both statistics**". The code is the authority:
+`organised = (R ≥ 0.60) or (E ≥ 2.40)`, and `organised` is what gates MULTICELL
+(`classify_v2` ~line 844, `classify_v3` ~line 923 — identical). `R = 0.364` is *below* its
+floor and contributes **nothing** to `organised`. Both statistics sit outside their §8.6
+bands, but **only `E` carried multicell-side weight through the rule**: `us15`'s
+multicell-side evidence at 1 km was one statistic, not two.
+
+**So "E stays high" — given its number in §4.2a before the run was read, `E ≥ 2.40` with
+`R ≤ 0.40` — is FALSE.** `E = 1.813` is below 2.40 and inside the 1.667–2.40 band, which
+is §8.6's INDETERMINATE zone. The single statistic that put `us15` on the multicell side
+at 1 km does not clear its floor at 500 m.
+
+**And the drop is in the flow, not the measurement.** Said plainly because it is *not*
+what the instrument was pre-registered for: block-reduced onto the **exact** 1 km grid and
+read by the **unchanged** classifier, the 500 m storm gives `E` 1.730 (mean) / 1.770
+(extremum) and `R` 0.197 / 0.257 — beside the raw 500 m values, nowhere near the 1 km run's
+2.721 / 0.364. **Coarsening does not restore the 1 km numbers**, and the two reductions
+agree, so the test is not indeterminate. A better-resolved storm in this environment is
+genuinely less elongated and less coherent; the 1 km elongation was a property of the 1 km
+*simulation*, not of the 1 km *measurement*.
+
+**The descriptors do not move together under refinement.** The 1 km trends were `R`
+0.364 → 0.526 → 0.560 (rising with shear) and `E` 2.721 → 1.948 → 1.546 (falling).
+Refining `us15` moves `R` *further* from `us20`/`us25` — that separation **strengthens** —
+and moves `E` into the *middle* of the 1 km trend, between `us20`'s 1.948 and `us25`'s
+1.546 — that separation **weakens**. No reading that treats the descriptor family as one
+coherent signal is supported.
+
+**A bound on the resolution confound, not a measurement of it.** Refining one member moved
+`E` by **0.908**, larger than the `us15` → `us20` shear step of **0.773**. That bounds the
+confound on the `E` trend; it is **not** a finding that the trend is an artifact, because
+**only one member was refined**. The measurement that would settle it is a 500 m
+`t5s_us20` — named in §4.2a as the escalation and **NOT RUN**: the owner's go covered one
+run, and no go is asked for.
+
+**What survives and what does not.** §4.2's structural-transition-between-`U_s` 15-and-20
+claim does not rest on `E` alone — the split test is a classifier-free measurement and is
+untouched by this run, and `R`'s separation gets *stronger* under refinement. That claim
+stands. What does not survive is any reading in which `us15`'s `E ≥ 2.40` at 1 km is
+resolution-robust evidence of a line-like regime.
+
+**Artefacts.** `runs/t5s_us15_500m/` (25 frames), derived
+`runs/t5s_us15_500m_coarse_{mean,extremum}/`; instruments `sim/probes/coarsen_test.py` and
+config `sim/probes/configs/t5s_us15_500m.json`, both tracked and both committed before the
+result existed.
+
+**Lesson.** The instrument built for one confound answered a different one. `coarsen_test`
+exists to ask whether a broken `P1` is physics or fragmentation; `P1` never broke, so on
+its own question it returned nothing. Putting the refined run back on the coarse grid,
+though, separated *the storm changed* from *the ruler changed* for `E` and `R` — a
+question nobody had posed. Building the instrument as "a different reduction, read by the
+unchanged classifier" rather than as a bespoke test is what made it reusable for a
+question it was not designed for.
