@@ -211,6 +211,66 @@ def gate_depth_positive():
     return refuses(lambda: fixture(half_y=-1.0), "crop_half_depth_m must be > 0")
 
 
+# --- 2b. orientation through regrid, on a rectangular grid -------------------
+#
+# The transpose gate above covers densevol.write's SHAPE ASSERTION only. regrid is
+# where a transposed field would actually be PRODUCED, and this project's x/y
+# orientation guard (test_orientation_t3.py, which discharged the cref orientation
+# question) runs on a 208x208 horizontal grid -- defanged for exactly this bug
+# class. These two gates close that: a marker at an OFF-DIAGONAL, OFF-CENTRE cell
+# on a grid whose nx and ny differ, resampled and located by index. A transposed
+# path cannot even reshape here, let alone land the marker in the right place.
+
+ORIENT_VOXEL = 1000.0
+ORIENT_NX, ORIENT_NY, ORIENT_NZ = 8, 12, 4
+MARK_Z, MARK_Y, MARK_X = 1, 9, 2        # no two equal; none at a centre or an edge
+
+
+def orient_fixture():
+    return fixture(half_x=ORIENT_NX * ORIENT_VOXEL / 2,
+                   half_y=ORIENT_NY * ORIENT_VOXEL / 2,
+                   z_top=ORIENT_NZ * ORIENT_VOXEL, voxel=ORIENT_VOXEL)
+
+
+def orient_axes(sc):
+    """A CM1 source grid whose cell centres coincide with the export centres, so
+    the resample is exact and any displacement is an orientation error, not
+    interpolation."""
+    return regrid.export_axes(sc)
+
+
+def gate_regrid_orientation_3d():
+    sc = orient_fixture()
+    cm1_x, cm1_y, cm1_z = orient_axes(sc)
+    field = np.zeros((ORIENT_NZ, ORIENT_NY, ORIENT_NX), dtype="f4")
+    field[MARK_Z, MARK_Y, MARK_X] = 1.0
+    q = regrid.build_query(sc, cm1_x, cm1_y, cm1_z)
+    out = regrid.resample(sc, field, cm1_x, cm1_y, cm1_z, q)
+    where = np.unravel_index(int(np.argmax(out)), out.shape)
+    ok = (out.shape == (ORIENT_NZ, ORIENT_NY, ORIENT_NX)
+          and where == (MARK_Z, MARK_Y, MARK_X)
+          and abs(out[where] - 1.0) < 1e-6)
+    return ok, (f"grid {ORIENT_NX}x{ORIENT_NY}x{ORIENT_NZ} (nx != ny != nz); "
+                f"marker put at (z,y,x)={(MARK_Z, MARK_Y, MARK_X)}, found at "
+                f"{where} value {out[where]:.3f}")
+
+
+def gate_regrid_orientation_2d():
+    """The PLAN path (cref), which reshapes to (ny, nx) -- the one line most
+    likely to be wrong once ny != nx."""
+    sc = orient_fixture()
+    cm1_x, cm1_y, _ = orient_axes(sc)
+    field = np.zeros((ORIENT_NY, ORIENT_NX), dtype="f4")
+    field[MARK_Y, MARK_X] = 50.0          # dBZ
+    q2 = regrid.build_query_2d(sc)
+    out = regrid.resample_dbz_2d(sc, field, cm1_x, cm1_y, q2)
+    where = np.unravel_index(int(np.argmax(out)), out.shape)
+    ok = (out.shape == (ORIENT_NY, ORIENT_NX) and where == (MARK_Y, MARK_X)
+          and abs(out[where] - 50.0) < 1e-3)
+    return ok, (f"plan grid {ORIENT_NX}x{ORIENT_NY}; marker at (y,x)="
+                f"{(MARK_Y, MARK_X)}, found at {where} value {out[where]:.2f} dBZ")
+
+
 # --- 3. periodicity, read from the namelist -----------------------------------
 
 def gate_periodic_default_open():
@@ -234,12 +294,18 @@ def gate_half_declared_axis_refused():
 # --- 4. the periodic-axis extent rule ----------------------------------------
 
 # A line: 180 x 999 m = 179.82 km domain, so the full y half-extent is 89910 m.
+# This is t5probe_c2's actual geometry.
 LINE_NML = {"nx": 180, "ny": 180, "dx": 999.0, "dy": 999.0, "sbc": 1, "nbc": 1}
 FULL_HALF = 89910.0
 
+# The export voxel MATCHES dy. Not cosmetic: on a periodic axis forced to the full
+# domain, any other voxel size puts the outermost export centre past the outermost
+# CM1 cell centre, where regrid fills with zero -- see gate_periodic_voxel_mismatch.
+LINE_VOXEL = 999.0
 
-def line_fixture(half_y=FULL_HALF, half_x=19980.0, **kw):
-    return fixture(half_x=half_x, half_y=half_y, voxel=333.0,
+
+def line_fixture(half_y=FULL_HALF, half_x=19980.0, voxel=LINE_VOXEL, **kw):
+    return fixture(half_x=half_x, half_y=half_y, voxel=voxel,
                    namelist=LINE_NML, **kw)
 
 
@@ -253,14 +319,39 @@ def gate_line_box_accepted():
     """The whole point: a box compact in x and full-domain in y CLEARS the gate.
 
     This is what could not be expressed before -- and note the result is not
-    square (120 x 540 x 54), so it is also not the mostly-empty full-domain
-    package the old schema forced. Across the line the box is 40 km wide; along
-    it, the full 180 km domain.
+    square (40 x 180 x 18), so it is also not the mostly-empty full-domain package
+    the old schema forced. Across the line the box is 40 km wide; along it, the
+    full 180 km domain.
     """
     sc = line_fixture()
     scenario.require_measured_box(sc)   # must not raise
-    return (sc.nx, sc.ny, sc.nz) == (120, 540, 54), (
+    return (sc.nx, sc.ny, sc.nz) == (40, 180, 18), (
         f"{sc.describe_grid()} -- accepted with x measured and y by construction")
+
+
+def gate_periodic_voxel_mismatch():
+    """A periodic axis exported at a DIFFERENT voxel size than the sim is refused.
+
+    The subtle one, and the reason it is a gate rather than a patch. Forcing the
+    box to the full domain puts the outermost export voxel centre past the
+    outermost CM1 cell centre unless voxel_m == dy: at 333 m against dy = 999 m the
+    grid reaches 89743.5 m where the last CM1 centre is 89410.5 m. regrid runs with
+    `bounds_error=False, fill_value=0` -- it does NOT raise -- so the export would
+    ship a dead rim along exactly the wall a wrapping line crosses. Silent, and
+    invisible in every existing gate.
+    """
+    return refuses(lambda: scenario.require_measured_box(
+        line_fixture(voxel=333.0)), "PERIODIC and its export grid reaches")
+
+
+def gate_periodic_resampling_matched_ok():
+    """...and the matched case is genuinely inside, not merely tolerated."""
+    sc = line_fixture()
+    src_half = (LINE_NML["ny"] - 1) / 2.0 * LINE_NML["dy"]
+    _, ys, _ = regrid.export_axes(sc)
+    ok = abs(ys[-1] - src_half) < 1e-6 and abs(ys[0] + src_half) < 1e-6
+    return ok, (f"outermost export centre {ys[-1]:.1f} m == outermost CM1 cell "
+                f"centre {src_half:.1f} m -- no sample lands outside the grid")
 
 
 def gate_cropped_periodic_axis_refused():
@@ -364,6 +455,10 @@ def main():
     check("a depth off the voxel grid is refused", gate_depth_divisibility)
     check("a non-positive depth is refused", gate_depth_positive)
 
+    print("\n=== 2b. orientation through regrid, nx != ny ===")
+    check("a 3D marker survives resample at its own (z,y,x)", gate_regrid_orientation_3d)
+    check("a 2D plan marker survives at its own (y,x)", gate_regrid_orientation_2d)
+
     print("\n=== 3. periodicity comes from the NAMELIST ===")
     check("absent sbc/nbc means open (template default)", gate_periodic_default_open)
     check("sbc=nbc=1 reads as a periodic y axis", gate_periodic_detected)
@@ -372,6 +467,8 @@ def main():
     print("\n=== 4. the periodic-axis extent rule ===")
     check("domain_half_m reads nx*dx/2 from the namelist", gate_domain_half)
     check("a LINE box (compact x, full-domain y) is ACCEPTED", gate_line_box_accepted)
+    check("a periodic axis at a MISMATCHED voxel is refused", gate_periodic_voxel_mismatch)
+    check("the matched line grid lands inside the CM1 grid", gate_periodic_resampling_matched_ok)
     check("a cropped periodic axis is refused", gate_cropped_periodic_axis_refused)
     check("an over-large periodic axis is refused", gate_larger_periodic_axis_refused)
     check("the _provisional guard still fires first", gate_provisional_still_first)

@@ -332,9 +332,18 @@ wrong for component counts.** T6–T7 pending | docs/phase3-plan-2026-07-20.md �
   into one scalar, so on a periodic-y line it reported the full-domain y extent as "the"
   half-width and demanded a square box that large — **the mostly-empty package was
   reachable through the measurement even after the schema stopped forcing it.** Now
-  per-axis (`scenario.box_verdict`). Gate `pipeline/tests/test_squall_box.py` **23/23**,
-  every fixture nx ≠ ny ≠ nz, one of them the transpose test no square grid in this repo
-  could have failed. **NOT delivered:** a squall-line scenario. Shipping C2 as a package
+  per-axis (`scenario.box_verdict`). **A fourth problem, found on review:** forcing a
+  periodic axis to the full domain pushes the outermost export voxel centre PAST the
+  outermost CM1 cell centre unless the export voxel equals the sim spacing, and `regrid`
+  fills outside-the-grid samples with **zero without raising** — a dead rim along exactly
+  the boundary a wrapping line crosses. Refused by name (`check_periodic_resampling`);
+  the repair is an **OWNER CALL, not taken**: export the periodic axis at the simulation
+  spacing, or give `regrid` real periodic wrapping (clamping is excluded — it smears the
+  wrap). Until it is taken, a line ships at its sim spacing or not at all. Gate
+  `pipeline/tests/test_squall_box.py` **27/27**, every fixture nx ≠ ny ≠ nz, three of them
+  the transpose test no square grid in this repo could have failed (`densevol` shape plus
+  a marker through `regrid.resample` and the 2D plan path). **NOT delivered:** a
+  squall-line scenario. Shipping C2 as a package
   still needs a run, a measured x half-width, and a `sim/scenarios/` config — each its own
   go; `t5probe_c2` stays a probe and is still refused for `_provisional` first. Record:
   plan §§4.4–4.4a, docs/STATUS.md.

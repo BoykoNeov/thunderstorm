@@ -1043,7 +1043,8 @@ is its own task and needs a go.
 ### 4.4a RESULT — the contract change is DONE, and the scope list above was one item short
 
 **2026-09-06.** All three items are built and gated, offline, with no CM1 run and no
-new compute. `pipeline/tests/test_squall_box.py`, **23/23**. Every pre-existing gate is
+new compute -- plus a **fourth**, found on review, that the three would have left as a
+silent wrong answer. `pipeline/tests/test_squall_box.py`, **27/27**. Every pre-existing gate is
 still green: `test_manifest` **17/17** (the shipped manifest still rebuilds
 byte-identical), `test_deck` 16/16, `test_scenario_t6` 11/11, `test_seed_t4` 17/17,
 `test_supercell_t2` 10/10, `test_sounding_t5s` 32/32, plus the regrid/orientation
@@ -1094,12 +1095,47 @@ left it there. Split into `half_x` / `half_y` with a per-axis verdict
 (`scenario.box_verdict`, pure and separately gated: it lives beside the rule it enforces
 rather than in the CLI, which also keeps its tests netCDF-free).
 
-**Every fixture in the new gate has nx ≠ ny ≠ nz, all three distinct** (120 × 180 × 54,
-and the line case 120 × 540 × 54). This project's own recorded lesson is that a square
-test grid silently defangs a transpose test, and the existing viewer fixture is
-208 × 208. One gate is that transpose test made real: `densevol.write` must accept
-`(nz, ny, nx)` and **refuse** `(nz, nx, ny)` — a check that could not fail on any square
-grid in the repo.
+**Every fixture in the new gate has nx ≠ ny ≠ nz, all three distinct** (120 × 180 × 54;
+the line case 40 × 180 × 18; the orientation case 8 × 12 × 4). This project's own
+recorded lesson is that a square test grid silently defangs a transpose test, and the
+existing fixtures are 208 × 208 — including `test_orientation_t3.py`, the guard that
+discharged the cref orientation question. Three gates close that on a rectangular grid:
+`densevol.write` must accept `(nz, ny, nx)` and **refuse** `(nz, nx, ny)`; and a marker
+placed at an off-centre, off-diagonal cell must come back through `regrid.resample` and
+through the 2D plan path (`resample_dbz_2d`, whose reshape to `(ny, nx)` is the line
+most likely to be wrong once they differ) at *its own* index. None of the three could
+fail on any square grid in the repo. `test_orientation_t3.py` itself is left alone — it
+has its own pre-registered scope and its own subject.
+
+#### The fourth item, found on review: the rule mandates a resample the pipeline cannot do
+
+Forcing a periodic axis to the full domain has a consequence the three items above do
+not: it pushes the outermost **export voxel centre** past the outermost **CM1 cell
+centre** whenever the export voxel differs from the simulation's spacing. The domain
+spans `n·d`, so its last cell centre is half a cell inside the wall at `(n−1)/2·d`,
+while the export grid's last centre sits at `(nₑ−1)/2·v` — equal only when `v == d`. For
+C2's geometry (180 × 999 m, exported at 333 m) that is **333 m — one full voxel — beyond
+the last CM1 centre, on both walls.**
+
+`regrid` runs its interpolator with `bounds_error=False, fill_value=0`. **It does not
+raise; it returns empty.** On an open axis that is correct and deliberate — outside the
+domain there is no storm. On a periodic axis it is wrong exactly where it matters: the
+field wraps, so the honest sample beyond the wall is the field from the other wall, and
+zeroing it lays a **dead rim along the very boundary the line's condensate crosses.**
+Nothing would fail; the package would quietly stop wrapping. This has never fired
+because `supercell_333m` is the only full-domain box in the repo and its export grid is
+1:1 with the sim grid, so the centres coincide.
+
+`check_periodic_resampling` **refuses it by name**, because the repair is a decision and
+not a patch. Two real options, and the gate's message names both: (a) export the
+periodic axis at the simulation's own spacing, so the centres coincide 1:1 and nothing
+lands outside — cheap, and what `supercell_333m` already does; (b) teach `regrid` to
+**wrap** the source along a periodic axis — physically the right answer and the only one
+that allows a different export voxel, but new interpolation behaviour in the module the
+charter reserves for the terrain work, needing its own gate. **Clamping is not on the
+list**: extending the last row outward flattens the wrap into a smear, a third wrong
+answer that looks plausible in a render. **Owner call, not taken here.** Until it is
+taken, a line ships at its simulation spacing or it does not ship.
 
 **What this does NOT do.** It does not make a squall line exist. `t5probe_c2` is still a
 probe: `_provisional: true`, never exported, and `require_measured_box` still refuses it

@@ -1660,11 +1660,28 @@ large. **The mostly-empty package was therefore reachable through the measuremen
 after the schema stopped forcing it** — fixing only the three scoped items would have
 left it in place. Now per-axis (`scenario.box_verdict`, pure, separately gated).
 
-**Gate: `pipeline/tests/test_squall_box.py`, 23/23.** Every fixture is nx ≠ ny ≠ nz
-(120 × 180 × 54; the line case 120 × 540 × 54) because this project has already recorded
-that a square test grid defangs a transpose test — and one gate *is* that transpose
-test: `densevol.write` must accept `(nz, ny, nx)` and refuse `(nz, nx, ny)`, which no
-square grid in the repo could have failed. Pre-existing suites all still green
+**A fourth problem, found on review, that the three scoped items would have left as a
+silent wrong answer.** Forcing a periodic axis to the full domain pushes the outermost
+export voxel centre *past* the outermost CM1 cell centre whenever the export voxel
+differs from the simulation spacing — for C2's geometry, one full voxel beyond, on both
+walls. `regrid` fills outside-the-grid samples with **zero and does not raise**, so the
+package would ship a dead rim along exactly the boundary a wrapping line crosses.
+Refused by name (`check_periodic_resampling`), because the repair is an **owner
+decision**: export the periodic axis at the simulation's own spacing (centres coincide,
+nothing lands outside — what `supercell_333m` already does), or give `regrid` real
+periodic wrapping (physically right, new interpolation behaviour, needs its own gate).
+Clamping is deliberately *not* an option — it flattens the wrap into a smear that looks
+plausible in a render. **Not taken here.** Until it is, a line ships at its simulation
+spacing or not at all.
+
+**Gate: `pipeline/tests/test_squall_box.py`, 27/27.** Every fixture is nx ≠ ny ≠ nz
+(120 × 180 × 54; the line case 40 × 180 × 18; the orientation case 8 × 12 × 4) because
+this project has already recorded that a square test grid defangs a transpose test — and
+three gates are that transpose test made real: `densevol.write` must accept
+`(nz, ny, nx)` and refuse `(nz, nx, ny)`, and an off-centre marker must survive
+`regrid.resample` and the 2D plan path at *its own* index. None could fail on a square
+grid. `test_orientation_t3.py` — which runs on 208×208 and is defanged for this bug
+class — is left alone: it has its own pre-registered scope. Pre-existing suites all still green
 (`test_deck` 16/16, `test_scenario_t6` 11/11, `test_seed_t4` 17/17, `test_supercell_t2`
 10/10, `test_sounding_t5s` 32/32, regrid/orientation suites). `test_classifier_t5` and
 one `test_web_decimation` gate fail on a missing `netCDF4` in the Windows interpreter —

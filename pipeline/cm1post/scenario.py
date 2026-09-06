@@ -46,7 +46,7 @@ class Scenario:
     # every existing package stays byte-identical -- the manifest already carried
     # `dimensions` and `extent_m.x/.y` as separate keys, so only the VALUES become
     # unequal, not the wire shape. That is why FORMAT_VERSION does not move.
-    crop_half_depth_m: float = None
+    crop_half_depth_m: float | None = None
 
     provenance: dict = field(default_factory=dict)
     namelist: dict = field(default_factory=dict)
@@ -190,6 +190,12 @@ def periodic_axes(sc):
     it from the same namelist that gets rendered into the deck makes the claim
     unfalsifiable-by-editing: change the boundary condition and the export rule
     changes with it. Same pattern as deck.py's Category 6 coupling check.
+
+    X-PERIODICITY IS CURRENTLY UNREACHABLE from a real config: `wbc`/`ebc` are not
+    in deck.py's OPTIONAL_KEYS, so a scenario declaring them is refused at deck
+    generation. The x branch here is defensive symmetry, exercised only by test
+    fixtures. If a scenario ever needs a periodic x, adding the keys to
+    OPTIONAL_KEYS is the deliberate step -- this function already follows.
     """
     out = {}
     for axis, spec in _AXES.items():
@@ -296,6 +302,63 @@ def box_verdict(sc, half_x, half_y, ztop):
     return rows
 
 
+def check_periodic_resampling(sc):
+    """A periodic axis may not need SAMPLES FROM OUTSIDE the CM1 grid.
+
+    `check_periodic_extents` forces a periodic axis's box to the full domain --
+    which is the right box, and which also pushes the outermost EXPORT voxel
+    centres past the outermost CM1 CELL centres whenever the export voxel differs
+    from the simulation's grid spacing. The domain spans n*d, so its last cell
+    centre sits half a cell inside the wall at (n-1)/2*d, while the export grid's
+    last voxel centre sits at (n_e-1)/2*v. Equal only when v == d.
+
+    Outside that span, regrid's RegularGridInterpolator runs with
+    `bounds_error=False, fill_value=0` -- it does not raise, it returns EMPTY.
+    On an open axis that is correct and deliberate (outside the domain there is
+    no storm). On a PERIODIC axis it is wrong in the one place it matters: the
+    field wraps, so the honest sample beyond the wall is the field from the other
+    wall, and zeroing it lays a dead rim exactly along the boundary the line's
+    condensate crosses. Nothing would raise; the package would just quietly stop
+    wrapping.
+
+    So this is refused BY NAME rather than papered over, because the repair is a
+    DECISION and not a patch:
+
+      (a) Export the periodic axis at the simulation's own spacing (v == d). The
+          centres then coincide 1:1, no sample lands outside, and no wrapping code
+          is needed. Cheap, and it is what `supercell_333m` already does on its
+          full-domain box -- which is why this has never fired.
+      (b) Teach `regrid` to WRAP the source along a periodic axis. Physically the
+          right answer and the only one that permits a different export voxel, but
+          it is new interpolation behaviour in the module the charter reserves for
+          the terrain work, and it needs its own gate.
+
+    Clamping (the z analogue in `build_query`) is NOT on the list: extending the
+    last row outward flattens the wrap into a smear, which is a third wrong answer
+    that looks plausible in a render.
+    """
+    per = periodic_axes(sc)
+    for axis, n_e in (("x", sc.nx), ("y", sc.ny)):
+        if not per[axis]:
+            continue
+        spec = _AXES[axis]
+        d = float(sc.namelist[spec["d"]])
+        n = float(sc.namelist[spec["n"]])
+        src_half = (n - 1) / 2.0 * d           # outermost CM1 cell CENTRE
+        exp_half = (n_e - 1) / 2.0 * sc.export_voxel_m   # outermost voxel CENTRE
+        if exp_half > src_half + 1e-6:
+            raise ValueError(
+                f"{sc.source_path}: {axis} is PERIODIC and its export grid reaches "
+                f"{exp_half:.1f} m, past the outermost CM1 cell centre at "
+                f"{src_half:.1f} m ({exp_half - src_half:.1f} m, "
+                f"{(exp_half - src_half) / sc.export_voxel_m:.2f} voxels beyond, on "
+                f"each wall). regrid fills outside-the-grid samples with ZERO and "
+                "does not raise, so this would ship a dead rim along the very "
+                "boundary a wrapping structure crosses. Either export this axis at "
+                f"the simulation spacing (voxel_m = {d:g} m, centres coincide 1:1) "
+                "or give regrid periodic wrapping -- see check_periodic_resampling.")
+
+
 def require_measured_box(sc):
     """Refuse to proceed while the crop box is still a placeholder.
 
@@ -314,6 +377,7 @@ def require_measured_box(sc):
     # Not a placeholder, but the sweep alone cannot police a periodic axis: there
     # the extent is fixed by the boundary condition, not by the storm.
     check_periodic_extents(sc)
+    check_periodic_resampling(sc)
 
 
 def with_export_voxel(sc, voxel_m, path=None):
