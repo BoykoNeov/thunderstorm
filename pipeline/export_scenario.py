@@ -144,6 +144,28 @@ def cmd_export_web(args):
     """
     sc = load_scenario(args)
     scenario.require_measured_box(sc)   # never bake a placeholder box into a package
+
+    # Optional COARSER web grid (--web-voxel-m). Web-only, presentation-side, and
+    # deliberately not a second scenario JSON -- see scenario.with_export_voxel for
+    # why duplicating a `sim` block to change one export number is the wrong shape.
+    # Applied AFTER require_measured_box: the crop box is unchanged, only how finely
+    # it is sampled, so the measured-box gate means the same thing either way.
+    web_decimation = None
+    if args.web_voxel_m is not None:
+        native = sc.export_voxel_m
+        if args.web_voxel_m < native:
+            print(f"error: --web-voxel-m {args.web_voxel_m:g} is FINER than the "
+                  f"scenario's export voxel ({native:g} m). This flag exists to "
+                  "make the web payload smaller; upsampling here would cost bytes "
+                  "and add no information the package does not already have.",
+                  file=sys.stderr)
+            return 2
+        if args.web_voxel_m != native:
+            sc = scenario.with_export_voxel(sc, args.web_voxel_m)
+            web_decimation = webvol.decimation_block(native, sc.export_voxel_m)
+            print(f"COARSENED web export: {native:g} m -> {sc.export_voxel_m:g} m "
+                  f"({web_decimation['decimation_factor']:g}x)  {sc.describe_grid()}")
+
     files = fields.frame_files(sc.run_dir)
     idx = parse_range(args.frames, len(files))
     os.makedirs(args.out, exist_ok=True)
@@ -258,7 +280,8 @@ def cmd_export_web(args):
             print(f"  [{n+1:3d}/{len(idx)}] f{i:04d} t={storm_t/60:5.1f}min "
                   f"{rec['rgba_bytes']/1e6:5.2f} MB  ({el/(n+1):.1f} s/frame)")
 
-    doc = webvol.build_manifest(sc, records, qmax, observed=observed)
+    doc = webvol.build_manifest(sc, records, qmax, observed=observed,
+                                web_decimation=web_decimation)
     webvol.write_manifest(os.path.join(args.out, "web_manifest.json"), doc)
 
     # Sum every *_bytes key, so an added extra field cannot silently fall out of
@@ -318,6 +341,10 @@ def main():
     add_common(w)
     w.add_argument("--out", required=True)
     w.add_argument("--frames", help="index range a:b (default all)")
+    w.add_argument("--web-voxel-m", type=float, default=None,
+                   help="export the web bricks on a COARSER grid than the "
+                        "scenario's export voxel (must divide the crop box into "
+                        "whole voxels; recorded in web_manifest.json)")
     w.set_defaults(func=cmd_export_web)
 
     args = ap.parse_args()

@@ -10,7 +10,7 @@ be simulated with one geometry and exported with another.
 """
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 SCHEMA_VERSION = "1.0"
 
@@ -159,6 +159,33 @@ def require_measured_box(sc):
             "sweep, write the result back into `export`, and drop the flag. "
             "Exporting now would ship a box measured from a DIFFERENT storm -- "
             "which succeeds silently and clips whatever falls outside it.")
+
+
+def with_export_voxel(sc, voxel_m, path=None):
+    """A copy of `sc` exporting on a COARSER Cartesian grid, re-validated.
+
+    Presentation-side decimation for the web viewer only -- the same category as
+    webvol.py's quantization ("no science here"). Same run, same fields, same
+    encodings, fewer voxels.
+
+    It deliberately does NOT live in the scenario JSON. That file exists so "a
+    scenario cannot be simulated with one geometry and exported with another"
+    (module docstring), and a second config duplicating the `sim` block to change
+    one export number would be a second file claiming that guarantee while free to
+    drift from it: edit the parent's namelist and the copy silently keeps the old
+    one while still advertising the same provenance. The factor is recorded instead
+    where a reader actually looks -- `web/web_manifest.json`, which IS tracked in
+    git for web packages (2026-07-22 amendment) and is the grid a reader loads.
+
+    nx/ny/nz and origin_m are PROPERTIES derived from voxel_m and the crop box, so
+    they all follow from this one substitution -- there is no second place to keep
+    in step. `_validate` then refuses any voxel size that does not divide the
+    declared box into whole voxels, which is what stops `int(round(...))` from
+    silently producing an off-by-one grid for a box the manifest still declares.
+    """
+    sc2 = replace(sc, export_voxel_m=float(voxel_m))
+    _validate(sc2, path or sc.source_path)
+    return sc2
 
 
 def _validate(sc, path):

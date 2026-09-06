@@ -148,7 +148,37 @@ def write_frame(out_dir, index, channels):
     return rec
 
 
-def build_manifest(sc, frames, qmax, observed=None):
+def decimation_block(source_voxel_m, export_voxel_m):
+    """Extra `grid` keys marking a COARSENED web export (see build_manifest).
+
+    Without these, `voxel_m: 666` alone is ambiguous: it could equally be a 666 m
+    simulation. The package NAME cannot disambiguate it either -- this project's
+    suffixes track the SIMULATION resolution (`single_cell_500m` exports at 250 m),
+    so the export voxel has never been readable off the name.
+    """
+    return {
+        "source_voxel_m": source_voxel_m,
+        "decimation_factor": export_voxel_m / source_voxel_m,
+        "decimation_note": (
+            "COARSENED WEB EXPORT. `voxel_m` above is the grid in THIS file and is "
+            "what a reader must use; `source_voxel_m` is the scenario's own export "
+            "voxel, which this one is a whole-number multiple of. It is NOT the "
+            "simulation resolution -- neither number is, and the package name does "
+            "not carry it. Presentation-side only: same run, same fields, same "
+            "encodings, fewer voxels, so this changes streaming cost and not "
+            "science. The per-channel byte-scaling maxima (qmax) are still measured "
+            "on the CM1 SOURCE grid, which stays a valid upper bound after "
+            "coarsening -- linear resampling cannot raise a maximum -- but a looser "
+            "one, so this export uses less of its byte range than the native one "
+            "and the two packages' BYTES ARE NOT NUMERICALLY COMPARABLE (the "
+            "decoded fields are; compare those, or compare visually). Rescaling "
+            "qmax per export would fix the slack at the cost of making one byte "
+            "mean different things in different packages, which is exactly what "
+            "the fixed cross-scenario `w` scale exists to prevent."),
+    }
+
+
+def build_manifest(sc, frames, qmax, observed=None, web_decimation=None):
     """web_manifest.json contents -- the whole reader contract."""
     return {
         "web_format_version": WEB_FORMAT_VERSION,
@@ -159,6 +189,9 @@ def build_manifest(sc, frames, qmax, observed=None):
             "voxel_m": sc.export_voxel_m,
             # World coords (CM1 SI metres) of the CENTRE of voxel (0,0,0).
             "origin_m": list(sc.origin_m),
+            # Present ONLY on a coarsened export (decimation_block above). Absent
+            # keys mean the native grid -- so a native manifest is byte-unchanged.
+            **(web_decimation or {}),
         },
         "volume": {
             "layout": "rgba8, x fastest, then y, then z (WebGL texImage3D order)",
