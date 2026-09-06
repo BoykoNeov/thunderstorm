@@ -739,6 +739,125 @@ unchanged — `us15` 80 / 0.364 / 2.721, `us20` 80 / 0.526 / 1.948, `us25` 80 / 
 1.546, `P1` at ceiling 3/3, verdict still NO DISCRIMINATOR. It addresses runs by explicit
 name and globs nothing.
 
+### 4.2c The split test at 500 m — PRE-REGISTERED 2026-09-06, WRITTEN AND COMMITTED BEFORE ANY 500 m `cref` FIELD WAS OPENED
+
+**Owner go 2026-09-06**, choosing this over the parked diorama work. §4.2b named this
+escalation and did not run it; this section runs it.
+
+#### Why this and not something else
+
+After §4.2b's retraction, the claim *"the structural transition between the multicell
+and supercell regimes lands between `U_s` 15 and 20 m/s"* stands on **one leg**. §4.2a
+offered two supports; the `R` one was withdrawn when refining **both** members turned
+its "separation strengthens" into a one-sided-refinement artifact. What is left is the
+**split test**: at 1 km, `us15` does not split into mirror-image movers and `us20` does,
+measured with **no classifier at all** — which is why it survived two 500 m runs that
+were about `E`, `R` and `P1`. But it has only ever been read at 1 km, and §4.2b's whole
+lesson is that a 1 km statement about a *difference between two members* is not entitled
+to assume refinement is a common offset. So the last leg gets the same treatment the
+retracted one did.
+
+**This needs no new simulation.** `t5s_us15_500m` and `t5s_us20_500m` are on disk from
+§§4.2a–4.2b, as are both block reductions of each (`_coarse_mean`, `_coarse_extremum`),
+all 25 frames, all covering 0–120 min with the same 17 mature frames as the 1 km pair.
+Containment is already measured for both (67.9 / 63.4 km and 60.94 / 32.47 km of
+clearance against the 15 km floor) — **cited, not re-derived**. This is an analysis run
+on existing fields.
+
+#### The confound this test has that the earlier ones did not
+
+`split_test_t5s.py` counts connected `cref >= 40 dBZ` components with
+`structure=np.ones((3,3))` — **a connectivity reach in GRID CELLS, not in kilometres**.
+At 1 km that reach is 2 km; at 500 m it is 1 km. So a 500 m grid can cut a single echo
+into two components for a purely numerical reason, and *that manufactures exactly the
+signal the test reads*. The area floor (`DBZ_MIN_AREA_KM2`) is in physical km² and is
+resolution-independent, so it is not part of the hazard.
+
+The fix is the one the record already established (`coarsen_test.py`): **block-reduce
+the 500 m runs back onto the exact 1 km grid and read them with the UNCHANGED
+instrument.** Re-tuning the connectivity structure per resolution would *hide* the
+confound rather than control for it, so the instrument is not touched.
+
+**Primary basis: the two block reductions.** Corroborating: the raw 500 m runs. If the
+two reductions disagree with each other the result is INDETERMINATE and no claim moves —
+`mean` and `extremum` bracket what a coarse grid can represent, and a conclusion that
+depends on which bracket you pick is not a conclusion.
+
+#### Gate N1 — instrument neutrality — **PASSED before the bar was written**
+
+The run list was parameterised (`--names`, `--runs`) and a machine-readable `SUMMARY`
+line added behind an off-by-default `--summary`. Invoked bare, the edited script's
+stdout is **byte-identical (6405 bytes) to the pre-edit version from `HEAD`** across the
+published five runs, reproducing the record's table to the digit: `us15` 1 two-component
+mature frame, `us20` 6 frames at **+3.16 m/s**, `us25` 9 frames at **+4.09 m/s**,
+`t5probe_sc` 1, `t5probe_a` 2. An instrument does not get "improved" on its way to new
+data.
+
+#### The bar — fixed from the 1 km values, before the 500 m numbers exist
+
+Every threshold below is derived from the **published 1 km table only**. None of them
+may be adjusted after a 500 m number is seen; defining "splits" by reference to the data
+under test is the self-referential-control trap this record has already fallen into
+twice (T5 §11.8's own median, and criterion 1's).
+
+A member scores **SPLITS** iff all three hold:
+
+1. **≥ 4** two-component mature frames (1 km: `us20` 6, `us25` 9; `us15` 1, `t5probe_a`
+   2. Four is below both splitters and above both non-splitters, and ≥ 3 is required for
+   a trend to be computable at all);
+2. separation trend **≥ +2.00 m/s** (1 km: `us20` +3.16, `us25` +4.09; the floor is
+   ~63 % of the weaker splitter);
+3. mean `|dy| > |dx|` — the separation axis is **across-shear**, which is what
+   distinguishes two movers on opposite flanks from an along-shear line. Both 1 km
+   splitters satisfy it.
+
+A member scores **NO SPLIT** iff it has **≤ 2** two-component mature frames (1 km:
+`us15` 1, `t5probe_a` 2 — the latter is recorded as non-splitting).
+
+Anything else — 3 frames, or ≥ 4 frames failing the trend or the axis — is
+**INDETERMINATE** for that member. Conditions 2 and 3 make SPLITS *harder*, which is the
+conservative direction for the surviving claim, not a protective one.
+
+#### The three outcomes, and the falsifying one is live
+
+- **(S) THE CLAIM SURVIVES REFINEMENT** — on **both** reductions, `us15` = NO SPLIT and
+  `us20` = SPLITS. The transition-location claim keeps its last leg, now measured at two
+  resolutions with both members refined, which is more than it has ever had.
+- **(F) THE CLAIM IS FALSIFIED** — on **both** reductions, either `us15` = SPLITS, or
+  `us20` = NO SPLIT. **Written down as genuinely possible:** if this fires, the
+  transition claim has **no** support left — not a weakened one — and §4.2's structural
+  transition must be withdrawn in the same way §4.2a's `R` support was. The BRN
+  environment result and the "no multicell label" result are untouched either way; this
+  is about the *structural* claim only.
+- **(I) INDETERMINATE** — the two reductions disagree on either member, or either member
+  lands in the middle band. Nothing moves, and the record says the last leg is
+  unverified at 500 m rather than pretending it was.
+
+The raw 500 m read is reported alongside. If it agrees with two agreeing reductions, all
+three bases agree and the result is not indeterminate (the §4.2b pattern). **If it
+disagrees with two agreeing reductions, that disagreement IS the connectivity artifact
+predicted above** — it is reported as a measurement of the confound, and the reductions
+govern.
+
+#### The late-window rule, fixed now because it will be tempting later
+
+`us15`'s **only** 1 km two-component frame is the **final frame** (t = 120 min) — a
+boundary-adjacent datum. So, decided in advance: if a member's two-component frames are
+**all** at t ≥ 105 min, it scores **INDETERMINATE**, never SPLITS and never NO SPLIT,
+because a signal that appears only as the run ends cannot be told apart from a run that
+stopped too early. Note this rule can only ever *withhold* a verdict — it cannot confirm
+the claim, and it blocks a falsification and a confirmation symmetrically. `t_last3` is
+printed by the instrument so the rule is checkable rather than asserted.
+
+#### What this run cannot settle, said in advance
+
+**The 15 → 20 step only.** `us25` is not refined and will not be, so no statement of the
+form "the sweep's splitting behaviour is / is not a resolution artifact" is licensed —
+only the statement about the step the transition claim actually rests on. And a
+surviving split test is **not** a multicell label: `P1` is at its ceiling at both
+resolutions and that question is closed (§4.2a).
+
+
 ### 4.3 Cost
 
 Five 1 km probes × ~13 min at `np=4`; one classifier addition (discrete propagation)

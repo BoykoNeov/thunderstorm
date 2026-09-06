@@ -11,6 +11,7 @@ A LINE:  two components at roughly constant separation, no systematic divergence
 (The rotation-SIGN test is unavailable: H4 / T5 section 13.7 measured CM1's `uh` as
 non-negative, so every rotation centre reads sign +1. Geometry is what is left.)
 """
+import argparse
 import os
 import sys
 
@@ -46,7 +47,32 @@ def echo_components(path):
     return t_min, out
 
 
-for name in ("t5s_us15", "t5s_us20", "t5s_us25", "t5probe_sc", "t5probe_a"):
+# --- 2026-09-06: run list parameterised so the SAME instrument can read the 500 m
+# members and their block reductions. Two deliberate constraints:
+#   * the default list is the published five, and `--summary` is OFF by default, so
+#     invoked bare this script's stdout is BYTE-IDENTICAL to the pre-edit version.
+#     That identity is the neutrality gate (docs plan section 4.2c gate N1) -- an
+#     instrument is not allowed to be "improved" on its way to new data.
+#   * nothing about the measurement changes: same DBZ_CELL, same DBZ_MIN_AREA_KM2,
+#     same 3x3 connectivity, same MATURE_MIN window. In particular the connectivity
+#     structure stays in GRID CELLS, which is exactly why the matched-resolution
+#     block reductions -- not the raw 500 m run -- are the primary basis: at 500 m a
+#     3x3 reaches 1 km where at 1 km it reaches 2 km, so a finer grid can cut one
+#     echo into two for no physical reason. Re-tuning connectivity per resolution
+#     would hide that confound instead of controlling for it.
+DEFAULT_NAMES = ("t5s_us15", "t5s_us20", "t5s_us25", "t5probe_sc", "t5probe_a")
+
+ap = argparse.ArgumentParser(description=__doc__)
+ap.add_argument("--names", nargs="+", default=list(DEFAULT_NAMES),
+                help="run directories under --runs (default: the published five)")
+ap.add_argument("--runs", default=RUNS)
+ap.add_argument("--summary", action="store_true",
+                help="append one machine-readable SUMMARY line per run (off by "
+                     "default so bare output stays byte-identical to the 1 km record)")
+args = ap.parse_args()
+RUNS = args.runs
+
+for name in args.names:
     d = os.path.join(RUNS, name)
     files = sorted(f for f in os.listdir(d)
                    if f.startswith("cm1out_0") and f.endswith(".nc"))
@@ -68,8 +94,10 @@ for name in ("t5s_us15", "t5s_us20", "t5s_us25", "t5probe_sc", "t5probe_a"):
         else:
             print(f"  {t:6.0f} {len(comps):2d}       -       -       -   "
                   + ("single component" if comps else "no echo"))
+    slope = float("nan")
     if len(seps) >= 3:
         sl = np.polyfit(np.array(ts) * 60.0, np.array(seps) * 1000.0, 1)[0]
+        slope = float(sl)
         print(f"  --> {len(seps)} two-component frames; separation "
               f"{min(seps):.1f}-{max(seps):.1f} km, trend {sl:+.2f} m/s")
         print(f"      |dx| mean {np.mean(np.abs(dxs)):.1f} km, "
@@ -78,3 +106,13 @@ for name in ("t5s_us15", "t5s_us20", "t5s_us25", "t5probe_sc", "t5probe_a"):
                  else "ALONG-shear (x)"))
     else:
         print(f"  --> only {len(seps)} two-component mature frames")
+    if args.summary:
+        # `t_last3` is the count of two-component frames in the final three output
+        # frames. It exists because us15's ONLY 1 km two-component frame is the LAST
+        # frame -- a boundary-adjacent datum -- and section 4.2c fixes in advance how a
+        # late-window-only signal scores, rather than deciding once the number is seen.
+        late = sum(1 for t in ts if t >= 105.0)
+        print(f"  SUMMARY {name} n2={len(seps)} trend_ms={slope:.3f} "
+              f"absdx_km={(np.mean(np.abs(dxs)) if dxs else float('nan')):.2f} "
+              f"absdy_km={(np.mean(np.abs(dys)) if dys else float('nan')):.2f} "
+              f"t_last3={late} mature_frames_total={len(ts)}")
