@@ -47,6 +47,8 @@ recorded prediction equals what the config's own sounding computes).
 | `t5s_us15.json` | sweep | WK82 + tanh U_s=15 (14.5 m/s 0–6 km) | BRN 59 → **multicell** |
 | `t5s_us20.json` | sweep | WK82 + tanh U_s=20 (19.3 m/s) | BRN 33 → supercell |
 | `t5s_us25.json` | sweep | WK82 + tanh U_s=25 (24.1 m/s) | BRN 21 → supercell |
+| `t5s_us15_500m.json` | §4.2a contingency | as `t5s_us15`, 360² @ 499.5 m | resolution only; RAN 2026-09-06, branch (iii) |
+| `t5s_us20_500m.json` | §4.2b escalation | as `t5s_us20`, 360² @ 499.5 m | resolution only; the matched-resolution 15→20 gap |
 
 The neutrality controls run FIRST and gate everything else: if `t5s_neutral_pc` does
 not reproduce `t5probe_pc`'s base state, `isnd=7` is not what the plan believes and the
@@ -453,7 +455,67 @@ Coarsening does not restore them, and the two reductions agree.
 trend but does not measure it, since only one member was refined. The split test and
 `R`'s separation are untouched, so §4.2's transition location stands; what does not
 survive is `E ≥ 2.40` at 1 km as resolution-robust evidence of a line-like regime.
-**The 500 m `t5s_us20` that would settle it stays NOT RUN.** Full record: plan §4.2a.
+**The 500 m `t5s_us20` that would settle it was NOT RUN at the time of writing; the owner gave the go on 2026-09-06 and it is §4.2b below.** Full record: plan §4.2a.
+
+#### §4.2b the SECOND 500 m run — **`t5s_us20` at 500 m, LAUNCHED 2026-09-06 09:44 under an owner go.** Pre-registered in flight, before any field was read.
+
+`t5s_us20_500m` is the escalation §4.2a *named and did not run*. It exists because a
+single refined member can only **bound** the resolution confound on the `E` trend: from
+one point, a common offset applied to every member and a collapse specific to `us15` are
+indistinguishable. Two refined members separate them, because the `us15` → `us20` gap can
+then be read **at matched resolution**.
+
+**Built from `t5s_us20.json`, not from `t5s_us15_500m.json`** — cloning the us15 file
+would have carried `umove` 9.9 and `U_s` 15 and silently answered a different question.
+Four keys move (`nx`, `ny` 180→360; `dx`, `dy` 999.0→499.5) and nothing else. Gated
+**before launch, measured not asserted**: the generated deck differs from `t5s_us20`'s in
+**exactly six lines** (`nx`, `ny`, `dx`, `dy`, `dx_inner`, `dy_inner`) with `tot_x_len`/
+`tot_y_len` identical at 179 820.0 m; `umove` reads 13.3 in both; and the generated
+`input_sounding` sha256 `7538c7ae…` matches four ways — generated from this config,
+generated from `t5s_us20.json`, recorded in `t5s_us20`'s `run_meta.txt`, and still on
+disk in that run directory. `np=8`, binary `5fc93016…`.
+
+**The decision, fixed in plan §4.2b before any number existed.** The quantity is
+`G_ref` = `E`(`us15_500m` coarsened) − `E`(`us20_500m` coarsened), against the 1 km gap
+`G_1km` = 0.773. The **bar is NEW and is declared new** — half of `G_1km`, **0.387**,
+meaning the point at which resolution and the shear step contributed equally to the gap
+seen at 1 km. Since `E`(`us15`) at 500 m is already measured, the bar is written as the
+numbers `us20` must produce:
+
+| basis | `E`(`us15`) | (A) ENVIRONMENTAL needs `E`(`us20_500m`) ≤ | (C) INVERTED at > |
+|---|---|---|---|
+| coarsened block-mean **(headline)** | 1.730 | **1.343** | 1.730 |
+| coarsened block-extremum **(headline)** | 1.770 | **1.383** | 1.770 |
+| raw 500 m (reported, not decisive) | 1.813 | 1.426 | 1.813 |
+
+(A) gap keeps its sign and ≥ 0.387 → the 15→20 separation is environmental, refinement
+is largely a common offset. (B) `0 ≤ G_ref < 0.387` → substantially resolution. (C)
+`G_ref < 0` → the 1 km ordering does not survive refinement — **live, not hypothetical**,
+since raw `E`(`us15_500m`) = 1.813 sits only 0.135 below `E`(`us20`) at 1 km. If the two
+reductions choose different branches the test is INDETERMINATE and neither is chosen.
+
+**Containment is read first and is NOT inherited** — higher risk here than for `us15`,
+because `us20` translates at 13.3 m/s against 9.9 m/s in the same 180 km box. A void
+member fires no branch and the escalation returns *not measured*, not a weaker answer.
+
+**Not the decision, pre-registered as such:** `Δ_E(us20)` beside `us15`'s 0.908 / 0.991 /
+0.951 is descriptive; `R` is a **separate** reading (`R` and `E` move in opposite
+directions under refinement, so a widening `R` gap does not rescue `E`); and `P1` = 80
+with a SUPERCELL label is expected and uninformative.
+
+**The instrument is unchanged.** `coarsen_test.py` already takes `--run`/`--ref`, so no
+constant is edited and the `us15` invocation stays reproducible from the same file:
+
+```sh
+python3 sim/probes/coarsen_test.py --run t5s_us20_500m --ref t5s_us20
+```
+
+**G2 re-runs against `t5s_us20` as its own reference** — a gate that proves the
+instrument on data whose answer is known is a per-reference claim, and `us15`'s pass
+does not transfer.
+
+**What it cannot settle, said in advance:** the 15→20 step only. `us25` stays at 1 km,
+so the three-member `E` trend is not settled by this run.
 
 ## Running one
 

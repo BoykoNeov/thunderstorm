@@ -247,9 +247,13 @@ task records THERE; keep this table to one line per phase.
   coarsening does not restore the 1 km values, and both reductions agree. `R` and `E` move in
   **opposite** directions under refinement, so the descriptor family is not one signal. The
   transition-location claim stands (the split test is classifier-free and untouched; `R`'s
-  separation strengthens). **Escalation named and NOT run:** a 500 m `t5s_us20` is the only
-  thing that would measure, rather than bound, the resolution confound on the `E` trend — the
-  go covered one run. Record: plan §4.2a, docs/STATUS.md, sim/probes/README.md §4.2a.
+  separation strengthens). **Escalation LAUNCHED 2026-09-06 under a fresh owner go:** a 500 m `t5s_us20` is the only
+  thing that would measure, rather than bound, the resolution confound on the `E` trend, and it
+  is now running (`t5s_us20_500m`, `np=8`). Its comparison, its bar and its three branches are
+  pre-registered in plan §4.2b, committed while it stepped and before any field was read; the
+  decisive number is the `us15`→`us20` gap in `E` read at MATCHED resolution against the 1 km
+  0.773, and the bar (half of it, 0.387) is declared NEW rather than dressed as pre-existing.
+  Record: plan §§4.2a–4.2b, docs/STATUS.md, sim/probes/README.md §§4.2a–4.2b.
 - **Capped single-cell control: CLOSED 2026-09-06 — DELIVERED, as a negative.** Both
   members ran (25 frames each) and initiation **PASSED** for both, but the singleness
   criterion was **void as first written**: the configuration is exactly symmetric

@@ -508,6 +508,130 @@ different grids by two different reductions. This project still has no criterion
 separates a multicell from a supercell, and resolution is now measured — not assumed — to
 be the wrong lever for building one.
 
+### 4.2b The SECOND 500 m run — the escalation, RUN. PRE-REGISTERED 2026-09-06 WHILE IT WAS STEPPING AND BEFORE ANY OF ITS FIELDS WERE OPENED
+
+§4.2a named a 500 m `t5s_us20` as the escalation and did not run it, because the go
+covered one run. **The owner gave the go for it on 2026-09-06** ("the second 500 m run
+that would settle how much of the trend is resolution rather than environment — run
+it"). It was launched at 09:44 and this subsection was written while it stepped, before
+its first frame was read. Everything below — the comparison, its bar, and the branches —
+is fixed here and is not renegotiated once the numbers exist.
+
+**Why one refined member could not settle it.** §4.2a measured that refining `us15`
+moved `E` by 0.908 (raw) and 0.991 / 0.951 (block-mean / block-extremum, on the
+reference grid), all larger than the `us15` → `us20` shear step of 0.773 at 1 km. That
+**bounds** the resolution confound and cannot **measure** it, because from one refined
+point a common offset applied to every member and a collapse specific to `us15` look
+identical. Two refined members separate them, because the gap between them can then be
+read at matched resolution.
+
+**The configuration, and the gate it passed before launch.** `t5s_us20_500m.json` is
+`t5s_us20.json` with four keys changed — `nx`, `ny` 180 → 360 and `dx`, `dy` 999.0 →
+499.5 — and nothing else. It was built from `t5s_us20.json`, **not** from
+`t5s_us15_500m.json`, which is the trap this run had to avoid: cloning the us15 file
+would have carried `umove` 9.9 and `U_s` 15 and silently answered a different question.
+**Measured before launch, not asserted:**
+
+- the generated deck differs from `t5s_us20`'s in **exactly six lines** — `nx`, `ny`,
+  `dx`, `dy` and the two geometry-derived `dx_inner`/`dy_inner` — with `tot_x_len` and
+  `tot_y_len` **identical** at 179 820.0 m, because 360 × 499.5 = 180 × 999 exactly;
+- `umove` reads **13.3** in both decks (`us20`'s value, not `us15`'s 9.9);
+- the generated `input_sounding` has sha256 `7538c7ae…`, matching **four ways**: newly
+  generated from this config, newly generated from `t5s_us20.json`, the value recorded
+  in `t5s_us20`'s own `run_meta.txt`, and the file still on disk in that run directory.
+
+`np=8`, one run and not a concurrent pair. The binary is the pinned fork `5fc93016…`.
+
+**Order of reading, fixed and unchanged from §4.2a: containment first.** It is
+**measured on this run and not inherited** — and the risk is higher here than it was for
+`us15`, because `us20` translates at 13.3 m/s against 9.9 m/s in the same 180 km box, so
+`us15_500m`'s 67.93 / 63.44 km clearance says nothing about this one. A void member is
+not scorable at any label, **no branch below fires, and the escalation returns "not
+measured" rather than a weaker version of an answer** — the matched-resolution gap needs
+both members scorable.
+
+#### The number this run exists to produce, and its bar
+
+The quantity that separates resolution from environment is the `us15` → `us20` gap in
+`E` **measured at the same resolution**:
+
+> `G_ref` = `E`(`us15_500m` coarsened) − `E`(`us20_500m` coarsened), against the 1 km
+> `G_1km` = 2.721 − 1.948 = **0.773**.
+
+The **coarsened** pair is the headline, for the reason commit `c490260` already gave: a
+raw 500 m comparison still compares numbers computed on a different grid from the one
+the 1 km value came from, inside the very claim that is about grid confounding. The raw
+500 m gap is reported beside it, never instead of it.
+
+**THE BAR IS NEW.** There is no pre-existing constant in this repo for a *gap*, and
+dressing one up as pre-existing is exactly the move this document exists to prevent. It
+is stated here, before the number exists, with its justification: **half of `G_1km`**,
+i.e. **0.387**. Its meaning is the only thing a fraction can honestly mean without a
+distribution behind it — one half is the point at which the resolution change and the
+shear step contribute *equally* to the gap observed at 1 km. Below it, resolution is the
+larger contributor. It is not a significance threshold and is not claimed to be one.
+
+Because `E`(`us15`) at 500 m is already measured, the bar can be written as the actual
+numbers `us20` must produce, which is what makes it unnegotiable:
+
+| basis | `E`(`us15`) measured | branch (A) ENVIRONMENTAL needs `E`(`us20_500m`) ≤ | branch (C) INVERTED at `E`(`us20_500m`) > |
+|---|---|---|---|
+| coarsened, block-mean **(headline)** | 1.730 | **1.343** | 1.730 |
+| coarsened, block-extremum **(headline)** | 1.770 | **1.383** | 1.770 |
+| raw 500 m (reported, not decisive) | 1.813 | 1.426 | 1.813 |
+
+- **(A) ENVIRONMENTAL** — `G_ref` keeps its sign and `G_ref ≥ 0.387`: the 15 → 20
+  separation survives refining *both* members; refinement acts largely as a common
+  offset; the `E` step across this shear interval is a property of the environment.
+- **(B) SUBSTANTIALLY RESOLUTION** — `0 ≤ G_ref < 0.387`: the gap keeps its sign but
+  loses at least half its 1 km size. Resolution contributed at least as much as the
+  shear step did, and the 1 km `E` trend across this step is not resolution-robust.
+- **(C) INVERTED** — `G_ref < 0`: the 1 km ordering does not survive refinement at all.
+  **This is live, not hypothetical**: raw `E`(`us15_500m`) = 1.813 already sits only
+  0.135 below `E`(`us20`) at 1 km, so a modest downward move in `us20` inverts it.
+
+**Both reductions must land in the same branch.** If block-mean and block-extremum
+choose differently, the coarsening test is **INDETERMINATE and neither is chosen** —
+§4.2a's own rule, unchanged.
+
+#### The readings that are NOT the decision
+
+- **The refinement delta on `us20` itself**, `Δ_E(us20)` = 1.948 − `E`(`us20_500m`),
+  beside `Δ_E(us15)` = 0.908 raw / 0.991 mean / 0.951 extremum. Two similar deltas *are*
+  the common offset branch (A) describes; a much smaller one is what produces (B) or
+  (C). This is **descriptive** — the gap branches above are the decision, and this
+  number does not get to overrule them.
+- **`R`, read entirely separately.** 1 km: `R`(`us15`) 0.364, `R`(`us20`) 0.526;
+  refining `us15` moved it to 0.247 raw / 0.197 mean / 0.257 extremum, which
+  *strengthened* that separation. §4.2a measured that `R` and `E` move in **opposite**
+  directions under refinement, so this is a second reading and not part of the first.
+  **Pre-registered now so it cannot be combined later:** an `R` gap that widens does not
+  rescue `E`, and an `E` gap that widens is not owed to `R`.
+- **`P1` will read 80, and that is expected and uninformative.** The ceiling is the H3
+  problem, not a result (§4.2a, and three times before it). A SUPERCELL label on the
+  predicted-supercell member is likewise expected and is evidence of nothing.
+
+#### The instrument
+
+`sim/probes/coarsen_test.py`, **unchanged** — it already takes `--run`, `--ref` and
+`--block`, so the `us15` invocation stays reproducible from the same file and no
+constant is edited in place:
+
+    python3 sim/probes/coarsen_test.py --run t5s_us20_500m --ref t5s_us20
+
+**G2 is re-run against `t5s_us20` as its own reference.** `us15`'s G2 pass does not
+transfer to a different reference run: the gate exists to prove the instrument on data
+whose answer is already known, and that is a per-reference claim. G1 and G3 follow as
+before, and if any gate fails, no verdict is read.
+
+#### What this run cannot settle, said in advance
+
+Two refined members settle the **15 → 20 step** — the step the structural-transition
+claim rests on — and nothing wider. `us25` stays at 1 km, so the **three-member `E`
+trend is not settled by this run**, and no statement of the form "the sweep's `E` trend
+is / is not a resolution artifact" is licensed by it. The same sentence §4.2a wrote
+about bounding versus measuring applies one member further out.
+
 ### 4.3 Cost
 
 Five 1 km probes × ~13 min at `np=4`; one classifier addition (discrete propagation)
