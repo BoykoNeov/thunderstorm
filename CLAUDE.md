@@ -173,7 +173,14 @@ Keep current — SVT behavior shifts between UE releases. Filled through Phase 0
   holds** — only "the binary is the Phase 0 binary" moved, which is what
   `sim/cm1-patches/README.md` and each run's `run_meta.txt` `cm1_binary_sha256` record.
   Verified bitwise-neutral vs stock at seed 0 **with `irandp=1`** (not just `irandp=0`,
-  which would not exercise the patched block). Rebuild recipe in the patches README;
+  which would not exercise the patched block). **Re-measured 2026-09-07 at a second
+  configuration** (`single_cell_500m`, 160×160×40, np=8, `irandp=0`): fork and stock
+  produce byte-identical output, and both reproduce July's on-disk run — so neutrality is
+  measured at two grids and two rank counts rather than extrapolated from one
+  (docs/phase3-completion-2026-09-06.md §3). Still not "any grid and rank count":
+  `supercell_333m` is unmeasured. Per-file sha256 baselines for all three shipped
+  scenarios live in `sim/baselines/`, so this stays checkable after the raw output is
+  reclaimed. Rebuild recipe in the patches README;
   never edit `init3d.f90` — it is a cpp build product.
 - **WSL/toolchain:** Ubuntu 24.04, gfortran 13, OpenMPI 4.1.6, netCDF C+Fortran
   (system libs). MPI, single node.
@@ -220,7 +227,7 @@ task records THERE; keep this table to one line per phase.
 | **0** benchmark gate | **COMPLETE** 2026-07-14 — 333 m default / 250 m flat hero / 500 m preview, `np=8`, bitwise reproducible; VHDX relocated to M: | docs/phase0-*.md |
 | **1** pipeline spike | **CLOSED** 2026-07-20 — 301-frame VDB→SVT end to end on a real RHI; two owner-owed live checks carried (UE SVT visual streaming sign-off, diorama 5c pan gestures) | docs/phase1-completion-2026-07-20.md |
 | **2** scenario system · layers · radar | **COMPLETE** (T1–T9) — scenario JSON drives deck AND export; linear-Z dBZ; `w`; `cref`; two packages; diorama picker/layers/plan view | docs/phase2-plan-2026-07-20.md |
-| **3** flat convective regimes | **IN PROGRESS** — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. **500 m re-run of `us15` DONE 2026-09-06 — branch (iii): the ceiling is structural, no multicell label, and `us15`'s one piece of multicell-side evidence (`E`) did not survive refinement.** **Second 500 m run (`us20`) DONE 2026-09-06 — branch (B): the 15→20 elongation gap keeps its sign but loses more than half its 1 km size, so that trend is not resolution-robust; and `R`'s "separation strengthens" is RETRACTED as a one-sided-refinement artifact, leaving the transition-location claim on the split test alone.** **The split test itself
+| **3** flat convective regimes | **CLOSED** 2026-09-07 (not "complete" — the Phase 1 precedent) — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. **500 m re-run of `us15` DONE 2026-09-06 — branch (iii): the ceiling is structural, no multicell label, and `us15`'s one piece of multicell-side evidence (`E`) did not survive refinement.** **Second 500 m run (`us20`) DONE 2026-09-06 — branch (B): the 15→20 elongation gap keeps its sign but loses more than half its 1 km size, so that trend is not resolution-robust; and `R`'s "separation strengthens" is RETRACTED as a one-sided-refinement artifact, leaving the transition-location claim on the split test alone.** **The split test itself
 READ AT 500 m 2026-09-06 — branch (I) INDETERMINATE: no new run needed, and `us20` scores
 SPLITS on NO basis (six mirrored frames diverging at +3.16 m/s at 1 km become 0 / 1 / 1 at
 500 m). The reductions disagree, so the claim is UNVERIFIED at 500 m — not confirmed, not
@@ -228,7 +235,23 @@ withdrawn — and the ONLY thing that stopped a withdrawal is the late-window gu
 before any field was opened. The pre-registered primary basis was measured STRUCTURALLY
 BLIND for this statistic: block reduction MERGES a 1 km gap it cannot represent (area
 conserved 100.8 %, gap sub-40 dBZ cells 2 → 0), so it is faithful for field statistics and
-wrong for component counts.** T6–T7 pending | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · sim/probes/README.md |
+wrong for component counts.** **CLOSED 2026-09-07 (T7). T6 is VOID BY MEASUREMENT** — its
+asset was pinned as "T5s's *confirmed* multicell at 333 m", and T5s measured that no
+multicell label is reachable; no substitute was shipped, because the only candidate
+cannot honestly be *named* multicell. **T7 RAN its pre-registered fork-neutrality gate
+and it PASSED on branch 1: all three comparisons IDENTICAL** over 302 files —
+`single_cell_500m` re-run tonight on the fork AND on the stock binary from ONE generated
+deck (same `namelist_sha256`, so the binary was the only difference), each also compared
+against July's surviving on-disk output. **T4 §4.1's extrapolation is now MEASURED TWICE**,
+at a second configuration differing in both quantities it was scoped on (grid 160² vs 60²,
+np 8 vs 4) — the charter's recovery path is settled bitwise for that scenario, and the
+fork costs it nothing. Free result: the generated deck is byte-different from July's
+hand-written one and only value-identical, yet the run is bitwise identical, so comments
+and key ordering are now *measured* not to reach the model. **Scope, not widened:** one
+scenario, one grid, one rank count; `supercell_333m` (540², 218 GB) stays unmeasured, and
+closing it is a known run, not a new design. `sim/baselines/` now holds per-file sha256
+lists for all three shipped scenarios (~100 KB) because the only baseline that existed
+was 240 GB of raw netCDF this charter calls *disposable by design*. | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · **docs/phase3-completion-2026-09-06.md** · sim/probes/README.md |
 | **3T** terrain | not started — Cartesian regridding module, heightfield render path, static full domain, VHDX resize first | Phase 3 plan §8 |
 | **4** lightning · hail swaths · particles · polish | not started — prerequisites listed in the 2026-09-02 plan §7 | — |
 
@@ -353,5 +376,18 @@ wrong for component counts.** T6–T7 pending | docs/phase3-plan-2026-07-20.md �
 2. Diorama 5c pan gestures.
 3. VHDX resize number before the first terrain hero run.
 4. Manifest inline provenance — now with `input_sounding` as a second input to record.
+   **Ordering, recorded at T7 and not optional:** the fix re-exports every package and
+   re-baselines the byte-identity gate, so it must come *after* any package-level
+   reproducibility check, never before — otherwise it invalidates the baseline by
+   construction. T7's gate was run first for exactly this reason.
+
+**Phase 3 is closed, and what comes next is one of five options — all owner calls, none
+started** (docs/phase3-completion-2026-09-06.md §5): **A** open Phase 3T (terrain — the
+prerequisite deck rule is already in); **B** finish the split-test thread (two named
+escalations, verifies a claim already made, ships nothing); **C** ship an organised-
+convection package from the `us20` environment — the storm is real and **the blocker is
+the name, not the physics**, so it needs the owner's word on an honest descriptive label;
+**D** ship a squall line (needs the periodic-axis resampling call taken first); **E** take
+the manifest decision above.
 
 Full advisor pressure-test of this plan: docs/advisor-review-2026-07-09.md

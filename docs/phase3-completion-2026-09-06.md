@@ -6,9 +6,10 @@ Companion to `docs/phase3-plan-2026-07-20.md` (the plan), its 2026-09-02 amendme
 every carried item, states plainly what Phase 3 delivered and what it did not, and
 settles — or records as unsettleable — the one extrapolation T4 deliberately left open.
 
-Written 2026-09-06. Sections 2 and 3 are **pre-registered**: they were written and
-committed before the gate they describe was run and before any of its output was
-hashed.
+Written 2026-09-06; §3 completed 2026-09-07. **Section 2 is pre-registered** — it was
+written and committed (`487221c`, amended `f63fbf5`) before the gate it describes was
+run and before any of its output was hashed. §3 records what the gate returned, against
+branches that were fixed in advance and were not renegotiated.
 
 ---
 
@@ -201,9 +202,92 @@ run, not a new design.
 
 ---
 
-## 3. RESULT — pending
+## 3. RESULT — branch 1: all three comparisons IDENTICAL
 
-*(This section is written after the gate runs. It is empty on purpose at commit time.)*
+Ran 2026-09-06 23:02 → 2026-09-07 01:01 (1 h 59 m wall). Log:
+`/home/boiko/thunderstorm/runs/t7neutral.log`.
+
+```
+COMPARISON 1  A(fork)  vs B(stock), both today : IDENTICAL (302 files)
+COMPARISON 2  B(stock) vs July on-disk         : IDENTICAL (302 files)
+COMPARISON 3  A(fork)  vs July on-disk         : IDENTICAL (302 files)
+```
+
+All three refusals cleared before either member started: the two binaries were verified
+to hash as recorded **and to differ from each other** (so the gate could not pass
+trivially), the baseline's 302 files were present, and neither target directory
+collided with any scenario's declared `run_dir`.
+
+### 3.1 The branch this is, and what it upgrades
+
+This is §2.6's **1 PASS, 2 PASS** branch, unambiguously — with comparison 3 measured
+rather than inferred, which is the transitivity check: 1 and 2 being IDENTICAL *forces*
+3 to be IDENTICAL, so a differing 3 would have meant the comparator itself was broken.
+It was not.
+
+**T4 §4.1's extrapolation is now a measurement, at a second configuration differing in
+both of the quantities it was scoped on** — grid 160×160×40 against T4's 60×60, and 8
+ranks against T4's 4. Its wording moves from *"expected to hold"* to **measured twice**.
+The charter's recovery path — *"regeneration from `sim/` + `pipeline/`"* — is settled
+bitwise for `single_cell_500m`, and the fork carries no cost to it.
+
+### 3.2 Why comparison 1 is clean: the only thing that differed was the binary
+
+Both members recorded `namelist_sha256 = 4eef9f40b4a0e679…` — the *same* deck, generated
+once by `pipeline/gen_deck.py` and handed to both. Same deck, same rank count, same
+OpenMPI, same hour; different binary. That is the whole of the difference, which is what
+makes "identical output" attributable to the patch's neutrality rather than to anything
+else holding still.
+
+### 3.3 A free result: comments and key ordering provably do not reach the output
+
+The generated deck is **not byte-identical** to July's hand-written one — `4eef9f40…`
+against `8244367c…` — it is *value*-identical, which is all `gen_deck.py --verify`
+claims (344/344 keys, modulo comments and key ordering). The run produced from it came
+back bitwise identical to July's anyway.
+
+So parsed-value comparison is not a weaker substitute for byte comparison here: the
+things it ignores are now **measured** not to reach the model. That retires a latent
+worry about `--verify`'s contract that no amount of reading the comparator could have
+settled.
+
+### 3.4 A second free result, stated narrowly
+
+The fork member took **68 m 22 s**; the stock member took **48 m 05 s** — a ~42 %
+wall-clock spread, caused by a competing background job on the machine, not by the
+patch. The output bytes are identical across that spread.
+
+Stated at exactly its strength: neither the patch nor a large contention swing moved a
+byte. It is **not** a claim that the machine is deterministic in general — that would
+need an A/A pair, which §2.6 deliberately left as an escalation and which did not fire.
+
+### 3.5 The artifact §2.6a promised
+
+`sim/baselines/` now holds one sorted `sha256` line per output file for all three
+shipped scenarios — 1206 files, ~100 KB. `single_cell_500m.np8.sha256` is the gate's
+own comparison-2 baseline, byte-identical to the list the gate computed. Provenance
+(grid, rank count, producing binary, file count) was **read off each run's own
+`namelist.input` and `run_meta.txt`**, not carried over from a plan.
+
+Both members' `run_meta.txt` are preserved next to the gate script as
+`sim/gates/t7_neutrality.{fork,stock}.run_meta.txt`, so the binary hashes, deck hash and
+rank count survive the deletion of the 12.2 GB of output they describe. The output
+itself is disposable by design and was deleted; these two files and the checksum lists
+are what remains, and they are what makes §3 a record rather than a claim.
+
+### 3.6 The boundary, carried forward from §2.7 so a clean PASS does not read wider
+
+One scenario, one grid, one rank count. This licenses *"measured twice, at
+configurations differing in both grid and rank count"* — **not** *"neutral at any grid
+and rank count"*. `supercell_333m` (540², 218 GB, ~4.5 h) stays unmeasured. Closing it
+is now a known run rather than a new design, and it is an owner call, not a Phase 3
+obligation.
+
+One hole found in passing and not chased: `t4gate` and `t4gate_sc` carry no
+`run_meta.txt`, because they were created outside `sim/run_scenario.sh`. So
+`sim/cm1-patches/README.md`'s *"every run says which binary produced it"* is true of
+production runs and not of hand-made gate directories. This gate wrote its own
+`run_meta.txt` for both members precisely because that is not automatic.
 
 ---
 

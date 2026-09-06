@@ -207,6 +207,19 @@ a measurement**, and is recorded here as such.
 compare against that run's recorded output checksums. That is a real check, not an
 argument — carried to T7 rather than asserted here.
 
+**SETTLED 2026-09-07 (T7).** The check named above ran, and the extrapolation is now a
+measurement — see `docs/phase3-completion-2026-09-06.md` §§2–3. The gate re-ran
+`single_cell_500m` (160×160×40, np=8) on **both** binaries on the same machine on the
+same night, from one generated deck, and compared each against the July on-disk output:
+all three comparisons IDENTICAL over 302 files. That is a second configuration
+differing in **both** quantities this paragraph scoped on — grid (160² vs 60²) and rank
+count (8 vs 4) — so the claim above is upgraded from *expected* to **measured twice**.
+
+It is still not *"any grid and rank count"*: `supercell_333m` (540², 218 GB) remains
+unmeasured, and closing it is a known run rather than a new design. The checksum lists
+that make any such future check possible after the raw output is deleted now live in
+`sim/baselines/`.
+
 Note the plan's stated gate — *"same seed ⇒ identical deck"* — is nearly
 tautological (deterministic text substitution on identical input). It is kept as
 `test_seed_t4.py`'s weakest check and labelled as such; the reproducibility claim
