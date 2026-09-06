@@ -1618,3 +1618,60 @@ most evidence at *any* resolution until the window is longer. Compute ask, needs
 `t >= 105`, which at a 5-minute interval is the last **four** frames. The plan states the
 rule as a threshold, so the threshold governs and no score changed; renamed `n_late` with
 `late_min` printed beside it, and gate N1 re-checked byte-identical after the rename.
+
+---
+
+## Squall line — the export contract, 2026-09-06
+
+**Owner ask: "work on the squall line."** The only piece of the squall line that was
+owed and startable is the one the 2026-09-02 plan scoped in §4.4: the export contract
+could not *describe* a line. Nothing else was reachable — C2's run is a probe marked
+`_provisional`, so there is nothing to export until the schema can hold the answer.
+**DONE, offline, no CM1 and no new compute.** Full record: plan §4.4a.
+
+**What was wrong.** `Scenario` carried a single `crop_half_width_m` and derived
+`ny = nx`, so the export box was **square by construction**. A squall line is compact
+*across* the line and spans the whole domain *along* it, so the only legal square box
+for one was the full domain: the largest possible package, mostly empty. On top of that,
+a periodic axis has no finite condensate extent, so the measured-box gate would have
+been applying a compact-storm criterion to a wrapping direction (T5 §11.7's original
+flag).
+
+**What landed.** An **optional** `crop_half_depth_m` (absent ⇒ square, so nothing
+shipped moves); `ny`, `origin_m` and `manifest.extent_m.y` follow it; and
+`check_periodic_extents`, which requires a periodic axis's extent to be the **full
+domain** — a gate, not a waiver, refused in both directions, and keyed off the
+**namelist** (`sbc`/`nbc`) rather than any flag in the `export` block, so the claim
+cannot be asserted by editing the thing it licenses. `bbox_center_m` stays (0, 0) on a
+rectangular box, so the SVT static-centre constraint survives.
+
+**`FORMAT_VERSION` does not move, and that is measured not asserted.** The manifest
+always wrote `dimensions` and `extent_m.x`/`.y` as separate keys; only the values become
+unequal. `test_manifest.py`'s byte-identity rebuild is still 17/17. The diorama needed
+**no change at all** — `scene.ts`, `gl.ts` and `main.ts` already read nx and ny
+independently and the HUD already prints "W × D km across" when they differ; that was
+read, not assumed.
+
+**The finding: §4.4's scope list was one item short, and the missing one was sharper.**
+The bbox sweep collapsed both horizontal axes into a single scalar
+(`half = max(half, |x…|, |y…|)`). Correct while the box is square; on a periodic-y line
+it reports the full-domain y extent as "the" half-width and demands a square box that
+large. **The mostly-empty package was therefore reachable through the measurement even
+after the schema stopped forcing it** — fixing only the three scoped items would have
+left it in place. Now per-axis (`scenario.box_verdict`, pure, separately gated).
+
+**Gate: `pipeline/tests/test_squall_box.py`, 23/23.** Every fixture is nx ≠ ny ≠ nz
+(120 × 180 × 54; the line case 120 × 540 × 54) because this project has already recorded
+that a square test grid defangs a transpose test — and one gate *is* that transpose
+test: `densevol.write` must accept `(nz, ny, nx)` and refuse `(nz, nx, ny)`, which no
+square grid in the repo could have failed. Pre-existing suites all still green
+(`test_deck` 16/16, `test_scenario_t6` 11/11, `test_seed_t4` 17/17, `test_supercell_t2`
+10/10, `test_sounding_t5s` 32/32, regrid/orientation suites). `test_classifier_t5` and
+one `test_web_decimation` gate fail on a missing `netCDF4` in the Windows interpreter —
+import errors, pre-existing, untouched.
+
+**NOT delivered, and not attempted.** A squall line scenario. Shipping C2 as a package
+still needs a run, an x half-width measured from that run's own sweep, and a config in
+`sim/scenarios/` — each its own go. `t5probe_c2` remains a probe and is still refused by
+`require_measured_box` for the `_provisional` reason first (gated). What changed is only
+this: when that run happens, the box can describe what it produced.

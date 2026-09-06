@@ -317,14 +317,27 @@ wrong for component counts.** T6–T7 pending | docs/phase3-plan-2026-07-20.md �
   and the late-window rule will absorb most evidence at any resolution until then. Record:
   plan §4.2c, docs/STATUS.md, sim/probes/README.md §4.2c.
 
-- **Squall line (C2): KEEP.** It does not retire with T5s, so T5 §11.7's crop-box
-  hazard is **live work owed before C2 can ship as a package** (not before T6).
-  Scoping found §11.7 understated it: `Scenario` carries one `crop_half_width_m` and
-  derives `ny = nx`, so the export box is **square by construction** and cannot
-  describe a line — the fix is a contract change (a separate along-line extent, with
-  `nx`/`ny`/`origin_m`/manifest following), plus a rule that a periodic axis's extent
-  is the full domain BY CONSTRUCTION and must count as measured. **Not started; needs
-  its own go.** Scope: docs/plan-science-hurdles-2026-09-02.md §4.4.
+- **Squall line (C2): KEEP — and the export contract is DONE 2026-09-06.** T5 §11.7's
+  crop-box hazard is discharged, offline, with no CM1 run. `Scenario` gains an
+  **optional** `crop_half_depth_m` (absent ⇒ square, so nothing shipped moves) and
+  `ny`/`origin_m`/`manifest.extent_m.y` follow it; `check_periodic_extents` requires a
+  periodic axis's extent to be the **full domain** — a gate, not a waiver, refused in
+  both directions and keyed off the **namelist** (`sbc`/`nbc`), never a flag in the
+  `export` block, so the claim cannot be asserted by editing the thing it licenses.
+  **`FORMAT_VERSION` does not move** and the byte-identity rebuild proves it
+  (`test_manifest` 17/17): the manifest always wrote `dimensions` and `extent_m.x`/`.y`
+  as separate keys, so only the values become unequal. The diorama needed **no change** —
+  it already reads nx and ny independently. **The finding: §4.4's scope list was one item
+  short, and the missing item was sharper.** The bbox sweep collapsed both horizontal axes
+  into one scalar, so on a periodic-y line it reported the full-domain y extent as "the"
+  half-width and demanded a square box that large — **the mostly-empty package was
+  reachable through the measurement even after the schema stopped forcing it.** Now
+  per-axis (`scenario.box_verdict`). Gate `pipeline/tests/test_squall_box.py` **23/23**,
+  every fixture nx ≠ ny ≠ nz, one of them the transpose test no square grid in this repo
+  could have failed. **NOT delivered:** a squall-line scenario. Shipping C2 as a package
+  still needs a run, a measured x half-width, and a `sim/scenarios/` config — each its own
+  go; `t5probe_c2` stays a probe and is still refused for `_provisional` first. Record:
+  plan §§4.4–4.4a, docs/STATUS.md.
 
 *Still open:*
 1. UE SVT visual streaming sign-off.

@@ -47,9 +47,14 @@ def cmd_bbox(args):
     print(f"scenario {sc.name} ({sc.kind})  run {sc.run_dir}")
     print(f"sweeping {len(files)} frames at the LOCKED export thresholds")
     print(f"  thresholds: {contract.THRESHOLDS}")
+    per = scenario.periodic_axes(sc)
+    if any(per.values()):
+        which = ", ".join(a for a in ("x", "y") if per[a])
+        print(f"  PERIODIC axes: {which} -- their extent is the full domain by "
+              "construction, not a measured union")
     cm1_x, cm1_y, cm1_z = fields.read_grid(files[0])
 
-    half = 0.0
+    half_x = half_y = 0.0
     ztop = 0.0
     peak_active, peak_i = 0, -1
     for i, path in enumerate(files):
@@ -60,21 +65,23 @@ def cmd_bbox(args):
             peak_active, peak_i = n, i
         if n:
             zi, yi, xi = np.where(m)
-            half = max(half, abs(cm1_x[xi.min()]), abs(cm1_x[xi.max()]),
-                       abs(cm1_y[yi.min()]), abs(cm1_y[yi.max()]))
+            # PER AXIS. Collapsing these into one maximum is only valid for a
+            # square box -- see box_verdict.
+            half_x = max(half_x, abs(cm1_x[xi.min()]), abs(cm1_x[xi.max()]))
+            half_y = max(half_y, abs(cm1_y[yi.min()]), abs(cm1_y[yi.max()]))
             ztop = max(ztop, cm1_z[zi.max()])
         if i % 60 == 0:
             print(f"  frame {i:3d} t={t/60:5.1f}min active={n/m.size*100:6.3f}%")
 
     print("\n=== union active region at export thresholds ===")
-    print(f"  horizontal half-width : {half/1000:7.3f} km   box: {sc.crop_half_width_m/1000:.3f} km"
-          f"   margin {(sc.crop_half_width_m-half)/1000:+.3f} km")
-    print(f"  top                   : {ztop/1000:7.3f} km   box: {sc.crop_z_top_m/1000:.3f} km"
-          f"   margin {(sc.crop_z_top_m-ztop)/1000:+.3f} km")
+    rows = scenario.box_verdict(sc, half_x, half_y, ztop)
+    for label, measured, box, ok, note in rows:
+        print(f"  {label:<13} : {measured/1000:7.3f} km   box: {box/1000:.3f} km"
+              f"   margin {(box-measured)/1000:+.3f} km   [{'ok' if ok else 'FAIL'}] {note}")
     print(f"  peak active frame     : {peak_i} ({peak_active} CM1 voxels)")
 
-    ok = half <= sc.crop_half_width_m and ztop <= sc.crop_z_top_m
-    print(f"\n{'PASS -- box contains every frame' if ok else 'FAIL -- box CLIPS the storm'}")
+    ok = all(r[3] for r in rows)
+    print(f"\n{'PASS -- box contains every frame' if ok else 'FAIL -- box does not describe this run'}")
     return 0 if ok else 1
 
 

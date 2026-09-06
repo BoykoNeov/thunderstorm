@@ -38,8 +38,12 @@ def build(sc, frames, provenance):
             "bbox_center_m": [0.0, 0.0, sc.crop_z_top_m / 2.0],
             "bbox_center_static": True,
             "extent_m": {
+                # x and y are SEPARATE half-extents: equal for a compact storm,
+                # unequal for a squall line (compact across the line, full domain
+                # along it). The wire shape is unchanged -- these two keys were
+                # always here -- so no format_version move.
                 "x": [-sc.crop_half_width_m, sc.crop_half_width_m],
-                "y": [-sc.crop_half_width_m, sc.crop_half_width_m],
+                "y": [-sc.half_depth_m, sc.half_depth_m],
                 "z": [0.0, sc.crop_z_top_m],
             },
             "ue_import_note": (

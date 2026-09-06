@@ -1040,6 +1040,73 @@ None of this is started, and none of it blocks anything currently in flight: it 
 owed **before C2 could ship as a scenario package**, not before T6. Sizing it properly
 is its own task and needs a go.
 
+### 4.4a RESULT — the contract change is DONE, and the scope list above was one item short
+
+**2026-09-06.** All three items are built and gated, offline, with no CM1 run and no
+new compute. `pipeline/tests/test_squall_box.py`, **23/23**. Every pre-existing gate is
+still green: `test_manifest` **17/17** (the shipped manifest still rebuilds
+byte-identical), `test_deck` 16/16, `test_scenario_t6` 11/11, `test_seed_t4` 17/17,
+`test_supercell_t2` 10/10, `test_sounding_t5s` 32/32, plus the regrid/orientation
+suites. (`test_classifier_t5` and one `test_web_decimation` gate need `netCDF4`, which
+the Windows interpreter does not have; both failures are import errors, pre-existing,
+and untouched by this change.)
+
+**Item 1, the schema.** `Scenario` gains an **optional** `crop_half_depth_m` — the y
+half-extent — and `ny` derives from it instead of returning `nx`. `origin_m`'s y term
+already read `self.ny`, so it followed for free, and the bbox centre stays exactly
+(0, 0) on a rectangular box (gated). Optional, not required, is the whole reason this
+costs nothing downstream: absent means "same as x", every existing config is unchanged,
+and `manifest.json` already carried `dimensions` and `extent_m.x` / `extent_m.y` as
+**separate keys** — so only the VALUES become unequal, never the wire shape.
+**`FORMAT_VERSION` does not move**, and the byte-identity gate proves it rather than
+asserting it. The diorama needed nothing: `scene.ts`, `gl.ts` and `main.ts` already
+read nx/ny independently, and the HUD already prints "W × D km across" when they
+differ — checked, not assumed.
+
+**Item 2, the measurement rule.** `check_periodic_extents` reads periodicity from the
+**namelist** (`sbc`/`nbc` = 1), never from a flag in the `export` block: "this axis is
+periodic" is a claim about the simulation, and an `export`-block assertion of it would
+be a placeholder wearing a different hat — the exact thing `require_measured_box`
+exists to refuse. Same coupling pattern as deck.py's Category 6. It is a **gate, not a
+waiver**: a periodic axis's extent is not merely *allowed* to be the full domain, it is
+**required** to be, because a smaller box on a wrapping axis is a crop with no outside
+and would ship edges that are an artifact of the box. Both directions are refused,
+smaller and larger. A half-declared axis (`sbc=1, nbc=2`) is refused too — periodicity
+belongs to the axis, not to one wall.
+
+**Item 3, downstream.** `manifest.py`'s `extent_m.y` follows the depth;
+`bbox_center_m` is unchanged and verified unchanged on a rectangular box.
+
+**The item §4.4 did not have, and it was the sharper of the two measurement bugs.**
+`export_scenario.py`'s bbox sweep collapsed **both** horizontal axes into one scalar:
+
+```python
+half = max(half, |x_min|, |x_max|, |y_min|, |y_max|)   # ONE number for two axes
+```
+
+That is exactly right while `ny == nx` and silently wrong the moment they differ. On a
+periodic-y line the y union *is* the whole domain, so the collapsed maximum reports the
+full-domain half-extent as "the" half-width and then checks it against
+`crop_half_width_m` — an instant FAIL whose only remedy is a square box that large.
+**So the mostly-empty full-domain package was reachable through the measurement even
+after the schema stopped forcing it**, and fixing only the three items above would have
+left it there. Split into `half_x` / `half_y` with a per-axis verdict
+(`scenario.box_verdict`, pure and separately gated: it lives beside the rule it enforces
+rather than in the CLI, which also keeps its tests netCDF-free).
+
+**Every fixture in the new gate has nx ≠ ny ≠ nz, all three distinct** (120 × 180 × 54,
+and the line case 120 × 540 × 54). This project's own recorded lesson is that a square
+test grid silently defangs a transpose test, and the existing viewer fixture is
+208 × 208. One gate is that transpose test made real: `densevol.write` must accept
+`(nz, ny, nx)` and **refuse** `(nz, nx, ny)` — a check that could not fail on any square
+grid in the repo.
+
+**What this does NOT do.** It does not make a squall line exist. `t5probe_c2` is still a
+probe: `_provisional: true`, never exported, and `require_measured_box` still refuses it
+for that reason first (gated). Shipping C2 as a package needs a run, a measured x
+half-width from that run's own sweep, and a `sim/scenarios/` config — none of which is
+started and each of which needs its own go. What is now true is that when that run
+happens, **the box can describe what it produced.**
 
 ---
 
