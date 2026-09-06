@@ -220,7 +220,15 @@ task records THERE; keep this table to one line per phase.
 | **0** benchmark gate | **COMPLETE** 2026-07-14 — 333 m default / 250 m flat hero / 500 m preview, `np=8`, bitwise reproducible; VHDX relocated to M: | docs/phase0-*.md |
 | **1** pipeline spike | **CLOSED** 2026-07-20 — 301-frame VDB→SVT end to end on a real RHI; two owner-owed live checks carried (UE SVT visual streaming sign-off, diorama 5c pan gestures) | docs/phase1-completion-2026-07-20.md |
 | **2** scenario system · layers · radar | **COMPLETE** (T1–T9) — scenario JSON drives deck AND export; linear-Z dBZ; `w`; `cref`; two packages; diorama picker/layers/plan view | docs/phase2-plan-2026-07-20.md |
-| **3** flat convective regimes | **IN PROGRESS** — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. **500 m re-run of `us15` DONE 2026-09-06 — branch (iii): the ceiling is structural, no multicell label, and `us15`'s one piece of multicell-side evidence (`E`) did not survive refinement.** **Second 500 m run (`us20`) DONE 2026-09-06 — branch (B): the 15→20 elongation gap keeps its sign but loses more than half its 1 km size, so that trend is not resolution-robust; and `R`'s "separation strengthens" is RETRACTED as a one-sided-refinement artifact, leaving the transition-location claim on the split test alone.** T6–T7 pending | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · sim/probes/README.md |
+| **3** flat convective regimes | **IN PROGRESS** — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. **500 m re-run of `us15` DONE 2026-09-06 — branch (iii): the ceiling is structural, no multicell label, and `us15`'s one piece of multicell-side evidence (`E`) did not survive refinement.** **Second 500 m run (`us20`) DONE 2026-09-06 — branch (B): the 15→20 elongation gap keeps its sign but loses more than half its 1 km size, so that trend is not resolution-robust; and `R`'s "separation strengthens" is RETRACTED as a one-sided-refinement artifact, leaving the transition-location claim on the split test alone.** **The split test itself
+READ AT 500 m 2026-09-06 — branch (I) INDETERMINATE: no new run needed, and `us20` scores
+SPLITS on NO basis (six mirrored frames diverging at +3.16 m/s at 1 km become 0 / 1 / 1 at
+500 m). The reductions disagree, so the claim is UNVERIFIED at 500 m — not confirmed, not
+withdrawn — and the ONLY thing that stopped a withdrawal is the late-window guard written
+before any field was opened. The pre-registered primary basis was measured STRUCTURALLY
+BLIND for this statistic: block reduction MERGES a 1 km gap it cannot represent (area
+conserved 100.8 %, gap sub-40 dBZ cells 2 → 0), so it is faithful for field statistics and
+wrong for component counts.** T6–T7 pending | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · sim/probes/README.md |
 | **3T** terrain | not started — Cartesian regridding module, heightfield render path, static full domain, VHDX resize first | Phase 3 plan §8 |
 | **4** lightning · hail swaths · particles · polish | not started — prerequisites listed in the 2026-09-02 plan §7 | — |
 
@@ -298,6 +306,16 @@ task records THERE; keep this table to one line per phase.
   the component count. Bitwise reproducibility re-confirmed on the way (24/25 frames per
   member; the one exclusion was predicted in advance). Record: plan §§5.2–5.6,
   docs/STATUS.md.
+
+- **The split test at 500 m: CLOSED 2026-09-06 — RAN (analysis only, no new simulation),
+  branch (I) INDETERMINATE.** The transition-location claim's last leg is **unverified at
+  500 m**. Two escalations are NAMED and NOT RUN, each needing its own go: (1) a
+  connectivity reach in **kilometres** applied identically at both resolutions, with its own
+  bar and neutrality gate — §4.2c's objection to re-tuning was right while the confound was
+  hypothetical, and a fixed physical radius hides nothing now that it is measured; (2)
+  **longer runs**, since the split signature lands at t ≥ 90–105 min in a 120-minute window
+  and the late-window rule will absorb most evidence at any resolution until then. Record:
+  plan §4.2c, docs/STATUS.md, sim/probes/README.md §4.2c.
 
 - **Squall line (C2): KEEP.** It does not retire with T5s, so T5 §11.7's crop-box
   hazard is **live work owed before C2 can ship as a package** (not before T6).

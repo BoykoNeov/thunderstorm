@@ -1551,3 +1551,70 @@ which happens long before the first brick is fetched. Both render gates were rea
 `frame 0/600 · buffering…` and passing. Fixed at both ends. **Lesson, third instance: a
 gate satisfied by an absence must be shown to fail on the absent case, or it measures
 nothing.**
+
+## The split test at 500 m — RAN 2026-09-06, BRANCH (I) INDETERMINATE: the last leg is unverified, and only a guard written in advance kept it from being withdrawn
+
+**Owner go 2026-09-06**, chosen over the parked diorama work. Plan §4.2c. **No new
+simulation** — both members and both block reductions of each were already on disk from
+§§4.2a–4.2b; this is one analysis invocation over eight runs, the 1 km pair included so
+the reference and the new numbers share a command line. Containment cited from those runs,
+not re-derived.
+
+**The bar was committed before any 500 m `cref` was opened** (`efcb14b`), and gate N1 —
+the parameterised instrument's bare output byte-identical (6405 bytes) to `HEAD`'s across
+the published five runs — passed *before* the bar was written.
+
+**Result.** `us20` scores SPLITS on **no basis at all**. At 1 km it shows six consecutive
+frames of one mirrored pair diverging monotonically at **+3.16 m/s**; at 500 m it shows
+**0, 1 and 1** two-component frames across the two reductions and the raw run. The two
+reductions disagree on it (NO SPLIT vs INDETERMINATE), which is branch **(I)** by the
+pre-registered rule.
+
+**Do not read "indeterminate" as "nothing changed."** Score `us20_500m_coarse_extremum` by
+frame count alone (`n2` = 1 ≤ 2 → NO SPLIT) and `us20` is NO SPLIT on **both** reductions,
+which is branch **(F) — the transition claim has no support left** — verbatim. The
+late-window rule fixed in §4.2c before any field was opened is the only thing withholding
+that. It was written expecting to block a confirmation; it blocked a falsification, which
+is the symmetry it was designed for. The direction across every basis is the falsifying one.
+
+**The pre-registered PRIMARY BASIS turned out to be structurally blind for this
+statistic — measured, not argued** (`sim/probes/gapfill_test.py`, new). On the frame where
+raw 500 m `us20` splits (t = 90) and both reductions do not: two mirrored 287 km²
+components separated by a **2-cell ≈ 1 km** sub-40 dBZ gap become **one** 579 km² component,
+with total ≥ 40 dBZ area **conserved** (100.8 % / 108.8 %) and **zero** sub-40 cells left in
+the gap. Area conservation is the discriminator: this is a **merge**, not a sensitivity
+loss. Mechanism: a 1 km gap cannot be represented under a 2× block at all, and block-mean is
+computed in **linear Z**, which is peak-dominated, so a block straddling 45/35 dBZ reads
+≈ 42 dBZ. §4.2c anticipated the *opposite* artifact (fine grids fragmenting one echo) and
+made the reductions primary to control it — sound for the field statistics `E` and `R`,
+**wrong for a connected-component count**. The raw basis was **not** promoted in response;
+the fix is a different instrument and gets its own pre-registration.
+
+**What the surviving frames actually are.** Not two movers: `us15_500m_coarse_mean` t=115 is
+**637 + 42 km²**, `us20_500m_coarse_extremum` t=115 is **1162 + 12 km²** — a speck barely
+over the 10 km² floor — against 1 km `us20`'s exactly mirrored 329/329 → 416/416 with
+`dx` = 0.00 throughout. And **`us15_500m`'s `n2` = 4 is two different objects**: t=105/110 a
+mirrored y-pair, t=115/120 a main plus a western speck. **Its −13.53 m/s "trend" is a line
+fitted through unrelated configurations and means nothing** — the instrument carries no
+object identity across frames. A limitation of the statistic, recorded as one.
+
+**An extension nobody asked for, included because omitting it would be convenient.** Applied
+to the **1 km reference**, the same late-window rule makes `us15` INDETERMINATE there too:
+its only two-component frame is t = 120, the final frame. Marked as an extension and not
+used to score this run — but it means the surviving leg was **thinner than the record stated
+before any refinement happened**.
+
+**Net:** the transition-location claim is **unverified at 500 m — not confirmed, not
+withdrawn**. The BRN environment result and the no-multicell-label result are untouched.
+
+**Two escalations named and NOT run:** (1) a connectivity reach in **kilometres**, identical
+at both resolutions, with its own bar and its own neutrality gate — §4.2c's "re-tuning per
+resolution hides the confound" was right while the confound was hypothetical, and a fixed
+physical radius hides nothing now that it is measured; (2) **longer runs**, since the split
+signature appears at t ≥ 90–105 min in a 120-minute run and the late-window rule will absorb
+most evidence at *any* resolution until the window is longer. Compute ask, needs a go.
+
+**Post-hoc, non-scoring:** the late-window counter printed as `t_last3` while testing
+`t >= 105`, which at a 5-minute interval is the last **four** frames. The plan states the
+rule as a threshold, so the threshold governs and no score changed; renamed `n_late` with
+`late_min` printed beside it, and gate N1 re-checked byte-identical after the rename.

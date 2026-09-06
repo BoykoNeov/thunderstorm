@@ -60,6 +60,8 @@ def echo_components(path):
 #     3x3 reaches 1 km where at 1 km it reaches 2 km, so a finer grid can cut one
 #     echo into two for no physical reason. Re-tuning connectivity per resolution
 #     would hide that confound instead of controlling for it.
+LATE_MIN = 105.0  # plan section 4.2c late-window rule
+
 DEFAULT_NAMES = ("t5s_us15", "t5s_us20", "t5s_us25", "t5probe_sc", "t5probe_a")
 
 ap = argparse.ArgumentParser(description=__doc__)
@@ -107,12 +109,15 @@ for name in args.names:
     else:
         print(f"  --> only {len(seps)} two-component mature frames")
     if args.summary:
-        # `t_last3` is the count of two-component frames in the final three output
-        # frames. It exists because us15's ONLY 1 km two-component frame is the LAST
-        # frame -- a boundary-adjacent datum -- and section 4.2c fixes in advance how a
-        # late-window-only signal scores, rather than deciding once the number is seen.
-        late = sum(1 for t in ts if t >= 105.0)
+        # Count of two-component frames at t >= 105 min. It exists because us15's ONLY
+        # 1 km two-component frame is the LAST frame -- a boundary-adjacent datum -- and
+        # section 4.2c fixes in advance how a late-window-only signal scores, rather than
+        # deciding once the number is seen. NAMED for the threshold, not for a frame
+        # count: at the 5-minute output interval t >= 105 is the last FOUR frames
+        # (105/110/115/120), and an earlier draft called this `t_last3`, which was wrong
+        # in the label and right in the arithmetic. The plan's rule is the threshold.
+        late = sum(1 for t in ts if t >= LATE_MIN)
         print(f"  SUMMARY {name} n2={len(seps)} trend_ms={slope:.3f} "
               f"absdx_km={(np.mean(np.abs(dxs)) if dxs else float('nan')):.2f} "
               f"absdy_km={(np.mean(np.abs(dys)) if dys else float('nan')):.2f} "
-              f"t_last3={late} mature_frames_total={len(ts)}")
+              f"n_late={late} late_min={LATE_MIN:.0f} mature_frames_total={len(ts)}")

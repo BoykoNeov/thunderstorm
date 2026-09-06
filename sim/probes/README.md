@@ -554,6 +554,42 @@ and not this run's job.
 near-floor frames **none** for both members, no chain break to attribute. `score_t5s.py`
 re-run after the two new derived directories appeared: output unchanged.
 
+#### §4.2c the split test at 500 m — **RUN 2026-09-06. BRANCH (I) INDETERMINATE**, and the pre-registered primary basis turned out blind for this statistic.
+
+`split_test_t5s.py` gained `--names` / `--runs` and an off-by-default `--summary`, so that
+invoked bare its stdout is **byte-identical to the pre-edit version** (gate N1, checked
+against `HEAD` before the bar was written and again after a later rename). No new
+simulation — both 500 m members and both block reductions were already on disk.
+
+    # the reading of record: all bases plus the 1 km reference in ONE invocation
+    python3 sim/probes/split_test_t5s.py --summary --names       t5s_us15 t5s_us20       t5s_us15_500m_coarse_mean  t5s_us20_500m_coarse_mean       t5s_us15_500m_coarse_extremum t5s_us20_500m_coarse_extremum       t5s_us15_500m t5s_us20_500m
+
+`us20` scores SPLITS on **no basis**: six mirrored frames diverging at +3.16 m/s at 1 km
+become **0 / 1 / 1** two-component frames at 500 m. The reductions disagree on it, so **(I)**.
+Score that one `n2` = 1 by count alone and it is branch **(F)** — no support left for the
+transition claim — so **the §4.2c late-window rule is the only thing withholding a
+withdrawal**, and it was written before any field was opened.
+
+**`gapfill_test.py` (new) is why the primary basis does not govern here.** On the t = 90
+frame where raw 500 m `us20` splits and both reductions do not: 287 + 287 km² separated by a
+**2-cell ≈ 1 km** sub-40 dBZ gap → **one** 579 km² component, total ≥ 40 dBZ area
+**conserved** (100.8 % / 108.8 %), **zero** sub-40 cells left in the gap. Conserved area is
+the discriminator — a **merge**, not a sensitivity loss. A 1 km gap cannot survive a 2×
+block, and block-mean in **linear Z** is peak-dominated (a 45/35 dBZ block reads ≈ 42). So
+block reduction is a faithful control for field statistics (`E`, `R`) and **structurally
+blind for connected-component counts**. The raw basis was *not* promoted in response.
+
+**Limitation of the statistic itself, found here:** `split_test_t5s.py` has **no object
+identity across frames**. `us15_500m`'s `n2` = 4 is a mirrored y-pair at t = 105/110 and a
+main-plus-western-speck at t = 115/120, so its −13.53 m/s "trend" is a line through two
+unrelated configurations. Component *areas* expose this where counts do not (637 + 42,
+1162 + **12** km² — specks over the 10 km² floor — vs 1 km `us20`'s exact 329/329 → 416/416).
+
+Named and NOT run: a connectivity reach in **kilometres** applied identically at both
+resolutions (needs its own bar and neutrality gate), and **longer runs**, since the signature
+lands at t ≥ 90–105 min in a 120-minute window.
+
+
 ## Running one
 
 ```sh
