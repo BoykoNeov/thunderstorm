@@ -168,6 +168,29 @@ An A/A control is deliberately **not** run up front: T4 gate 3 already establish
 same-binary bitwise reproducibility at fixed rank count, so an A/A here would re-measure
 a settled point. It is pre-registered above as the 1-FAIL-and-2-FAIL escalation only.
 
+### 2.6a Amendment, written while the gate ran and before any of its output was read
+
+The 1-PASS/2-FAIL branch above says the contract *"downgrades to statistical
+equivalence + recorded output checksums"* — and §2.2 says, correctly, that **no
+recorded output checksums exist**. As written, that branch points at a fallback with
+no artifact behind it.
+
+**So this gate creates the artifact.** It already computes
+`t7neutral_baseline.SHA256SUMS` for `singlecell` as a side effect of comparison 2; that
+list, and the equivalents for the other two shipped scenarios, are committed to
+`sim/baselines/` as part of T7 — about 100 KB in total for 1206 output files, well
+inside the charter's "nothing >10 MB in plain git" rule.
+
+This is not tidiness. **The only baseline for all three shipped scenarios today is
+240 GB of raw netCDF that the charter explicitly calls disposable by design.** The
+first time anyone cleans `runs/`, this gate becomes permanently un-re-runnable and the
+extrapolation reverts to unsettleable — not only for this fork, but for every future
+compiler, MPI or netCDF bump. A checksum list survives the cleanup that the thing it
+describes is *designed* to not survive.
+
+`supercell333`'s list is deliberately computed **after** the gate finishes: hashing
+218 GB during the run would steal memory bandwidth from it.
+
 ### 2.7 What this gate does NOT settle, stated in advance
 
 One shipped scenario at one grid and one rank count. It does **not** license
