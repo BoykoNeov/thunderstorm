@@ -1252,7 +1252,7 @@ the confound and can invent a trend that is not there.**
 
 ---
 
-## Coarser diorama web export — LAUNCHED 2026-09-06, and its bar fixed before the numbers exist
+## Coarser diorama web export — DONE 2026-09-06: 6.53x fewer bytes, 682 → 7 stalls, 13/13 gates
 
 **Owner ruling that started it (2026-09-06):** *"i think a lower resolution will be ok
 anyway - for the diorama we dont need that superhigh export resolution - also - it would
@@ -1354,3 +1354,89 @@ shipped default) and the half-res volume pass (plan §C.3), which is still owner
 and gains nothing), and the 333 m supercell payload, which **stays on disk** so the
 resolution drop can be judged as an A/B by one picker click. Deleting it is a separate owner
 call, cheap to defer because the source run is still there.
+
+### RESULT — 2026-09-06: DONE, 13/13 on-data gates, and one recorded before-number that did NOT reconcile
+
+Export `EXIT 0` in 3902 s (65 min; two 601-frame passes over the existing run, no CM1
+re-run). Package at
+`M:\claud_projects\thunderstorm\scenarios\supercell_333m_coarse\web\` — 2405 files
+(601 × 4 + manifest), and the concatenated-file sha256 of the copy equals the ext4
+original's **byte for byte**, so the 9P crossing is not a source of doubt.
+`/scenarios.json` lists it as a 4th package with the correct grid and **no viewer
+change was needed**: the picker is the tier selector, exactly as the retired `tiers[]`
+design would have duplicated. `.gitignore` behaved as designed — of 2405 files, git
+sees **one**, `web/web_manifest.json`.
+
+**1. Grid — PASS.** 270×270×27 @ 666 m, `origin_m` = [−89577.0, −89577.0, 333.0],
+`source_voxel_m: 333.0`, `decimation_factor: 2.0`, spanning 179.82 km — the same
+measured box.
+
+**2. `qmax` — PASS on all seven, to the last digit.** cloud 0.009068764746189117, ice
+0.009691072627902031, rain 0.010498762130737305, graupelhail 0.017307115718722343, dbz
+vmax 75.44092559814453, cref vmax 75.44092559814453, `w` −53.19807052612305 ..
+66.33143615722656 — each `==` the 333 m package's, not merely close. The run's one
+falsifiable gate, and it is what licenses the claim that only the *grid* moved.
+**Strengthened past the pre-registration:** every top-level manifest key outside `grid`
+and `frames` is identical (`volume`, `dbz`, `extra_fields`, `plan_fields`, `source_run`,
+both versions), both 601 frames. **13/13.**
+
+**3. Bytes — MEASURED 6.53×, not 8×.** Total 1.557 → **0.239 GB**; mean/frame 2.590 →
+**0.397 MB**; median 1.883 → **0.283 MB**; peak frame (f0600 in both) 7.268 → **1.124 MB**
+(6.47×). Voxel count fell exactly 8× as gated; the shortfall is the pre-registered
+effect — coarsening averages, which raises per-voxel entropy and costs gzip ratio.
+This is precisely why §C.2 forbade predicting it. Decompressed 94.5 → **11.8 MB/frame**,
+so the 60× demand falls **472 → 59 MB/s**.
+
+**4. Stall probe — PASS via the written-finding clause, and the residual falsified.**
+Both packages probed **in one invocation**, same 9 s window, 60× (the select default):
+
+| | native 333 m | coarse 666 m |
+|---|---|---|
+| stalls / 9 s | **682** | **7** |
+| uploads / 9 s | 22 | 56 |
+| GPU total | 3.88 ms | **2.37 ms** |
+| …of which upload | 1.40 ms | **0.28 ms** |
+| …of which march | 2.28 ms | **1.82 ms** |
+| rAF max | 13.9 ms | **7.1 ms** |
+
+**The upload counts carry the result, not the stall counts.** 9 s at 60× is 540 storm-s
+= **45 frames** at `tapfrq=12`. Coarse uploaded 56 (ahead, prefetching); native uploaded
+**22, less than half what it owed**. This is a keeping-up/not-keeping-up difference, not
+a graded one.
+
+**The residual 7 is a fixed transient, and that was tested rather than assumed.** Doubling
+the window to 18 s returned **6**, not ~14: the count does not scale with time, so there
+is no sustained deficit to be fetch- or disk-bound about (18 s needs 90 frames; it
+uploaded **101**). 6 of 2591 rendered frames = 0.23 %, consistent with the window opening
+mid-prefetch. The acceptance clause asked for `stalls=0` **or** a written finding; this
+is the finding, with a falsification test the clause did not require.
+
+**THE RECORDED BEFORE-NUMBER DOES NOT RECONCILE, AND IS NOT USED.** This section's own
+pre-registration quoted `stalls=16` per 4 s at 60× for the native package. Re-measuring
+that **same package** now gives 682 per 9 s ≈ 300 per 4 s — roughly **19× worse**, not a
+noise-level difference. The earlier figure's exact invocation was never recorded (§C.2
+gives the recipe generically: `rs=2`, `acc=0`, `fps=240`, a frozen `frame=150`), and a
+capped-fps or short-window run simply has fewer rAF iterations in which to stall, so the
+two numbers are almost certainly counting over different denominators. **No attempt is
+made here to reconcile them.** The A/B above does not depend on it: both packages were
+measured in one invocation under identical parameters, so the comparison is internally
+valid whichever historical number is right. **Lesson, and it is the same one this project
+keeps relearning:** a before-number is only a before-number if its invocation is recorded
+with it. `stalls=16 per 4 s` was written down without the command that produced it, and
+is therefore now unusable as a baseline — the reason a fresh same-session control was
+measured instead of trusted.
+
+**One pre-registered claim was too pessimistic, in the harmless direction.** "A smaller
+texture buys **no fewer steps**" remains true — `?step=auto` floors the step at (box
+extent / 280) and the box did not move — yet march time fell **2.28 → 1.82 ms (−20 %)**.
+Same steps, cheaper: an 8× smaller volume is far kinder to the texture cache. So the
+render half gets ~20 %, not zero and not the ~6.5× the streaming half got.
+**"Runs on lower machines" stays half-delivered**, and §C.3 remains the honest answer to
+the other half.
+
+**Opened by this shipping (plan owner-call 5, NOT decided here):** both supercell
+packages are now in the picker. (a) Is the 666 m image acceptable as the only supercell,
+or is the 333 m one worth its 1.56 GB as a quality reference? (b) If kept, should the
+picker default to the coarse one? The 333 m payload **stays on disk** and will not be
+deleted without an explicit go; deferring is cheap because the 218 GB source run is
+still on ext4.

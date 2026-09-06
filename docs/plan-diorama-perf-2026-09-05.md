@@ -173,7 +173,7 @@ default for the shipped viewer (recommended for outreach machines; it never
 changes anything on a GPU that holds the cap)? If yes: flip `rsParam`'s default
 in `main.ts`, update README's param table, and note it in `STATUS.md`.
 
-### C.2 Supercell streaming throughput — **DECIDED 2026-09-06: coarser export, no tiers**
+### C.2 Supercell streaming throughput — **DONE 2026-09-06: coarser export, no tiers; 6.53x fewer bytes, 682 -> 7 stalls**
 
 **Owner ruling (2026-09-06):** *"i think a lower resolution will be ok anyway - for
 the diorama we dont need that superhigh export resolution - also - it would be nice
@@ -230,6 +230,70 @@ fetch. It does **not** reduce march cost: `?step=auto` floors the step at
 (box extent / 280), so a smaller texture buys **no fewer steps**. "Runs on lower
 machines" is therefore **half-delivered** by this change; the render-cost half is
 `?rs=auto` (already the shipped default) and C.3.
+
+**RESULT — 2026-09-06, read against the four criteria above, in their order.**
+Export `EXIT 0` in 3902 s (65 min, two 601-frame passes over the existing run).
+Package copied to `M:\claud_projects\thunderstorm\scenarios\supercell_333m_coarse\web\`
+(2405 files; the concatenated-file sha256 matches the ext4 original **byte for
+byte**, so the 9P crossing is not a source of doubt). `/scenarios.json` lists it as
+the 4th package with the right grid, and **no viewer change was needed** — the
+picker is the tier selector, as designed.
+
+1. **Grid — PASS.** 270x270x27 @ 666 m, `origin_m` = [-89577.0, -89577.0, 333.0],
+   `source_voxel_m: 333.0`, `decimation_factor: 2.0`. Coarse grid spans 179.82 km,
+   i.e. **the same measured box** as the native one.
+2. **`qmax` — PASS, to the last digit, on all seven.** cloud 0.009068764746189117,
+   ice 0.009691072627902031, rain 0.010498762130737305, graupelhail
+   0.017307115718722343, dbz vmax 75.44092559814453, cref vmax 75.44092559814453,
+   `w` observed -53.19807052612305 .. 66.33143615722656 — each **`==` the 333 m
+   package's**, not merely close. This was the run's only falsifiable gate and it is
+   the one that says the *fields* are untouched and only the *grid* moved.
+   **Strengthened beyond the pre-registration:** every top-level manifest key outside
+   `grid` and `frames` is identical, `extra_fields`/`volume`/`plan_fields`/`dbz`/
+   `source_run` included, and both carry 601 frames at `web_format_version` 1.2.
+   **13/13 on-data gates pass.**
+3. **Bytes — MEASURED: 6.53x, NOT 8x.** Total 1.557 GB -> **0.239 GB**; mean/frame
+   2.590 MB -> **0.397 MB**; median 1.883 -> **0.283 MB**; peak frame (f0600 in both)
+   7.268 -> **1.124 MB** (6.47x). Voxel count fell exactly 8x, as gated — the shortfall
+   is the pre-registered effect: coarsening averages, which raises the per-voxel
+   entropy and costs gzip some of its ratio. Reported after the fact for exactly this
+   reason. Decompressed: 94.5 -> **11.8 MB/frame**, i.e. the 60x demand falls
+   **472 -> 59 MB/s**.
+4. **Stall probe — PASS, with the finding written rather than a bare zero.** Both
+   packages probed **in one invocation**, same 9 s window, 60x (the select's default),
+   so the before-number is re-measured now rather than quoted from memory:
+
+   | | native 333 m | coarse 666 m |
+   |---|---|---|
+   | stalls / 9 s | **682** | **7** |
+   | uploads / 9 s | 22 | 56 |
+   | GPU total | 3.88 ms | **2.37 ms** |
+   | ...of which upload | 1.40 ms | **0.28 ms** |
+   | ...of which march | 2.28 ms | **1.82 ms** |
+   | rAF max | 13.9 ms | **7.1 ms** |
+
+   **The upload counts are the real result, not the stall counts.** 9 s at 60x is 540
+   storm-seconds = **45 frames** at `tapfrq=12`. The coarse package uploaded 56 (ahead,
+   with prefetch); the native uploaded **22 — less than half of what it owed**, which
+   is why it stalled 682 times. This is a keeping-up/not-keeping-up difference, not a
+   graded one.
+
+   **The residual 7 is a fixed transient, and that is measured, not assumed.** Doubling
+   the window to 18 s returned **6** stalls, not ~14 — the count does not scale with
+   time, so there is no sustained deficit to be fetch- or disk-bound about. (18 s needs
+   90 frames; it uploaded **101**.) 6 events out of 2591 rendered frames is 0.23 %, and
+   consistent with the measurement window opening mid-prefetch. The acceptance clause
+   asked for `stalls=0` **or** a written finding; this is the finding, and it is
+   stronger than the clause anticipated because it comes with a falsification test the
+   clause did not require.
+
+**One thing the plan got wrong, in the harmless direction.** "A smaller texture buys
+**no fewer steps**" is still true — `?step=auto` floors the step at (box extent / 280)
+and the box did not move — but march time nonetheless fell **2.28 -> 1.82 ms (-20 %)**.
+The steps are the same steps; they are cheaper because an 8x smaller volume is far
+kinder to the texture cache. So the render half is not *zero* help, just ~20 % rather
+than the ~6.5x the streaming half got. **"Runs on lower machines" remains
+half-delivered**, and C.3 remains the honest answer to the other half.
 
 **Not touched.** The single-cell packages (0.14 MB/frame — coarsening costs visible
 quality and gains nothing), and the 333 m supercell payload, which **stays on disk**
@@ -341,3 +405,10 @@ stays blocked on the Phase 4 event-list exporter.
    turned the "tier" into a plain second package and retired the `tiers[]`
    design unbuilt (C.2).
 4. Half-res volume pass default anywhere (C.3) — only after a zoomed-anvil crop.
+5. **NEW 2026-09-06, opened by C.2 shipping.** Both supercell packages are now in
+   the picker (`supercell_333m`, `supercell_333m_coarse`). Two questions that only
+   the owner can answer, and both are cheap to defer because the 218 GB source run
+   is still on ext4: (a) is the 666 m image acceptable as the *only* supercell, or
+   is the 333 m one worth its 1.56 GB as a quality reference? (b) if it is, should
+   the picker default to the coarse one? Deleting the 333 m payload is not done and
+   will not be done without an explicit go.
