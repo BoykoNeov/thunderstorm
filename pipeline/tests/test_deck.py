@@ -206,6 +206,45 @@ def main():
     check("an optional key is emitted with the template's Fortran type",
           optional_key_keeps_the_templates_fortran_type)
 
+    # ---------------------------------------------------------------- terrain
+    # Phase 3 T7. The rule is written BEFORE Phase 3T opens, and its failure mode is
+    # what makes it worth a guard: a moving domain plus terrain does not crash CM1 --
+    # it produces a run in which the ground slides beneath the storm, with nothing in
+    # the output saying so. Both halves of the test matter: the two refusals prove the
+    # guard fires on either route into terrain, and the two controls prove it is a
+    # targeted rule rather than a blanket ban on terrain or on motion.
+    print("\n=== terrain and a moving domain are mutually exclusive ===")
+
+    check("terrain_flag=true with imove=1 is refused",
+          lambda: expect_error(
+              lambda: deck.generate(mutated(sc, terrain_flag=True, imove=1,
+                                            umove=12.5, vmove=3.0)),
+              "mutually exclusive"))
+
+    check("itern!=0 with imove=1 is refused too (the OTHER route into terrain)",
+          lambda: expect_error(
+              lambda: deck.generate(mutated(sc, itern=1, imove=1,
+                                            umove=12.5, vmove=3.0)),
+              "mutually exclusive"))
+
+    def terrain_on_a_static_domain_is_allowed():
+        t, _ = deck.generate(mutated(sc, terrain_flag=True, itern=1))
+        p = deck.parse(t)
+        return p.get("terrain_flag") is True and p.get("imove") == 0, \
+            f"terrain_flag={p.get('terrain_flag')} itern={p.get('itern')} imove={p.get('imove')}"
+
+    check("CONTROL: terrain with imove=0 still generates",
+          terrain_on_a_static_domain_is_allowed)
+
+    def motion_without_terrain_is_allowed():
+        t, _ = deck.generate(mutated(sc, imove=1, umove=12.5, vmove=3.0))
+        p = deck.parse(t)
+        return p.get("imove") == 1 and p.get("umove") == 12.5, \
+            f"imove={p.get('imove')} umove={p.get('umove')} (supercell_333m's shape)"
+
+    check("CONTROL: a moving domain with no terrain still generates",
+          motion_without_terrain_is_allowed)
+
     passed = sum(_results)
     print(f"\n{'=' * 62}\n{passed} passed, {len(_results) - passed} failed")
     return 0 if passed == len(_results) else 1

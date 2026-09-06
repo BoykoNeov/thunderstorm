@@ -91,6 +91,27 @@ count. (This does *not* make a whole run rank-independent: floating-point
 summation order still differs, so "same seed ⇒ bitwise identical" holds at a
 fixed rank count, which is what the charter's reproducibility contract records.)
 
+## Source facts read against the pinned tarball (not patched — recorded)
+
+Phase 3 T5s read `base.F` before any run, and Phase 3 T7 records the line numbers
+here as well as in `sim/probes/README.md`, because this file is where the pin lives:
+anyone rebuilding the fork from the tarball above should be able to re-find them
+without re-deriving the read. **None of these lines is patched.** They are the parts
+of stock CM1 the project *depends on* and therefore has to be able to check after any
+version bump.
+
+| Fact | Where, in `cm1r21.1/src/base.F` |
+|---|---|
+| `isnd=7` external-sounding format — header `p_sfc[mb] th_sfc[K] qv_sfc[g/kg]`, then `z[m] theta[K] qv[g/kg] u[m/s] v[m/s]` ascending; `qv` divided by 1000 on read | `:463-494` (comment), `:543-560` (reader) |
+| `iwnd` is **ignored** at `isnd=7` — the analytic-wind section is skipped, and `param.F` forcibly sets `iwnd=0` with a **non-fatal** warning (this project's `deck.py` refuses instead, so it is stricter than CM1) | `:466`, `:2263` (`IF(isnd.ne.7)`), `param.F:836-853` |
+| Level cap `nmax = 1000000` — not a real constraint. The binding ones are `nsnd > 2` and the file's last `z` exceeding the top **scalar** level (19 750 m, not the 20 000 m nominal top) | `:501`, `:565-572`, `:492` + `:681-684` |
+| `u0`/`v0` in the output are **grid-relative** — `umove`/`vmove` are subtracted | `:2661-2668` |
+| `input_sounding_grid` is dead code behind `dothis = .false.` | `:3247` |
+
+`isnd=6` reads the same file but takes the wind from `iwnd` instead of from the file
+(`:495`, `:552-554`). No project run has used it and no gate covers it, so `deck.py`
+refuses it by name rather than letting it through untested.
+
 ## Rebuilding the fork from scratch
 
 ```sh

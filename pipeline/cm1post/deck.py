@@ -343,7 +343,21 @@ def build_overrides(sc, template_lines=None):
     ov["tot_x_len"] = float(nml["nx"]) * float(nml["dx"])
     ov["tot_y_len"] = float(nml["ny"]) * float(nml["dy"])
 
-    # Category 3 -- motion-coupled.
+    # Category 3 -- motion-coupled. Terrain first, because it is the coarser rule:
+    # a moving domain translates the grid, and terrain is bolted to the ground, so
+    # the two are mutually exclusive (charter: "imove -- flat scenarios ONLY,
+    # incompatible with terrain"; Phase 3 plan 2.1). Refused HERE, before Phase 3T
+    # opens, because the failure mode is silent: CM1 would run, and the terrain would
+    # slide under the storm at umove/vmove without anything in the output saying so.
+    # `itern` is checked alongside `terrain_flag` -- either one alone turns terrain on
+    # in CM1, so testing only the flag would leave the other as an unguarded route.
+    if (bool(nml["terrain_flag"]) or int(nml["itern"]) != 0) and int(nml["imove"]) != 0:
+        raise DeckError(
+            f"{sc.source_path}: terrain (terrain_flag={nml['terrain_flag']}, "
+            f"itern={nml['itern']}) with imove={nml['imove']}. A moving domain and "
+            "terrain are mutually exclusive: the grid translates and the terrain does "
+            "not, so the ground would slide beneath the storm. Choose one -- a "
+            "terrain scenario runs imove=0 in a static full domain.")
     if int(nml["imove"]) == 0:
         for k in ("umove", "vmove"):
             if k in nml and float(nml[k]) != 0.0:
