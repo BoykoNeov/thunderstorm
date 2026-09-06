@@ -77,9 +77,15 @@ async function goto(url) {
   await send("Page.navigate", { url });
   for (let i = 0; i < 120; i++) {
     await sleep(500);
+    // BOTH conditions. The picker populates from /scenarios.json long before the
+    // first brick is fetched, decoded and uploaded, so a picker-only wait returns
+    // while the page still reads "buffering..." -- and then every downstream
+    // "it rendered" gate passes on a page that has rendered nothing.
     const ready = await evaluate(
       `(() => { const s = document.getElementById('scenario');
-                return !!s && s.options.length > 0 && getComputedStyle(s).display !== 'none'; })()`
+                const c = document.getElementById('clock');
+                return !!s && s.options.length > 0 && getComputedStyle(s).display !== 'none'
+                       && !!c && !/buffering/i.test(c.textContent); })()`
     ).catch(() => false);
     if (ready) return;
   }
@@ -95,7 +101,11 @@ const check = (name, ok, detail) => { results.push([ok, name, detail]); };
 // --- 1. no ?scenario= at all: what does the app OPEN on? -------------------
 await goto(`${BASE}/?az=90&el=25&layer=dbz&anim=0`);
 const opened = await evaluate(`document.getElementById('scenario').value`);
-check("opens on the coarse supercell with no ?scenario=", opened === "supercell_333m_coarse", opened);
+// The expected package is written out LITERALLY rather than imported from
+// scenario.ts. That is the whole point of this gate: importing DEFAULT_SCENARIO
+// would make it agree with any value the constant is ever changed to, which is
+// exactly the failure it exists to catch.
+check("opens on the full-detail supercell with no ?scenario=", opened === "supercell_333m", opened);
 
 const opts = await evaluate(
   `[...document.getElementById('scenario').options].map(o => o.value + ' => ' + o.textContent)`);
@@ -112,36 +122,41 @@ const scLbl = await evaluate(
             return getComputedStyle(l).display !== 'none' ? l.textContent : '(hidden)'; })()`);
 check("the dropdown carries a visible label", scLbl === "Storm", scLbl);
 
-const grid0 = await evaluate(`document.getElementById('hud').textContent`);
+const hud0 = await evaluate(`document.getElementById('hud').textContent`);
 const clk0 = await evaluate(`document.getElementById("clock").textContent`);
 // NOT the buffering regex alone: an EMPTY hud passes that vacuously. The clock
 // only carries a storm time once a frame is decoded and drawn.
-check("coarse package actually rendered a frame",
-  !/buffering/i.test(grid0) && /storm time/i.test(clk0) && /\d/.test(clk0), JSON.stringify(clk0));
+check("the default package actually rendered a frame",
+  !/buffering/i.test(clk0) && !/buffering/i.test(hud0) && /storm time/i.test(clk0)
+    && /\d/.test(clk0), JSON.stringify(clk0));
 
-// --- 2. switching to the original from the dropdown ------------------------
+// --- 2. switching to the OTHER member of the pair from the dropdown --------
+// (the coarse one, now that the full-detail package is what opens: the gate is
+// that the pair is reachable in one click, whichever of the two is default)
 await evaluate(
   `(() => { const s = document.getElementById('scenario');
-            s.value = 'supercell_333m';
+            s.value = 'supercell_333m_coarse';
             s.dispatchEvent(new Event('change')); })()`);
 await sleep(1200);
 for (let i = 0; i < 120; i++) {
   await sleep(500);
   const ok = await evaluate(
     `(() => { const s = document.getElementById('scenario');
-              return !!s && s.value === 'supercell_333m' && !/buffering/i.test(document.getElementById('hud').textContent); })()`
+              return !!s && s.value === 'supercell_333m_coarse'
+                     && !/buffering/i.test(document.getElementById('clock').textContent); })()`
   ).catch(() => false);
   if (ok) break;
 }
 const href = await evaluate(`location.search`);
-check("switch put ?scenario=supercell_333m in the URL", /scenario=supercell_333m(?!_)/.test(href), href);
+check("switch put ?scenario=supercell_333m_coarse in the URL", /scenario=supercell_333m_coarse/.test(href), href);
 check("switch PRESERVED the view params", /az=90/.test(href) && /el=25/.test(href) && /layer=dbz/.test(href), href);
 const sel2 = await evaluate(`document.getElementById('scenario').value`);
-check("picker shows the original after the reload", sel2 === "supercell_333m", sel2);
+check("picker shows the switched-to package after the reload", sel2 === "supercell_333m_coarse", sel2);
 const hud2 = await evaluate(`document.getElementById('hud').textContent`);
 const clk2 = await evaluate(`document.getElementById("clock").textContent`);
-check("original package actually rendered a frame",
-  !/buffering/i.test(hud2) && /storm time/i.test(clk2) && /\d/.test(clk2), JSON.stringify(clk2));
+check("switched-to package actually rendered a frame",
+  !/buffering/i.test(clk2) && !/buffering/i.test(hud2) && /storm time/i.test(clk2)
+    && /\d/.test(clk2), JSON.stringify(clk2));
 
 // --- 3. an old bookmark still wins over the new default --------------------
 await goto(`${BASE}/?scenario=single_cell_500m&anim=0`);

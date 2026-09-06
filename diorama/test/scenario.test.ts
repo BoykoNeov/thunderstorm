@@ -21,13 +21,15 @@ describe("resolveScenario", () => {
     expect(resolveScenario(null, list)).toBe(DEFAULT_SCENARIO);
   });
 
-  // The owner call this default encodes: open on the COARSE supercell. Asserted
-  // by name and not merely via DEFAULT_SCENARIO, so that silently repointing the
-  // constant at another package fails here instead of passing tautologically.
-  it("opens on the coarse supercell, and a bookmark still overrides it", () => {
-    expect(DEFAULT_SCENARIO).toBe("supercell_333m_coarse");
-    expect(resolveScenario(null, list)).toBe("supercell_333m_coarse");
-    expect(resolveScenario("supercell_333m", list)).toBe("supercell_333m");
+  // The owner call this default encodes: open on the FULL-DETAIL supercell (the
+  // coarse one was the default for half of 2026-09-06, until the weak-machine
+  // work it existed to serve was parked). Asserted by NAME and not merely via
+  // DEFAULT_SCENARIO, so that silently repointing the constant at another package
+  // fails here instead of passing tautologically.
+  it("opens on the full-detail supercell, and a bookmark still overrides it", () => {
+    expect(DEFAULT_SCENARIO).toBe("supercell_333m");
+    expect(resolveScenario(null, list)).toBe("supercell_333m");
+    expect(resolveScenario("supercell_333m_coarse", list)).toBe("supercell_333m_coarse");
     expect(resolveScenario("single_cell_500m", list)).toBe("single_cell_500m");
   });
 

@@ -41,13 +41,23 @@ export interface ScenarioSummary {
 }
 
 // The package the viewer opens when the URL names none (or names one the server
-// does not serve). Owner call 2026-09-06: the supercell is the showcase storm
-// and the COARSE export is the default one, because it is the variant that
-// streams without stalling on a modest machine; the full-detail 333 m package
-// is kept and is one click away in the picker (which labels the pair "lighter"
-// vs "full detail" — see scenarioLabel). Changing this does NOT break an old
-// bookmark: resolveScenario honours a served `?scenario=` param over this.
-export const DEFAULT_SCENARIO = "supercell_333m_coarse";
+// does not serve). Owner call 2026-09-06: the supercell is the showcase storm,
+// and the FULL-DETAIL 333 m export is the one it opens on.
+//
+// This was `supercell_333m_coarse` for the first half of that day. The reversal
+// is not a mind-change about the coarse package — it is a consequence of the
+// weak-machine work (plan C.3, the half-resolution DRAWING pass) being parked:
+// the coarse export halves streaming cost but not render cost, so on its own it
+// does not deliver "runs on lower machines", and with that goal shelved there is
+// nothing left for a default to trade image quality against. Both packages stay
+// served, the picker labels the pair "lighter" vs "full detail" (see
+// scenarioLabel), and the coarse one is one click away — the same click the full
+// one used to need. If C.3 is ever picked up, flip this back and the argument
+// for doing so is written down here rather than re-derived.
+//
+// Changing this does NOT break an old bookmark: resolveScenario honours a served
+// `?scenario=` param over this default.
+export const DEFAULT_SCENARIO = "supercell_333m";
 
 /**
  * Decide which scenario to load from the URL param and the served list.

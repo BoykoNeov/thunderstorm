@@ -1484,7 +1484,10 @@ be evident and easy how to choose the original if one wishes so."* So: **both pa
 stay** — the 1.56 GB 333 m payload is the quality reference and is **not to be deleted** —
 the picker **opens on the coarse one**, and the choice is made legible in words.
 
-## Picker: coarse supercell is the default, and the pair is labelled — DONE 2026-09-06, 12/12 live
+## Picker: both supercells labelled and one click apart — DONE 2026-09-06, 12/12 live
+
+*(Heading corrected: the default landed on the FULL-DETAIL package by the end of the
+day — see the amendment at the foot of this section.)*
 
 Three small changes, in `diorama/src/scenario.ts`, `diorama/vite.config.ts`,
 `diorama/src/main.ts` and `diorama/index.html`:
@@ -1521,3 +1524,30 @@ label, a dropdown switch to the original with `az`/`el`/`layer` surviving the re
 an old bookmark still winning. **Two gates first passed vacuously** (`!/buffering/` is true
 of an empty HUD) and were tightened to require the storm clock to read a real time before
 "it rendered" is claimed.
+
+**AMENDED SAME DAY 2026-09-06 — the default is the FULL-DETAIL package after all.**
+Owner: *"leave the lower machine half then, park what is done, but make the finer
+detailed default."* `DEFAULT_SCENARIO` is now `supercell_333m`. Not a reversal of
+keep-both and not a verdict on the coarse export — it stays served, stays labelled, and
+is one click away, the same click the full one needed for the few hours in between. It
+follows from **C.3 (the half-resolution DRAWING pass) being parked**: the coarse export
+halves streaming cost but not render cost, so on its own it does not deliver "runs on
+lower machines", and with that goal shelved there is nothing left for a default to trade
+image quality against. The argument lives in the `DEFAULT_SCENARIO` comment so that
+picking C.3 back up does not require re-deriving it.
+
+**The amendment broke `picker-check.mjs`, which is the point of having it.** The tool
+hard-codes the expected package by name — deliberately, since importing
+`DEFAULT_SCENARIO` would make the gate agree with whatever the constant is changed to,
+the exact failure it exists to catch — so flipping the default without touching it would
+have put an 11/12 tool on `main`. `tsc` and 157/157 vitest stayed green through that.
+Gate updated; section 2 now switches to the *coarse* member, since the invariant is "the
+pair is one click apart", whichever is default. **Re-run: 12/12.**
+
+**It then caught a THIRD vacuous gate in itself.** The renderer writes `buffering…` into
+the **clock**, not the HUD, so `!/buffering/.test(hud)` was true of a page that had
+rendered nothing — and the readiness wait returned as soon as the *picker* populated,
+which happens long before the first brick is fetched. Both render gates were reading
+`frame 0/600 · buffering…` and passing. Fixed at both ends. **Lesson, third instance: a
+gate satisfied by an absence must be shown to fail on the absent case, or it measures
+nothing.**

@@ -501,3 +501,33 @@ stays blocked on the Phase 4 event-list exporter.
    winning. Two of its gates initially passed **vacuously** — `!/buffering/` is true
    of an empty HUD — and were tightened to require the storm clock to read a real
    time before "it rendered" is claimed.
+
+   **AMENDED SAME DAY 2026-09-06 — the default is the FULL-DETAIL package after all.**
+   Owner: *"leave the lower machine half then, park what is done, but make the finer
+   detailed default."* `DEFAULT_SCENARIO` is now `supercell_333m`. This is **not** a
+   reversal of the keep-both ruling and not a verdict on the coarse export, which stays
+   served, stays labelled, and is one click away — the same click the full one needed for
+   the few hours in between. It follows from **C.3 (the half-resolution DRAWING pass)
+   being parked**: the coarse export halves streaming cost but not render cost, so on its
+   own it does not deliver "runs on lower machines", and with that goal shelved there is
+   nothing left for a default to trade image quality against. The argument is written into
+   the `DEFAULT_SCENARIO` comment in `diorama/src/scenario.ts`, so that if C.3 is ever
+   picked up the flip back does not have to be re-derived.
+
+   **The amendment broke the live check, which is the point of having one.**
+   `picker-check.mjs` hard-codes the expected package by name (deliberately — importing
+   `DEFAULT_SCENARIO` would make the gate agree with any value the constant is ever
+   changed to, which is exactly the failure it exists to catch), so flipping the default
+   without touching it would have shipped an 11/12 tool on `main`. `tsc` and 157/157
+   vitest both stayed green through that. Gate updated, and section 2 now switches to the
+   *coarse* member — the invariant is "the pair is one click apart", whichever is default.
+   **Re-run: 12/12.**
+
+   **And it caught a THIRD vacuous gate in itself, same shape as the first two.** The
+   renderer prints `buffering…` into the **clock** element, not the HUD, so
+   `!/buffering/.test(hud)` was true of a page that had rendered nothing — and the
+   readiness wait returned as soon as the *picker* populated, which happens long before
+   the first brick is fetched. Both render gates were reading `frame 0/600 · buffering…`
+   and passing. Fixed at both ends (wait on the clock, assert on the clock). Lesson, third
+   instance: **a gate satisfied by an absence must be shown to fail on the absent case**,
+   or it is measuring nothing.
