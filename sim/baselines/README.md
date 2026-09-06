@@ -55,22 +55,37 @@ any other, and excluding it would leave an unchecked file in every run.
 
 ## How these were produced, and why not the obvious way
 
+Two different routes, and which list came from which is recorded here rather than
+assumed — this is the file whose entire point is that assumed provenance is worthless.
+
+| List | Route |
+|---|---|
+| `single_cell_500m` | plain `sha256sum`, computed by the T7 gate itself |
+| `single_cell_333m` | plain `sha256sum` |
+| `supercell_333m` | **direct I/O** (below) |
+
 The obvious way — `sha256sum cm1out_*.nc` — pulled 218 GB through the Linux page cache
-and drove the Windows host into a low-memory state, where the job was killed. So the two
-large lists are produced with **direct I/O**, which reads straight from the device and
-never grows the cache:
+and drove the Windows host into a low-memory state, where the job was killed partway
+through the third directory. So the largest list is produced with **direct I/O**, which
+reads straight from the device and never grows the cache:
 
 ```sh
 dd if="$f" iflag=direct bs=4M status=none | sha256sum | cut -d' ' -f1
 ```
 
-That changes the *route* to the bytes, not the bytes, but "it should be the same hash" is
-an assumption and this directory exists because assumed provenance is worthless. So the
-producing script **gates itself**: it first re-hashes `single_cell_500m` by the direct-I/O
-path and refuses to continue unless the result reproduces the already-committed list
-**byte-for-byte** — catching a wrong route, or wrong output formatting, on 6 GB instead of
-on 218 GB. It also runs at idle CPU and I/O priority, because it is reading a disk the
-owner is also using.
+That changes the *route* to the bytes, not the bytes — but "it should be the same hash" is
+an assumption, and one that would leave the three lists above incomparable with each
+other. So the producing script **gates itself**: it re-hashes `single_cell_500m` by the
+direct-I/O path and refuses to continue unless the result reproduces the already-committed
+list **byte-for-byte**.
+
+That gate is what makes the table above harmless. It is not merely a smoke test on 6 GB
+instead of 218 — it is the evidence that **the two routes are interchangeable**, so a list
+made one way can be checked against a run hashed the other way. Without it, the table
+would be documenting an inconsistency rather than resolving one.
+
+The job also runs at idle CPU and I/O priority, because it is reading a disk the owner is
+also using.
 
 ## How to check a run against one
 

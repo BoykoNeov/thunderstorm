@@ -263,17 +263,25 @@ need an A/A pair, which §2.6 deliberately left as an escalation and which did n
 
 ### 3.5 The artifact §2.6a promised
 
-`sim/baselines/` now holds one sorted `sha256` line per output file for all three
-shipped scenarios — 1206 files, ~100 KB. `single_cell_500m.np8.sha256` is the gate's
-own comparison-2 baseline, byte-identical to the list the gate computed. Provenance
-(grid, rank count, producing binary, file count) was **read off each run's own
+`sim/baselines/` holds one sorted `sha256` line per output file, ~25 KB per scenario.
+`single_cell_500m` (302 files) is the gate's own comparison-2 baseline, byte-identical
+to the list the gate computed; `single_cell_333m` (302) landed with it.
+`supercell_333m` (602) is the largest and is produced separately — see the directory's
+README for why the route had to change and how that change gates itself. Provenance for
+every row (grid, rank count, producing binary, file count) was **read off each run's own
 `namelist.input` and `run_meta.txt`**, not carried over from a plan.
 
-Both members' `run_meta.txt` are preserved next to the gate script as
-`sim/gates/t7_neutrality.{fork,stock}.run_meta.txt`, so the binary hashes, deck hash and
-rank count survive the deletion of the 12.2 GB of output they describe. The output
-itself is disposable by design and was deleted; these two files and the checksum lists
-are what remains, and they are what makes §3 a record rather than a claim.
+**No separate checksum list was kept for either gate member.** All three of the gate's
+lists were byte-identical — that *is* the result — so a per-member file would be three
+copies of `single_cell_500m.np8.sha256` under different names, which is worse than one
+list plus this sentence.
+
+What was kept is both members' `run_meta.txt`, next to the gate script as
+`sim/gates/t7_neutrality.{fork,stock}.run_meta.txt`, so the binary hashes, the shared
+deck hash and the rank count survive the deletion of the 12.2 GB of output they describe.
+That output was deleted — disposable by design, and the deletion was gated on the
+preserved copies being present in the repo first. Those two files plus the checksum
+lists are what makes §3 a record rather than a claim.
 
 ### 3.6 The boundary, carried forward from §2.7 so a clean PASS does not read wider
 
