@@ -319,6 +319,105 @@ advance: P1 breaks and E holds (resolution artifact -> MULTICELL); P1 breaks and
 collapses (the elongation was resolution-driven too); P1 still reads 80 (the ceiling
 is structural and H3 needs a criterion this project does not have).
 
+### 4.2a The 500 m re-run — PRE-REGISTERED 2026-09-06, WHILE THE RUN WAS IN FLIGHT AND BEFORE ANY OF ITS FIELDS WERE OPENED
+
+The run was launched at 06:22 on 2026-09-06 and this subsection was written before its
+first frame was read. It exists because §4.2's three branches, as written, have a hole
+big enough to swallow the result, and because the two words "stays high" in branch (i)
+have no number attached to them.
+
+**The configuration, and why the diff is the whole argument.** `t5s_us15_500m.json`
+doubles `nx`/`ny` and halves `dx`/`dy` **exactly** — 360 × 499.5 m = 179 820 m =
+180 × 999 m — and touches nothing else. The generated deck differs from `t5s_us15`'s in
+**six lines**: `nx`, `ny`, `dx`, `dy`, and the two geometry-derived `dx_inner`/`dy_inner`.
+`tot_x_len`/`tot_y_len` are identical. `nz`, `dz`, `timax`, `tapfrq`, `dtl`, `adapt_dt`,
+`imove`, `umove`, `irandp`, `iinit`, `iorigin`, `icor`, `ptype`, `ihail` and the entire
+sounding block are unchanged. **Measured before launch, not asserted:** the generated
+`input_sounding` has sha256 `3761542a…`, which is byte-for-byte the value in
+`t5s_us15`'s own `run_meta.txt`. So "only resolution moved" is a *measurement*. `dtl`
+stays 6.0 on purpose: at 1 km, `adapt_dt=1` raised dt to 6.6 then 7.26 at the first two
+adaptations with `cflmax` near 0.06, so `dtl` is a seed value the solver immediately
+leaves behind, and halving it would have moved a second variable for no effect.
+`np=8` rather than the sweep's `np=4` because this is one run and not a concurrent
+pair (charter, production run config).
+
+**Order of reading, fixed: containment first.** `drift_fit`'s 15 km void rule is
+evaluated before `P1` or `E` is looked at, exactly as `score_t5s.py` did for the sweep.
+The 1 km members' 60–71 km clearance is **not inherited**: measured drift ran 7–14 %
+below declared `umove` on all three, and a better-resolved storm may propagate
+differently. A void member is not scorable at any label and branch selection does not
+happen.
+
+#### The hole in branch (i), and the instrument that closes it
+
+Branch (i) reads a broken `P1` as *the rotation stopped persisting*. But `P1` is a
+chain-linking statistic over `uh` components that have first been filtered by
+`UH_MIN_AREA_KM2`, and **halving the grid spacing can break that chain with no physical
+change at all**: one blob that cleared the area floor at 1 km can appear at 500 m as
+several pieces that individually do not. That is this project's own twice-recorded
+lesson — *component counting measures fragmentation, not quantity* (T5 §13; T5s §5.6,
+where it inverted outright: fewer components, four times the convection) — arriving in
+a third place. Left unaddressed, a broken `P1` would be read as physics when it may be
+arithmetic.
+
+**The fix is a different reduction, not a moved threshold** — the §5.6 move. Because
+499.5 = 999/2 **exactly**, every 1 km cell is exactly four 500 m cells, so the 500 m
+fields can be block-reduced onto the 1 km grid and the **unchanged** classifier run on
+the result. Pre-registered now:
+
+- **Primary reduction: block-MEAN** over 2×2 cells. It is the honest analogue of what a
+  coarse grid can represent — a 1 km cell cannot hold the gaps between fragments — and
+  it is the *conservative* direction, since averaging lowers peaks. A chain that
+  survives block-mean coarsening is a strong reading.
+- **Sensitivity: block-MAX**, reported beside it as the lenient bound. **If mean and max
+  disagree, that is reported as an indeterminate coarsening test and neither is
+  chosen.** Picking the one that gives a cleaner answer is exactly the move this
+  document exists to prevent.
+- The coarsened field is an *approximation* to what CM1 would have computed at 1 km, not
+  a reconstruction of it. Nothing here claims otherwise; the test is a direction test.
+
+**Decision rule, written before the numbers exist:**
+
+| raw 500 m `P1` | coarsened `P1` | reading |
+|---|---|---|
+| breaks (< 80) | still 80 | **the break is fragmentation, not physics.** Branch (i) does NOT fire; `us15` is not labelled MULTICELL on it. |
+| breaks (< 80) | also breaks | the break survives the confound → **branch (i) or (ii) as §4.2 wrote them**, decided by `E` below. |
+| 80 (ceiling) | 80 | **branch (iii)**: the ceiling is structural, H3 needs a criterion this project does not have. Coarsening is still run, as an instrument gate. |
+
+**Instrument gates, run before any verdict is read** (the §5.5 pattern — the instrument
+proves itself on data whose answer is already known):
+
+1. The coarsened grid's `xh`/`yh` must equal the 1 km run's to floating point.
+2. Applying the same code path to the 1 km run with a 1×1 block must be the identity —
+   bitwise.
+3. Whole-domain integrals of the reduced field must equal the 500 m whole-domain
+   integrals (block-mean conserves the sum by construction; a non-zero residual means
+   the reduction is wrong, not that the physics moved).
+
+**Supporting reading, not a criterion:** per-frame `uh` component areas with any frame
+within 2× of `UH_MIN_AREA_KM2` flagged. If the chain break lands on a near-floor frame,
+that is the tell, independent of the coarsening test.
+
+#### "E stays high" gets its number now
+
+§4.2's branches say "stays high" and "collapses" with no bar, which is a post-hoc
+negotiation waiting to happen. The bars are **already pre-registered elsewhere and are
+not new**: criterion 2′'s decisive edges, `E ≥ 2.40` **and** `R ≤ 0.40` (T5 §8,
+unchanged). So:
+
+- **"E stays high"** = `E ≥ 2.40` **with** `R ≤ 0.40` — the same decisive-on-both-sides
+  reading that made `us15` the only decisive member of the 1 km sweep.
+- **"E collapses"** = `E` falls below 2.40, or `R` rises above 0.40, or both. Inside the
+  band on either statistic is **not** "stays high".
+
+#### The escalation, named so it is not discovered late
+
+If branch (i) fires, the label rests on "`P1` breaks at 500 m", and the immediate and
+correct question is whether `P1` breaks at 500 m for a *known* supercell too. The
+coarsening test above is the cheap first answer. If it comes back indeterminate, the
+escalation is a **500 m `t5s_us20`** — named here as the path, **not run**: the owner's
+go covers one run.
+
 ### 4.3 Cost
 
 Five 1 km probes × ~13 min at `np=4`; one classifier addition (discrete propagation)

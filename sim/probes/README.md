@@ -359,6 +359,64 @@ structural, H3 needs a criterion this project does not have, and that is the fin
 Branch (ii) exists because without it three numbers would be interpreted after the
 fact.
 
+#### §4.2a the 500 m re-run — **LAUNCHED 2026-09-06 06:22, PRE-REGISTERED IN FLIGHT.** No field has been read.
+
+`t5s_us15_500m` — §4.2's own contingency, and the only open route to a multicell
+*label*. `-np 8` (one run, not a concurrent pair), ~1.5–2 h expected against the 1 km
+member's measured 768 s at `-np 4` (8× the work: 4× the cells, half the timestep).
+
+**Only resolution moved, and that is measured rather than asserted.** The generated
+deck differs from `t5s_us15`'s in **six lines** — `nx`, `ny`, `dx`, `dy` and the two
+geometry-derived `dx_inner`/`dy_inner`. `tot_x_len`/`tot_y_len` are identical
+(179 820 m), because 360 × 499.5 = 180 × 999 **exactly**: an exact 2× refinement of the
+same physical domain on aligned cell edges. The generated `input_sounding` has sha256
+`3761542a…`, **byte-for-byte the value in `t5s_us15`'s own `run_meta.txt`** — checked
+before launch, not after. `dtl` stays 6.0 deliberately: `adapt_dt=1` raised dt to 6.6
+then 7.26 at the first two adaptations at 1 km with `cflmax` near 0.06, so `dtl` is a
+seed the solver leaves behind immediately and halving it would have moved a second
+variable for no effect.
+
+**The hole in §4.2's branch (i), and what closes it.** Branch (i) reads a broken `P1`
+as *rotation stopped persisting*. But `P1` chains `uh` components filtered by
+`UH_MIN_AREA_KM2`, and halving the spacing can break that chain **with no physical
+change**: a blob that cleared the floor at 1 km can appear at 500 m as pieces that
+individually do not. This project has recorded that lesson twice already — *component
+counting measures fragmentation, not quantity* (T5 §13; §5.6 above, where it inverted:
+fewer components, four times the convection).
+
+`coarsen_test.py` (tracked, committed **before the run finished**) is the answer, and
+it is the §5.6 move — **a different reduction, not a moved threshold**. Because
+499.5 = 999/2 exactly, the 500 m fields block-reduce onto the 1 km grid and the
+**unchanged** classifier runs on the result: the reduced frames are written as a
+derived run directory with CM1's own file and variable layout, so `classify_t5` opens
+them like any other run and is not aware anything happened. Two reductions are reported
+and **neither is chosen after the fact** — `mean` (the primary and the conservative
+direction; `cref` averaged in linear Z per `cm1post/regrid.py`) and `extremum` (the
+lenient bound; `min` for `thpert`, whose feature is the negative cold-pool
+perturbation). **If they disagree the test is INDETERMINATE.**
+
+The decision table, fixed in plan §4.2a before any number existed: raw `P1` breaks but
+coarsened `P1` still reads 80 → **the break is fragmentation, not physics, and branch
+(i) does not fire**; both break → branch (i) or (ii) as written; raw `P1` = 80 →
+branch (iii). And **"E stays high" now has its number**, taken unchanged from criterion
+2′'s decisive edges: `E ≥ 2.40` **with** `R ≤ 0.40`. Inside the band on either
+statistic is not "stays high".
+
+**Instrument gates before any verdict is read.** G1 the reduced grid's `xh`/`yh` equal
+the 1 km run's to float tolerance; G2 the same code path at block size 1 on the 1 km run
+is the identity; G3 block-mean conserves the whole-domain sum. **G2 has already
+PASSED** — 25 frames, **0 metric differences** — run on the reference data while the
+500 m job was still stepping, so the instrument was validated on data whose answer was
+known before the data it exists to read had been written.
+
+Containment is evaluated **first** and is **not inherited** from the 1 km members'
+60–71 km clearance: measured drift ran 7–14 % below declared `umove` on all three, and
+a better-resolved storm may propagate differently.
+
+**The escalation is named and NOT run**: if branch (i) fires and the coarsening test
+comes back indeterminate, the next question is whether `P1` breaks at 500 m for a
+*known* supercell too, which is a 500 m `t5s_us20`. The owner's go covers one run.
+
 ## Running one
 
 ```sh
