@@ -101,6 +101,7 @@ const fpsInput = document.getElementById("fps") as HTMLInputElement;
 const scrub = document.getElementById("scrub") as HTMLInputElement;
 const clockEl = document.getElementById("clock") as HTMLSpanElement;
 const scenarioSel = document.getElementById("scenario") as HTMLSelectElement;
+const scenarioLbl = document.getElementById("scenarioLbl") as HTMLSpanElement;
 const sbBox = document.getElementById("scalebar") as HTMLDivElement;
 const sbRule = document.getElementById("sbRule") as HTMLDivElement;
 const sbLabel = document.getElementById("sbLabel") as HTMLDivElement;
@@ -330,10 +331,16 @@ async function start() {
     for (const s of scenarios) {
       const o = document.createElement("option");
       o.value = s.name;
-      o.textContent = scenarioLabel(s);
+      // the whole list goes in: the "lighter / full detail" tag only appears
+      // where one storm is served at two detail levels, which a single summary
+      // cannot know (see scenarioLabel).
+      o.textContent = scenarioLabel(s, scenarios);
       o.selected = s.name === scenario;
       scenarioSel.appendChild(o);
     }
+    // the picker is unlabelled until it is populated, so that the word "Storm"
+    // never sits next to a hidden control on a single-package server.
+    scenarioLbl.style.display = "";
     scenarioSel.style.display = "";
     scenarioSel.addEventListener("change", () => {
       location.search = scenarioSwitchUrl(location.search, scenarioSel.value);

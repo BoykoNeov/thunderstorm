@@ -449,10 +449,55 @@ stays blocked on the Phase 4 event-list exporter.
    turned the "tier" into a plain second package and retired the `tiers[]`
    design unbuilt (C.2).
 4. Half-res volume pass default anywhere (C.3) — only after a zoomed-anvil crop.
-5. **NEW 2026-09-06, opened by C.2 shipping.** Both supercell packages are now in
-   the picker (`supercell_333m`, `supercell_333m_coarse`). Two questions that only
-   the owner can answer, and both are cheap to defer because the 218 GB source run
-   is still on ext4: (a) is the 666 m image acceptable as the *only* supercell, or
-   is the 333 m one worth its 1.56 GB as a quality reference? (b) if it is, should
-   the picker default to the coarse one? Deleting the 333 m payload is not done and
-   will not be done without an explicit go.
+5. ~~**NEW 2026-09-06, opened by C.2 shipping.** (a) is the 666 m image acceptable
+   as the *only* supercell? (b) should the picker default to the coarse one?~~
+   **ANSWERED 2026-09-06 (owner): KEEP BOTH — "the coarse is good, but the original
+   is better". The picker defaults to the coarse one, and choosing the original must
+   be "evident and easy".** So the answer to (a) is *no, do not make it the only
+   one*: the 1.56 GB 333 m payload stays, as the quality reference, **and is not to
+   be deleted**. (b) is yes.
+
+   **Shipped 2026-09-06** (commit below). Three changes, deliberately small:
+   - `DEFAULT_SCENARIO` = `supercell_333m_coarse` in `diorama/src/scenario.ts`. This
+     changes which STORM the app opens on as well as which detail level — before
+     today it opened on `single_cell_500m`. That is the plain reading of the ruling
+     and it was taken on purpose: a default that only applied "within the supercell
+     pair" would have left startup behaviour byte-identical to before, which is not
+     what "the picker should default on the coarser" asks for. **A bookmark is not
+     broken by this**: `resolveScenario` honours a served `?scenario=` over the
+     default, and there is a gate asserting exactly that.
+   - **The label now says which is which in words**, because
+     `supercell_333m_coarse · 270×270×27 @ 666 m` is evident only to someone who
+     already knows. The dropdown reads `… · lighter (2× coarser)` and
+     `… · full detail`. The tag is **derived, never a hardcoded name list**: two
+     packages are the same storm at two detail levels iff they share `source_run`
+     (which a coarsened export copies verbatim from its parent), and
+     `decimation_factor` says which of the pair is the light one. Consequences worth
+     stating: a future coarse export named anything at all still pairs correctly,
+     two unrelated packages sharing a name prefix do not, and the tag **only prints
+     when a sibling is actually served** — "full detail" is a boast with nothing to
+     contrast against on a package that has no lighter twin, so the single-cell
+     packages stay untagged.
+   - The `<select>` was an unlabelled 12 px dropdown with a `title` tooltip. It now
+     carries a visible **`Storm`** label (hidden along with the picker itself when
+     only one package is served, so the word never sits beside a hidden control).
+
+   `vite.config.ts` had to start emitting `source_run` / `source_voxel_m` /
+   `decimation_factor` in `/scenarios.json`. That discovery list is **one shape
+   living in two files with nothing enforcing agreement**, so the server now
+   *imports* `ScenarioSummary` from `src/scenario.ts` and types its return with it:
+   adding a picker field breaks `tsc --noEmit` until the server emits it, instead of
+   silently shipping `undefined`.
+
+   **Verification — and this is the part the unit tests could not do.** 157/157
+   vitest (18 in `scenario.test.ts`, up from 11) pass, but every one of them is a
+   pure-helper test: they would all stay green if the dropdown rendered nothing, if
+   the page opened on the wrong package, or if the reload dropped the view params.
+   Same shape as the "13 gates, none read a voxel" catch above. So
+   `diorama/tools/picker-check.mjs` (new) drives a real Chrome over CDP against the
+   real dev server: **12/12**, covering what opens with no `?scenario=` at all, the
+   exact option strings, the visible label, a dropdown switch to the original with
+   `az`/`el`/`layer` surviving the reload, and an old `?scenario=` bookmark still
+   winning. Two of its gates initially passed **vacuously** — `!/buffering/` is true
+   of an empty HUD — and were tightened to require the storm clock to read a real
+   time before "it rendered" is claimed.

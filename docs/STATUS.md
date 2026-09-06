@@ -1478,9 +1478,46 @@ ratio. If the supercell is ever used to teach *hail severity specifically*, that
 number to weigh; for everything else the 666 m package is a faithful rendering of the
 same storm.
 
-**Opened by this shipping (plan owner-call 5, NOT decided here):** both supercell
-packages are now in the picker. (a) Is the 666 m image acceptable as the only supercell,
-or is the 333 m one worth its 1.56 GB as a quality reference? (b) If kept, should the
-picker default to the coarse one? The 333 m payload **stays on disk** and will not be
-deleted without an explicit go; deferring is cheap because the 218 GB source run is
-still on ext4.
+**Owner-call 5 ANSWERED same day (2026-09-06):** *"the coarse is good, but the original
+is better - keep both as options. the picker should default on the coarser, but it should
+be evident and easy how to choose the original if one wishes so."* So: **both packages
+stay** — the 1.56 GB 333 m payload is the quality reference and is **not to be deleted** —
+the picker **opens on the coarse one**, and the choice is made legible in words.
+
+## Picker: coarse supercell is the default, and the pair is labelled — DONE 2026-09-06, 12/12 live
+
+Three small changes, in `diorama/src/scenario.ts`, `diorama/vite.config.ts`,
+`diorama/src/main.ts` and `diorama/index.html`:
+
+- `DEFAULT_SCENARIO` moves `single_cell_500m` → `supercell_333m_coarse`. **This changes
+  which storm the app opens on**, not merely which detail level, and that is deliberate:
+  a default that only applied "within the supercell pair" would have left startup
+  behaviour identical to before, which is not what the ruling asks for. It does **not**
+  break an old bookmark — `resolveScenario` honours a served `?scenario=` over the
+  default, and a gate now asserts that by name rather than via the constant (so
+  repointing the constant fails the test instead of passing tautologically).
+- **The dropdown now says which is which in words:** `… · lighter (2× coarser)` and
+  `… · full detail`. Derived, **never a hardcoded name list** — two packages are one
+  storm at two detail levels iff they share `source_run` (a coarsened export copies its
+  parent's verbatim), and `decimation_factor` picks out the light one. So a future coarse
+  export named anything still pairs; two unrelated packages sharing a name prefix do not;
+  and the tag prints **only when a sibling is served**, because "full detail" is a boast
+  with nothing to contrast against — the single-cell packages stay untagged.
+- The `<select>` was unlabelled with only a hover `title`; it now carries a visible
+  **`Storm`** caption, hidden with the picker when a single package is served.
+
+`vite.config.ts` now emits `source_run` / `source_voxel_m` / `decimation_factor`. That
+discovery list is **one shape in two files with nothing enforcing agreement**, so the
+server now *imports* `ScenarioSummary` and types its return with it: a new picker field
+breaks `tsc --noEmit` until the server emits it, instead of silently shipping `undefined`.
+
+**Verification, and the point is that the unit tests could not do it.** 157/157 vitest
+pass (18 in `scenario.test.ts`, up from 11) — and every one is a pure-helper test that
+would stay green with an empty dropdown, the wrong package on open, or a reload that drops
+the view. Structurally the same hole as the "13 gates, none read a voxel" catch above. So
+`diorama/tools/picker-check.mjs` (new) drives a real Chrome over CDP against the real dev
+server: **12/12** — what opens with no `?scenario=`, the exact option strings, the visible
+label, a dropdown switch to the original with `az`/`el`/`layer` surviving the reload, and
+an old bookmark still winning. **Two gates first passed vacuously** (`!/buffering/` is true
+of an empty HUD) and were tightened to require the storm clock to read a real time before
+"it rendered" is claimed.

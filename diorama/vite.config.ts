@@ -1,6 +1,11 @@
 import { defineConfig, type Plugin } from "vite";
 import fs from "node:fs";
 import path from "node:path";
+// The discovery list's wire format is ONE shape living in two files. Importing
+// the viewer's interface here (rather than restating it) makes `tsc --noEmit`
+// the thing that keeps them in agreement: if the picker starts needing a field,
+// this server stops compiling until it emits it.
+import type { ScenarioSummary } from "./src/scenario";
 
 // Scenario data is NOT in git (data policy: package payloads live outside plain
 // git). The dev server maps /data/<name>/* onto ../scenarios/<name>/web/* and
@@ -27,13 +32,17 @@ function listScenarios() {
   } catch {
     return [];
   }
-  const out: { name: string; voxel_m: number; nx: number; ny: number; nz: number; frames: number }[] = [];
+  const out: ScenarioSummary[] = [];
   for (const name of names.sort()) {
     if (!isSafeName(name)) continue;
     const mf = path.join(SCENARIOS_ROOT, name, "web", "web_manifest.json");
     try {
       if (!fs.statSync(mf).isFile()) continue;
       const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+      // source_run pairs a coarsened export with its parent (same CM1 run =
+      // same storm, two detail levels); decimation_factor says which is which.
+      // Both are forwarded raw and left undefined when absent, so "no coarse
+      // sibling" stays distinguishable from "coarsened by a factor of 1".
       out.push({
         name,
         voxel_m: m.grid?.voxel_m ?? 0,
@@ -41,6 +50,9 @@ function listScenarios() {
         ny: m.grid?.ny ?? 0,
         nz: m.grid?.nz ?? 0,
         frames: Array.isArray(m.frames) ? m.frames.length : 0,
+        source_run: typeof m.source_run === "string" ? m.source_run : undefined,
+        source_voxel_m: m.grid?.source_voxel_m,
+        decimation_factor: m.grid?.decimation_factor,
       });
     } catch {
       // not a readable scenario package — skip it silently
