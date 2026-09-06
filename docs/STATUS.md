@@ -1083,6 +1083,8 @@ floor and contributes **nothing** to `organised`. Both statistics sit outside th
 bands, but **only `E` carried multicell-side weight through the rule**: `us15`'s
 multicell-side evidence at 1 km was one statistic, not two.
 
+**The code was already precise; the prose generalised it.** `score_t5s.py`'s own printed annotation reads `[E=2.721 past the decisive edge 2.40; R=0.364 below the decisive edge 0.40]` — exactly the distinction above. The scorer was **re-run 2026-09-06** after the three new run directories appeared alongside the sweep (`t5s_us15_500m` and the two derived `_coarse_*`): output unchanged, no regression. It addresses runs by explicit name and globs nothing, so derived siblings in the runs root cannot be picked up by it.
+
 **So "E stays high" — given its number in §4.2a before the run was read, `E ≥ 2.40` with
 `R ≤ 0.40` — is FALSE.** `E = 1.813` is below 2.40 and inside the 1.667–2.40 band, which
 is §8.6's INDETERMINATE zone. The single statistic that put `us15` on the multicell side
@@ -1105,7 +1107,7 @@ and moves `E` into the *middle* of the 1 km trend, between `us20`'s 1.948 and `u
 coherent signal is supported.
 
 **A bound on the resolution confound, not a measurement of it.** Refining one member moved
-`E` by **0.908**, larger than the `us15` → `us20` shear step of **0.773**. That bounds the
+`E` by **0.908** raw — and by **0.991** (mean) / **0.951** (extremum) measured *on the reference grid itself*, the apples-to-apples pair, since the raw figure still compares across grids in the very claim about grid confounding. All three exceed the `us15` → `us20` shear step of **0.773**. That bounds the
 confound on the `E` trend; it is **not** a finding that the trend is an artifact, because
 **only one member was refined**. The measurement that would settle it is a 500 m
 `t5s_us20` — named in §4.2a as the escalation and **NOT RUN**: the owner's go covered one

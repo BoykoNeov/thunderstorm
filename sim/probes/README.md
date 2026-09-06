@@ -448,7 +448,7 @@ Coarsening does not restore them, and the two reductions agree.
 
 **The descriptors do not move together.** Refinement moves `R` *further* from
 `us20`/`us25` (separation strengthens) and `E` *into the middle* of the 1 km trend
-(separation weakens). Refining one member moved `E` by 0.908 — larger than the
+(separation weakens). Refining one member moved `E` by 0.908 raw, and by 0.991 (mean) / 0.951 (extremum) measured *on the reference grid itself* — the apples-to-apples pair. All three exceed the
 `us15` → `us20` shear step of 0.773 — which **bounds** the resolution confound on the `E`
 trend but does not measure it, since only one member was refined. The split test and
 `R`'s separation are untouched, so §4.2's transition location stands; what does not
