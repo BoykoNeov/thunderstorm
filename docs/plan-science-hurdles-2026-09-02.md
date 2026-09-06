@@ -498,7 +498,7 @@ owner's go covered one run.
 **What survives §4.2 and what does not.** The structural-transition-between-15-and-20
 claim does **not** rest on `E` alone: the split test (§4.2, a classifier-free measurement
 of mirrored two-component echoes) is untouched by this run, and `R`'s separation gets
-*stronger* under refinement. That claim stands. What does **not** survive is any reading
+*stronger* under refinement. That claim stands. **— RETRACTED IN PART 2026-09-06 (§4.2b RESULT): the `R` half of this sentence is a one-sided-refinement artifact.** Refining `us20` as well NARROWS the `R` separation on every basis (0.162 at 1 km → 0.089 / 0.038 / 0.026), so `R` is **withdrawn** as a support. The transition claim still stands, but on the split test ALONE — one leg, not two — and the split test has never been read at 500 m. What does **not** survive is any reading
 in which `us15`'s `E ≥ 2.40` at 1 km is resolution-robust evidence of a line-like regime.
 It is not.
 
@@ -631,6 +631,113 @@ claim rests on — and nothing wider. `us25` stays at 1 km, so the **three-membe
 trend is not settled by this run**, and no statement of the form "the sweep's `E` trend
 is / is not a resolution artifact" is licensed by it. The same sentence §4.2a wrote
 about bounding versus measuring applies one member further out.
+
+#### RESULT 2026-09-06 — **BRANCH (B) FIRED. The 15 → 20 elongation gap is substantially resolution: it keeps its sign and loses more than half its 1 km size.**
+
+The run completed (`PROBE_OK`, 25 frames, 3.6 GB) and was read in the order fixed above.
+Nothing was renegotiated and no threshold moved. **The bar 0.387 was NEW when it was
+written, is still labelled NEW here, and was committed (`ddff22d`) while the run was
+stepping and before any of its fields were opened.**
+
+**Containment, read first and measured on this run, not inherited.** `t5s_us20_500m`
+clears the open wall by **60.94 km** (echo cells) and **32.47 km** (updraft) against the
+15 km floor — contained, therefore scorable, so the branch table is live. The 1 km member
+re-measured alongside it at 65.93 / 64.94 km. *One coincidence, recorded so nobody chases
+it:* 32.47 is exactly half of 64.94, which looks like a units bug and is not — §4.2a's
+`us15` pair ran 67.93 / 63.44 against 69.93 / 70.93, ratios 0.97 and 0.89, so the code
+does not systematically halve `w`-clearance at 500 m. The refined `us20` updraft genuinely
+reaches further out, and is still 2× the floor.
+
+**Instrument gates, all three PASS.** G2 (block size 1 on the 1 km reference is the
+identity) — 25 frames, **0 metric differences**, and it was run against `t5s_us20` **before
+the 500 m data existed**, since a gate that proves the instrument on data whose answer is
+known is a per-reference claim. G1 (reduced grid equals the 1 km grid) — max |dx| and |dy|
+**7.629e-06 km**, both reductions. G3 (block² × reduced sum equals the 500 m sum) — worst
+relative residual **2.806e-15**, on `thpert`.
+
+| run | label | `P1` | `R` | `E` | span |
+|---|---|---|---|---|---|
+| `t5s_us20` (1 km reference) | SUPERCELL | 80 | 0.526 | **1.948** | 80.0 |
+| `t5s_us20_500m` (raw) | SUPERCELL | 80 | 0.273 | 1.442 | 80.0 |
+| `t5s_us20_500m_coarse_mean` | SUPERCELL | 80 | 0.286 | **1.405** | 80.0 |
+| `t5s_us20_500m_coarse_extremum` | SUPERCELL | 80 | 0.295 | **1.426** | 80.0 |
+
+The 1 km reference re-read **1.948** through this run's own code path, matching the
+pre-registered baseline exactly, so the gap's denominator is not drifting.
+
+**The decision, against the table fixed before these numbers existed.** `E`(`us20_500m`)
+had to be **≤ 1.343** (block-mean) or **≤ 1.383** (block-extremum) for branch (A). It is
+1.405 and 1.426. It had to exceed 1.730 / 1.770 for branch (C). It does not.
+
+| basis | `E`(`us15_500m`) | `E`(`us20_500m`) | `G_ref` | vs `G_1km` = 0.773 | branch |
+|---|---|---|---|---|---|
+| coarsened block-mean **(headline)** | 1.730 | 1.405 | **0.325** | 42.0 % retained | **(B)** |
+| coarsened block-extremum **(headline)** | 1.770 | 1.426 | **0.344** | 44.5 % | **(B)** |
+| raw 500 m (reported, not decisive) | 1.813 | 1.442 | 0.371 | 48.0 % | (B) |
+
+**All three bases agree, including the raw one**, which is worth saying because the raw
+gap is the number a sceptic reaches for and it misses the bar by only 4 %. The verdict
+therefore does not depend on §4.2b having demoted raw to non-decisive — that
+pre-registration held the line here for free. The two headline reductions agree, so the
+test is not INDETERMINATE. **Branch (B): the 15 → 20 separation in `E` keeps its sign and
+loses more than half its 1 km size. Resolution contributed at least as much as the shear
+step did, and the 1 km `E` trend across this step is not resolution-robust.**
+
+**The mechanism, from the descriptive reading that is not the decision.** Refinement moved
+`E` by **0.543 / 0.522 / 0.506** (mean / extremum / raw) on `us20`, against **0.991 /
+0.951 / 0.908** on `us15` — `us15` loses about **1.8×** as much on every basis. Both
+members fall; one falls harder. That is not a common offset, which is precisely what
+branch (A) would have required and what branch (B) describes. **This is not extended to
+"the refinement effect scales with shear"**: `us25` is unrefined and §4.2b forbade the
+wider claim in advance.
+
+#### The `R` reversal — a RETRACTION of §4.2a, in the statistic §4.2a used as its independent check
+
+§4.2a wrote that refining `us15` moved `R` *further* from `us20`/`us25`, "so that
+separation **strengthens**", and leaned on it. With **both** members refined, the `R`
+separation **narrows on every basis**, sign preserved:
+
+| basis | `R`(`us15`) | `R`(`us20`) | gap | vs 1 km 0.162 |
+|---|---|---|---|---|
+| 1 km | 0.364 | 0.526 | 0.162 | — |
+| coarsened block-mean | 0.197 | 0.286 | 0.089 | 55 % retained |
+| coarsened block-extremum | 0.257 | 0.295 | 0.038 | 23 % |
+| raw 500 m | 0.247 | 0.273 | 0.026 | 16 % |
+
+**This is stated as a direction, not a magnitude.** The three bases spread 16–55 %, unlike
+`E`'s tight 42–48 %, so no single number is quoted as *the* `R` gap. The direction is what
+the retraction needs and it is unanimous.
+
+**What it costs, said plainly.** §4.2a's "`R` strengthens" was itself a **one-sided-
+refinement artifact — the same error class §4.2b was built to correct, found in the very
+statistic §4.2a used as the independent check.** §4.2a listed two supports for the
+structural-transition-between-15-and-20 claim; **one is now withdrawn.** The claim
+**survives on one leg, not two**: the split test (classifier-free, a measurement of
+mirrored two-component echoes) is untouched by either 500 m run and still stands on its
+own. §4.2a's paragraph is corrected in place rather than only here, because a reader who
+stops at §4.2a would otherwise get a sentence that is measured false.
+
+**Newly open, and NOT this run's job:** the split test has never been read at 500 m. That
+is the honest next escalation for the transition claim, named here without being run.
+
+**The confound the instrument was built for failed to fire a second time.**
+`coarsen_test.py` exists for the `P1` fragmentation confound; `P1` reads 80 on the 1 km
+run, the raw 500 m run and both reductions, near-floor frames read **none** for both
+members, and there is no chain break to attribute to anything. As in §4.2a, the instrument
+earned its keep on `E` and `R` instead — twice now, by accident rather than by design.
+`P1` = 80 and a SUPERCELL label were pre-registered as expected and uninformative, and
+they were.
+
+**What this run does NOT settle, in §4.2b's own words.** The **15 → 20 step only**.
+`us25` stays at 1 km, so **the three-member `E` trend is not settled by this run**, and no
+statement of the form "the sweep's `E` trend is / is not a resolution artifact" is
+licensed by it.
+
+**No regression.** `score_t5s.py` was re-run after the two new derived directories
+(`t5s_us20_500m_coarse_mean`, `_coarse_extremum`) appeared beside the sweep: output
+unchanged — `us15` 80 / 0.364 / 2.721, `us20` 80 / 0.526 / 1.948, `us25` 80 / 0.560 /
+1.546, `P1` at ceiling 3/3, verdict still NO DISCRIMINATOR. It addresses runs by explicit
+name and globs nothing.
 
 ### 4.3 Cost
 

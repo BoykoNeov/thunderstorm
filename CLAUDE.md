@@ -220,7 +220,7 @@ task records THERE; keep this table to one line per phase.
 | **0** benchmark gate | **COMPLETE** 2026-07-14 — 333 m default / 250 m flat hero / 500 m preview, `np=8`, bitwise reproducible; VHDX relocated to M: | docs/phase0-*.md |
 | **1** pipeline spike | **CLOSED** 2026-07-20 — 301-frame VDB→SVT end to end on a real RHI; two owner-owed live checks carried (UE SVT visual streaming sign-off, diorama 5c pan gestures) | docs/phase1-completion-2026-07-20.md |
 | **2** scenario system · layers · radar | **COMPLETE** (T1–T9) — scenario JSON drives deck AND export; linear-Z dBZ; `w`; `cref`; two packages; diorama picker/layers/plan view | docs/phase2-plan-2026-07-20.md |
-| **3** flat convective regimes | **IN PROGRESS** — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. **500 m re-run of `us15` DONE 2026-09-06 — branch (iii): the ceiling is structural, no multicell label, and `us15`'s one piece of multicell-side evidence (`E`) did not survive refinement.** T6–T7 pending | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · sim/probes/README.md |
+| **3** flat convective regimes | **IN PROGRESS** — T1 supercell, T3 cref orientation, T4 seed (CM1 forked) DONE; **T5 CLOSED as measured** (no multicell reachable from the namelist); **T5s 2026-09-02: the external-sounding path WORKS — `base.F` read confirms all three assumptions, both neutrality gates PASS 11/11, three-member shear sweep run and contained.** The environment now reaches the gap with the pinned binary unchanged, and the structural transition lands between U_s 15 and 20 m/s exactly where BRN crosses 50. **No label though:** criterion 1′ sits at its ceiling for every sheared storm and the new criterion 2 failed its own control — H3 confirmed twice over. **500 m re-run of `us15` DONE 2026-09-06 — branch (iii): the ceiling is structural, no multicell label, and `us15`'s one piece of multicell-side evidence (`E`) did not survive refinement.** **Second 500 m run (`us20`) DONE 2026-09-06 — branch (B): the 15→20 elongation gap keeps its sign but loses more than half its 1 km size, so that trend is not resolution-robust; and `R`'s "separation strengthens" is RETRACTED as a one-sided-refinement artifact, leaving the transition-location claim on the split test alone.** T6–T7 pending | docs/phase3-plan-2026-07-20.md · docs/phase3-t5-multicell.md · **docs/plan-science-hurdles-2026-09-02.md** · sim/probes/README.md |
 | **3T** terrain | not started — Cartesian regridding module, heightfield render path, static full domain, VHDX resize first | Phase 3 plan §8 |
 | **4** lightning · hail swaths · particles · polish | not started — prerequisites listed in the 2026-09-02 plan §7 | — |
 
@@ -246,14 +246,31 @@ task records THERE; keep this table to one line per phase.
   grid and read by the unchanged classifier, `E` = 1.730 / 1.770 and `R` = 0.197 / 0.257 —
   coarsening does not restore the 1 km values, and both reductions agree. `R` and `E` move in
   **opposite** directions under refinement, so the descriptor family is not one signal. The
-  transition-location claim stands (the split test is classifier-free and untouched; `R`'s
-  separation strengthens). **Escalation LAUNCHED 2026-09-06 under a fresh owner go:** a 500 m `t5s_us20` is the only
-  thing that would measure, rather than bound, the resolution confound on the `E` trend, and it
-  is now running (`t5s_us20_500m`, `np=8`). Its comparison, its bar and its three branches are
-  pre-registered in plan §4.2b, committed while it stepped and before any field was read; the
-  decisive number is the `us15`→`us20` gap in `E` read at MATCHED resolution against the 1 km
-  0.773, and the bar (half of it, 0.387) is declared NEW rather than dressed as pre-existing.
-  Record: plan §§4.2a–4.2b, docs/STATUS.md, sim/probes/README.md §§4.2a–4.2b.
+  transition-location claim stands, but **on the split test ALONE after the escalation below**
+  (classifier-free and untouched by both 500 m runs) — §4.2a's second support, "`R`'s
+  separation strengthens", is **RETRACTED**.
+- **Escalation CLOSED 2026-09-06 — RAN, and BRANCH (B) FIRED: the 15→20 elongation gap is
+  SUBSTANTIALLY RESOLUTION.** The second 500 m run (`t5s_us20_500m`, `np=8`, 25 frames) is the
+  only thing that could measure, rather than bound, the resolution confound, and its bar was
+  committed (`ddff22d`) while it stepped, before any field was read — the bar declared **NEW**
+  rather than dressed as pre-existing. Containment read first and measured on the run (60.94 /
+  32.47 km against a 15 km floor; the 2:1 is coincidence, not a units bug — `us15`'s pair ran
+  0.97 / 0.89). All three instrument gates PASS. Branch (A) needed `E`(`us20_500m`) ≤ **1.343**
+  (block-mean) or ≤ **1.383** (block-extremum); it read **1.405** and **1.426**, so the matched-
+  resolution gap `G_ref` = **0.325 / 0.344** against the 1 km **0.773** — 42–45 % retained, under
+  the 0.387 bar. The raw 500 m gap (0.371) lands in (B) too, so **all three bases agree** and the
+  test is not indeterminate. The gap keeps its sign but loses more than half its size: **the 1 km
+  `E` trend across this step is not resolution-robust**, and refinement is NOT a common offset
+  (`us15` loses ~1.8× as much as `us20` on every basis). **The retraction is the finding with the
+  most teeth:** with BOTH members refined, `R`'s separation **narrows** on every basis (0.162 →
+  0.089 / 0.038 / 0.026), so §4.2a's "`R` strengthens" was a **one-sided-refinement artifact —
+  the same error class this run was built to correct, in the statistic §4.2a used as its
+  independent check**. Two supports for the transition claim, one withdrawn; the split test
+  survives and **has never been read at 500 m**, which is the next escalation, named and NOT run.
+  The `P1` fragmentation confound the instrument exists for failed to fire a **second** time
+  (`P1` = 80 everywhere, near-floor frames none). **NOT settled: the 15→20 step only — `us25`
+  stays at 1 km, so no claim about the three-member `E` trend is licensed.** Record: plan
+  §§4.2a–4.2b, docs/STATUS.md, sim/probes/README.md §§4.2a–4.2b.
 - **Capped single-cell control: CLOSED 2026-09-06 — DELIVERED, as a negative.** Both
   members ran (25 frames each) and initiation **PASSED** for both, but the singleness
   criterion was **void as first written**: the configuration is exactly symmetric

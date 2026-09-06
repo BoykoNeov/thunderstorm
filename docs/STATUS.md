@@ -1103,7 +1103,7 @@ genuinely less elongated and less coherent; the 1 km elongation was a property o
 0.364 → 0.526 → 0.560 (rising with shear) and `E` 2.721 → 1.948 → 1.546 (falling).
 Refining `us15` moves `R` *further* from `us20`/`us25` — that separation **strengthens** —
 and moves `E` into the *middle* of the 1 km trend, between `us20`'s 1.948 and `us25`'s
-1.546 — that separation **weakens**. No reading that treats the descriptor family as one
+1.546 — that separation **weakens**. **— THE `R` HALF IS RETRACTED 2026-09-06** (see the `t5s_us20` 500 m record below): refining `us20` as well NARROWS the `R` separation on every basis (0.162 → 0.089 / 0.038 / 0.026), so "strengthens" was a one-sided-refinement artifact. No reading that treats the descriptor family as one
 coherent signal is supported.
 
 **A bound on the resolution confound, not a measurement of it.** Refining one member moved
@@ -1116,7 +1116,7 @@ run, and no go is asked for.
 **What survives and what does not.** §4.2's structural-transition-between-`U_s` 15-and-20
 claim does not rest on `E` alone — the split test is a classifier-free measurement and is
 untouched by this run, and `R`'s separation gets *stronger* under refinement. That claim
-stands. What does not survive is any reading in which `us15`'s `E ≥ 2.40` at 1 km is
+stands. **— AMENDED 2026-09-06: the claim stands, but on the split test ALONE. The `R` support is withdrawn** (see below), and the split test has never been read at 500 m. What does not survive is any reading in which `us15`'s `E ≥ 2.40` at 1 km is
 resolution-robust evidence of a line-like regime.
 
 **Artefacts.** `runs/t5s_us15_500m/` (25 frames), derived
@@ -1131,3 +1131,121 @@ though, separated *the storm changed* from *the ruler changed* for `E` and `R` �
 question nobody had posed. Building the instrument as "a different reduction, read by the
 unchanged classifier" rather than as a bespoke test is what made it reusable for a
 question it was not designed for.
+
+## Second 500 m run — `t5s_us20` — RAN 2026-09-06, BRANCH (B): the 15 → 20 elongation gap is substantially resolution
+
+**The owner's go.** "the second 500 m run that would settle how much of the trend is
+resolution rather than environment — run it". §4.2a had named a 500 m `t5s_us20` as the
+escalation and left it unrun because the previous go covered one run. This is that run.
+
+**Why one refined member could not settle it.** §4.2a measured that refining `us15` moved
+`E` by 0.908 raw / 0.991 mean / 0.951 extremum, all larger than the `us15` → `us20` shear
+step of 0.773 at 1 km. From a single refined point, a common offset applied to every
+member and a collapse specific to `us15` are indistinguishable. Two refined members
+separate them, because the gap between them can then be read **at matched resolution**.
+
+**The trap that was avoided, and proved rather than asserted.** `t5s_us20_500m.json` was
+built from `t5s_us20.json`, **not** by cloning `t5s_us15_500m.json` — the clone would have
+carried `umove` 9.9 and `U_s` 15 and silently answered a different question. Four keys
+move (`nx`, `ny` 180 → 360; `dx`, `dy` 999.0 → 499.5). Gated before launch: the generated
+deck differs in **exactly six lines** with `tot_x_len`/`tot_y_len` identical at 179 820.0 m
+(360 × 499.5 = 180 × 999 exactly); `umove` reads **13.3** in both; the generated
+`input_sounding` sha256 `7538c7ae…` matches **four ways** — generated from this config,
+generated from `t5s_us20.json`, recorded in `t5s_us20`'s `run_meta.txt`, and on disk in
+that run directory. `np=8`, pinned fork binary `5fc93016…`.
+
+**Pre-registered in flight.** Plan §4.2b — the comparison, the bar and the three branches —
+was written and committed (`ddff22d`) while the run was stepping and **before any of its
+fields were opened**. The bar was **NEW**, was declared new rather than dressed as
+pre-existing, and is still labelled new in the result.
+
+**Containment first, measured on this run and not inherited** (`us20` translates at
+13.3 m/s against 9.9 m/s in the same 180 km box): **60.94 km** echo-cell and **32.47 km**
+updraft clearance against the 15 km floor — contained, therefore scorable. The 1 km member
+re-measured at 65.93 / 64.94 km. *Coincidence, recorded so nobody chases it:* 32.47 is
+exactly half of 64.94 and looks like a units bug; it is not — `us15`'s pair ran ratios 0.97
+and 0.89, so the code does not systematically halve `w`-clearance at 500 m.
+
+**Instrument gates, all three PASS.** G2 against `t5s_us20` as its own reference (a
+per-reference claim; `us15`'s pass does not transfer) — 25 frames, **0 metric
+differences**, run *before the 500 m data existed*. G1 — max |dx|, |dy| **7.629e-06 km**,
+both reductions. G3 — worst relative residual **2.806e-15** on `thpert`.
+
+| run | label | `P1` | `R` | `E` | span |
+|---|---|---|---|---|---|
+| `t5s_us20` (1 km reference) | SUPERCELL | 80 | 0.526 | **1.948** | 80.0 |
+| `t5s_us20_500m` (raw) | SUPERCELL | 80 | 0.273 | 1.442 | 80.0 |
+| `t5s_us20_500m_coarse_mean` | SUPERCELL | 80 | 0.286 | **1.405** | 80.0 |
+| `t5s_us20_500m_coarse_extremum` | SUPERCELL | 80 | 0.295 | **1.426** | 80.0 |
+
+The 1 km reference re-read **1.948** through this run's own code path, so the gap's
+denominator is not drifting.
+
+**The verdict against the committed table.** Branch (A) needed `E`(`us20_500m`) ≤ 1.343
+(mean) or ≤ 1.383 (extremum); it is 1.405 and 1.426. Branch (C) needed > 1.730 / 1.770; it
+is not.
+
+| basis | `G_ref` | vs `G_1km` = 0.773 | branch |
+|---|---|---|---|
+| coarsened block-mean **(headline)** | **0.325** | 42.0 % retained | **(B)** |
+| coarsened block-extremum **(headline)** | **0.344** | 44.5 % | **(B)** |
+| raw 500 m (not decisive) | 0.371 | 48.0 % | (B) |
+
+**All three bases agree, including the raw one** — the number a sceptic reaches for, which
+misses the bar by only 4 % and still lands in (B). The two headline reductions agree, so
+the test is not INDETERMINATE. **Branch (B): the 15 → 20 separation in `E` keeps its sign
+and loses more than half its 1 km size. Resolution contributed at least as much as the
+shear step did; the 1 km `E` trend across this step is not resolution-robust.**
+
+**Mechanism (descriptive, not the decision).** Refinement moved `E` by 0.543 / 0.522 /
+0.506 on `us20` against 0.991 / 0.951 / 0.908 on `us15` — `us15` loses about **1.8×** as
+much on every basis. Both fall; one falls harder. That is not the common offset branch (A)
+required. **Not extended to "the refinement effect scales with shear"** — `us25` is
+unrefined and §4.2b forbade the wider claim in advance.
+
+**RETRACTION — `R`'s separation, the statistic §4.2a used as its independent check.**
+§4.2a wrote that refining `us15` moved `R` *further* from `us20`/`us25`, "so that
+separation **strengthens**", and leaned on it. With **both** members refined the `R`
+separation **narrows on every basis**, sign preserved: 0.162 at 1 km → 0.089 (mean, 55 %
+retained) / 0.038 (extremum, 23 %) / 0.026 (raw, 16 %). Stated as a **direction, not a
+magnitude** — the bases spread 16–55 %, unlike `E`'s tight 42–48 %, so no single number is
+quoted as *the* `R` gap. §4.2a's "`R` strengthens" was itself a **one-sided-refinement
+artifact — the same error class this run was built to correct, found in the very statistic
+§4.2a used as its independent check.** §4.2a listed two supports for the
+structural-transition-between-15-and-20 claim; **one is withdrawn.** The claim **survives
+on one leg, not two**: the split test (classifier-free) is untouched by both 500 m runs.
+The §4.2a paragraphs in the plan and in `sim/probes/README.md` are corrected in place, not
+only here.
+
+**Newly open, named without being run:** the split test has never been read at 500 m. That
+is the honest next escalation for the transition claim, and it is not this run's job.
+
+**The confound the instrument was built for failed to fire a second time.**
+`coarsen_test.py` exists for the `P1` fragmentation confound. `P1` reads 80 on the 1 km
+run, the raw 500 m run and both reductions; near-floor frames read **none** for both
+members; there is no chain break to attribute to anything. The instrument earned its keep
+on `E` and `R` instead — twice now, by accident rather than design. `P1` = 80 and a
+SUPERCELL label were pre-registered as expected and uninformative, and they were.
+
+**What this does NOT settle, in §4.2b's own words.** The **15 → 20 step only**. `us25`
+stays at 1 km, so **the three-member `E` trend is not settled**, and no statement of the
+form "the sweep's `E` trend is / is not a resolution artifact" is licensed.
+
+**No regression.** `score_t5s.py` re-run after the two new derived directories appeared:
+output unchanged (`us15` 80 / 0.364 / 2.721, `us20` 80 / 0.526 / 1.948, `us25` 80 / 0.560 /
+1.546; `P1` at ceiling 3/3; verdict still NO DISCRIMINATOR).
+
+**Artefacts.** `runs/t5s_us20_500m/` (25 frames, 3.6 GB), derived
+`runs/t5s_us20_500m_coarse_{mean,extremum}/`; config
+`sim/probes/configs/t5s_us20_500m.json`, tracked and committed before the result existed;
+instrument `sim/probes/coarsen_test.py` **unchanged** — it already took `--run`/`--ref`, so
+no constant was edited in place and the `us15` invocation stays reproducible from the same
+file.
+
+**Lesson.** *A one-sided refinement can flip the sign of a comparison's conclusion.*
+Refining one member of a pair moves both the member and its distance from every unrefined
+member, and those two effects are not separable from one point. §4.2a's `E` finding
+survived the second member; its `R` finding did not, and the `R` claim had been used as the
+independent corroboration precisely because it looked untouched. The rule this leaves: **a
+resolution claim about a *difference* needs both sides refined — refining one side bounds
+the confound and can invent a trend that is not there.**
