@@ -53,6 +53,25 @@ rather than merely a record of what happened.
 `cm1out_stats.nc` is included alongside the numbered frames: it is model output like
 any other, and excluding it would leave an unchecked file in every run.
 
+## How these were produced, and why not the obvious way
+
+The obvious way — `sha256sum cm1out_*.nc` — pulled 218 GB through the Linux page cache
+and drove the Windows host into a low-memory state, where the job was killed. So the two
+large lists are produced with **direct I/O**, which reads straight from the device and
+never grows the cache:
+
+```sh
+dd if="$f" iflag=direct bs=4M status=none | sha256sum | cut -d' ' -f1
+```
+
+That changes the *route* to the bytes, not the bytes, but "it should be the same hash" is
+an assumption and this directory exists because assumed provenance is worthless. So the
+producing script **gates itself**: it first re-hashes `single_cell_500m` by the direct-I/O
+path and refuses to continue unless the result reproduces the already-committed list
+**byte-for-byte** — catching a wrong route, or wrong output formatting, on 6 GB instead of
+on 218 GB. It also runs at idle CPU and I/O priority, because it is reading a disk the
+owner is also using.
+
 ## How to check a run against one
 
 ```sh
