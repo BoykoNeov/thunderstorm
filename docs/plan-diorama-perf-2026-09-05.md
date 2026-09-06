@@ -173,26 +173,68 @@ default for the shipped viewer (recommended for outreach machines; it never
 changes anything on a GPU that holds the cap)? If yes: flip `rsParam`'s default
 in `main.ts`, update README's param table, and note it in `STATUS.md`.
 
-### C.2 Supercell streaming throughput (decode-bound)
+### C.2 Supercell streaming throughput — **DECIDED 2026-09-06: coarser export, no tiers**
 
-**Symptom:** `supercell_333m` (63 MB bricks, 601 frames) stalls at 60× even with
-the decoder pool (probe `stalls=16` per 4 s). The GPU is idle (4.5 ms).
-**Diagnose first** (do not guess): add to `decode.worker.ts` a `performance.now()`
-around `loadBrick` and post `{id, buffer, ms}`; record `stats.decodeMs` in
-`main.ts` (like `uploadMs`); print it from `statprobe.mjs`. Then:
-- If decode ms × frames-per-second-needed > 1000 / poolSize: raise the pool cap
-  (`decoderPoolSize(…, max)`) toward `hardwareConcurrency − 2` and make
-  `MAX_INFLIGHT` = pool size (it is a hardcoded 4).
-- If the fetch dominates (check `read_network_requests` timing or `performance`
-  resource entries in the worker): the vite middleware streams from disk with
-  no caching headers — fine on localhost; nothing to do here.
-- If neither is enough: the real fix is a **coarser web tier** in the pipeline
-  (`pipeline/cm1post/webvol.py` export at 2× decimation → 270×270×27, 8 MB
-  bricks) selected per package by the picker. That is a pipeline task with its
-  own go (the web manifest would carry `tiers[]`; the viewer picks by `?tier=`
-  or by measured throughput). Scope it; do not start without the owner.
-**Accept:** `stalls=0` over a 9 s probe at 60× on the supercell, or a written
-finding that it is fetch/disk-bound.
+**Owner ruling (2026-09-06):** *"i think a lower resolution will be ok anyway - for
+the diorama we dont need that superhigh export resolution - also - it would be nice
+to be able to run on lower machines."* That retires this section's `tiers[]` design
+before it was built, and it retires **diagnose-first as a precondition**: the coarse
+export is wanted for its own sake, not as a fix conditional on where the
+milliseconds went. The decode instrumentation is not cancelled, only demoted — it is
+no longer load-bearing for the decision, because 8x fewer bytes helps decode, upload
+and fetch alike.
+
+**Symptom (unchanged — this is the before-number).** `supercell_333m`: 601 frames,
+540x540x54 @ 333 m, **2.59 MB/frame gzipped, 1.56 GB total, ~95 MB/frame
+decompressed**. Stalls at 60x even with the decoder pool (`stalls=16` per 4 s) while
+the GPU sits idle at 4.5 ms. At 60x the viewer needs 5 frames/s, i.e. **~470 MB/s of
+gunzip + upload** — which is the whole story.
+
+**What shipped instead of tiers** (commit `0de3494`): `export-web --web-voxel-m`.
+No `tiers[]`, no `?tier=`, **no `web_format_version` bump and no viewer change**.
+Phase 2 T7 already serves every `scenarios/<name>/web`, lists them at
+`/scenarios.json`, and made the viewer grid-agnostic per load — so a coarse export
+is simply another package and **the picker is the tier selector**. The other
+tempting shape, a second scenario JSON with a bigger `voxel_m`, is refused for the
+reason `scenario.py`'s own docstring gives: that file exists so "a scenario cannot
+be simulated with one geometry and exported with another", and a duplicated `sim`
+block is a second file claiming that guarantee while free to drift from it.
+
+**Pre-registered acceptance — written and committed BEFORE the export finished**
+(launched 2026-09-06 12:04 via `M:\claud_projects\temp\run_exportweb_supercell_coarse.sh`;
+no CM1 re-run — the 218 GB source run is still on ext4):
+
+1. **Grid.** The new `web_manifest.json` reads **270x270x27 @ 666 m**, `origin_m`
+   x = **-89577.0** (it MUST move; -89743.5 is the 333 m grid's centres), and carries
+   `source_voxel_m: 333` + `decimation_factor: 2`. Gated offline already
+   (`pipeline/tests/test_web_decimation.py`, 10/10); this is the on-data confirmation.
+2. **`qmax` must come back IDENTICAL to the 333 m export's** — cloud 0.009069, ice
+   0.009691, rain 0.0105, graupelhail 0.01731, dbz 75.44, `w` -53.20 .. +66.33,
+   `cref` 0.00 .. 75.44 (docs/phase3-t2-run-health.md §3, 2026-07-22). Those maxima
+   are measured on the CM1 **source** grid, so they are independent of the export
+   voxel **by construction**; a difference would mean something other than the grid
+   moved. It costs nothing and it is **this run's one genuinely falsifiable gate**.
+3. **Bytes are MEASURED, never predicted.** Voxel count falls exactly 8x (gated).
+   Compressed bytes need not: coarsening averages, which moves the entropy of the
+   byte field in a direction this plan does not get to assume in advance. The
+   per-frame figure is reported after the fact.
+4. **Stall probe.** Re-run the same 9 s `statprobe.mjs` at 60x against the coarse
+   package. **Accept:** `stalls=0`, or a written finding that the remainder is
+   fetch/disk-bound. Note the A/B against the 333 m package is **visual or on
+   decoded values, never on bytes** — `qmax` is deliberately not rescaled, so the
+   coarse export uses less of its byte range and the two packages' bytes do not mean
+   the same thing.
+
+**What this does NOT fix, stated in advance.** Streaming only — decode, upload,
+fetch. It does **not** reduce march cost: `?step=auto` floors the step at
+(box extent / 280), so a smaller texture buys **no fewer steps**. "Runs on lower
+machines" is therefore **half-delivered** by this change; the render-cost half is
+`?rs=auto` (already the shipped default) and C.3.
+
+**Not touched.** The single-cell packages (0.14 MB/frame — coarsening costs visible
+quality and gains nothing), and the 333 m supercell payload, which **stays on disk**
+so the resolution drop can be judged as an A/B by one picker click. Deleting it is a
+separate owner call, and cheap to defer because the source run is still there.
 
 ### C.3 Half-resolution volume pass + depth-aware upsample (the next 3–4× lever)
 
@@ -290,7 +332,12 @@ stays blocked on the Phase 4 event-list exporter.
 
 ## Owner calls collected here
 
-1. Accept/revert the three defaults (C.1).
-2. `?rs=auto` as the shipped default (C.1).
-3. Coarser supercell web tier — a pipeline task with its own go (C.2).
+1. ~~Accept/revert the three defaults (C.1).~~ **ANSWERED 2026-09-05** — kept.
+2. ~~`?rs=auto` as the shipped default (C.1).~~ **ANSWERED 2026-09-05** — yes,
+   it is the default. Still the main weak-GPU lever, since C.2 does not touch
+   render cost.
+3. ~~Coarser supercell web tier — a pipeline task with its own go (C.2).~~
+   **ANSWERED 2026-09-06: go, and lower resolution accepted outright** — which
+   turned the "tier" into a plain second package and retired the `tiers[]`
+   design unbuilt (C.2).
 4. Half-res volume pass default anywhere (C.3) — only after a zoomed-anvil crop.

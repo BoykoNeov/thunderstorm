@@ -1249,3 +1249,108 @@ survived the second member; its `R` finding did not, and the `R` claim had been 
 independent corroboration precisely because it looked untouched. The rule this leaves: **a
 resolution claim about a *difference* needs both sides refined — refining one side bounds
 the confound and can invent a trend that is not there.**
+
+---
+
+## Coarser diorama web export — LAUNCHED 2026-09-06, and its bar fixed before the numbers exist
+
+**Owner ruling that started it (2026-09-06):** *"i think a lower resolution will be ok
+anyway - for the diorama we dont need that superhigh export resolution - also - it would
+be nice to be able to run on lower machines."* That is the answer to diorama perf plan
+owner-call 3, and it answers it **more broadly than the question asked**: the plan had
+framed the coarse export as a conditional fallback for a stall whose cause was still
+unmeasured, and the ruling accepts lower resolution **outright**. Two consequences, both
+taken deliberately:
+
+- **The `tiers[]` design is retired unbuilt.** Plan §C.2 sketched a `tiers[]` block in
+  `web_manifest.json` plus a `?tier=` selector in the viewer. Phase 2 T7 had already
+  built that: the dev server serves every `scenarios/<name>/web`, lists them at
+  `/scenarios.json`, and the viewer is grid-agnostic per load. A coarse export is
+  therefore **just another package, and the picker is the tier selector** — no
+  `web_format_version` bump, no viewer change, no second selector to keep in step.
+- **"Diagnose first" is demoted, not cancelled.** §C.2's decode instrumentation was a
+  *precondition* only while the coarse export needed justifying by where the milliseconds
+  went. It no longer does: 8× fewer bytes helps decode, upload and fetch alike, and the
+  owner wants the smaller payload for its own sake.
+
+**The shape that was refused, and why it matters.** The obvious implementation is a second
+scenario JSON with a bigger `voxel_m`. `pipeline/cm1post/scenario.py`'s own docstring
+forbids it: that file exists so "a scenario cannot be simulated with one geometry and
+exported with another". A copy of the `sim` block is a second file **claiming that
+guarantee while free to drift from it** — edit the parent's namelist and the copy silently
+keeps the old one while still declaring the same provenance. So the coarser grid is a
+**flag on the export**, and the record lives in `web/web_manifest.json`, which is tracked
+in git for web packages (the 2026-07-22 amendment) and is where a reader gets its grid
+anyway. *An advisor pass had initially recommended the second JSON and reversed itself on
+being shown that docstring.*
+
+**What shipped (commit `0de3494`).** `export-web --web-voxel-m`:
+
+- `scenario.with_export_voxel()` — `dataclasses.replace` **plus a re-validation**.
+  `nx`/`ny`/`nz` and `origin_m` are derived properties, so the entire grid follows from one
+  substitution and there is no second place to keep in step. The re-validation is the whole
+  safety argument: `nx` is `int(round(...))`, so a non-dividing voxel would **not** raise —
+  it would round, and the package would ship a 180.00 km box while the manifest kept
+  declaring 179.82 km.
+- `webvol.decimation_block()` — writes `source_voxel_m` and the factor into the manifest
+  `grid`, **only** when coarsened. Without it `voxel_m: 666` is ambiguous with a 666 m
+  *simulation*, and the package NAME cannot settle it either: this project's suffixes track
+  the SIMULATION resolution (`single_cell_500m` exports at **250 m**), so the export voxel
+  has never been readable off a name.
+- The CLI refuses a voxel **finer** than the scenario's own — the flag exists to shrink the
+  payload.
+
+**`qmax` is deliberately NOT rescaled.** It is measured on the CM1 source grid and stays a
+valid upper bound after coarsening (linear resampling cannot raise a maximum), just a
+**looser** one — so the coarse export uses less of its byte range than the native one and
+**the two packages' bytes are not numerically comparable**. Rescaling per export would buy
+back the slack at the cost of one byte meaning different things in different packages,
+which is exactly what the fixed cross-scenario `w` scale exists to prevent. Every A/B
+against the 333 m package is therefore **visual, or on decoded values — never on bytes**.
+
+**Offline gates before any data was touched** (`pipeline/tests/test_web_decimation.py`,
+**10/10**): grid halves to 270×270×27; `origin_m` recomputes (−89743.5 → −89577.0, and it
+*must*, or the coarse package would claim the fine one's voxel centres); the measured crop
+box is unchanged; the parent scenario is not mutated; 8× fewer voxels; **400 m is REFUSED**
+(divides neither span); **999 m is allowed** (3×, divides both — so the check is "divides",
+not "power of two"); a finer voxel is refused at the CLI. **Negative control:** with the
+flag absent the emitted `grid` block is key-for-key *and* value-for-value the shipped
+manifest's, so the format is unchanged for every existing package. Full pipeline suite
+re-run afterwards: **12/12 files rc=0**.
+
+**The run.** `supercell_333m` at 666 m, 601 frames, `--web-voxel-m 666`. **No CM1 re-run** —
+the 218 GB source is still on ext4 (`/home/boiko/thunderstorm/runs/supercell333`), so this
+is a re-export, not a re-simulation. Launched detached 2026-09-06 12:04 via
+`M:/claud_projects/temp/run_exportweb_supercell_coarse.sh`; output and log on ext4 under
+`/home/boiko/thunderstorm/export/supercell333_coarse/`. Two full 601-frame passes (maxima
+scan, then encode), as for the 333 m export.
+
+**PRE-REGISTERED READING — fixed here while the export was still stepping:**
+
+1. **Grid.** The new manifest reads 270×270×27 @ 666 m, origin x = −89577.0, with
+   `source_voxel_m: 333` and `decimation_factor: 2`. Gated offline already; this is the
+   on-data confirmation, expected and uninformative.
+2. **`qmax` must come back IDENTICAL to the 333 m export's** — cloud 0.009069, ice 0.009691,
+   rain 0.0105, graupelhail 0.01731, dbz 75.44, `w` −53.20 .. +66.33, `cref` 0.00 .. 75.44
+   (T2 §3, 2026-07-22). Those maxima are measured on the CM1 **source** grid, so they are
+   independent of the export voxel **by construction**; a difference would mean something
+   other than the grid moved. It costs nothing, and it is **this run's one genuinely
+   falsifiable gate**.
+3. **Bytes are MEASURED, never predicted.** Voxel count falls exactly 8× (gated). Compressed
+   bytes need not: coarsening averages, which moves the entropy of the byte field in a
+   direction nobody here gets to assume in advance. The per-frame figure is reported after
+   the fact, not forecast.
+4. **Stall probe.** Re-run the same 9 s `statprobe.mjs` at 60× against the coarse package.
+   **Accept:** `stalls=0`, or a written finding that the remainder is fetch/disk-bound.
+   Before-number: `stalls=16` per 4 s at 60×, GPU idle at 4.5 ms.
+
+**Stated in advance — what this CANNOT deliver.** Streaming only: decode, upload, fetch.
+It does **not** reduce march cost — `?step=auto` floors the step at (box extent / 280), so
+a smaller texture buys **no fewer steps**. The owner asked for two things and this delivers
+**half** of "runs on lower machines"; the render-cost half remains `?rs=auto` (already the
+shipped default) and the half-res volume pass (plan §C.3), which is still owner-gated.
+
+**Not touched.** The single-cell packages (0.14 MB/frame — coarsening costs visible quality
+and gains nothing), and the 333 m supercell payload, which **stays on disk** so the
+resolution drop can be judged as an A/B by one picker click. Deleting it is a separate owner
+call, cheap to defer because the source run is still there.
