@@ -62,7 +62,7 @@ assumed — this is the file whose entire point is that assumed provenance is wo
 |---|---|
 | `single_cell_500m` | plain `sha256sum`, computed by the T7 gate itself |
 | `single_cell_333m` | plain `sha256sum` |
-| `supercell_333m` | **direct I/O** (below) |
+| `supercell_333m` | **direct I/O** (below) — gate PASSED before it ran |
 
 The obvious way — `sha256sum cm1out_*.nc` — pulled 218 GB through the Linux page cache
 and drove the Windows host into a low-memory state, where the job was killed partway
@@ -100,6 +100,12 @@ deck the production generator reproduces —
 `pipeline/gen_deck.py --scenario <name> --verify <that run's namelist.input>`. Without
 that, a difference could mean "different build" or "different deck", and the check
 would not distinguish them.
+
+All three lists were completed 2026-09-07 and independently sanity-checked: 1206 lines,
+1206 distinct hashes, 1206 distinct filenames, zero malformed lines, and three
+spot-checks per the section above re-hashed by plain `sha256sum` and matching. Distinct
+hashes matter as a check in their own right — a partly-failed read would show up as
+repeats.
 
 ## First use
 
